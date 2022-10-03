@@ -35,7 +35,6 @@ impl MaybeToken {
         }
     }
 
-    #[allow(dead_code)]
     pub fn error(&self, err: SyntaxErrorType) -> SyntaxError {
         debug_assert!(!self.matched);
         SyntaxError::from_loc(&self.range, err, Some(self.typ))

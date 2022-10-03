@@ -138,7 +138,6 @@ impl Lexer {
             .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
     }
 
-    #[allow(dead_code)]
     fn while_not_2_chars(&self, a: u8, b: u8) -> Match {
         Match {
             len: memchr2(a, b, &self.source.code()[self.next..]).unwrap_or(self.remaining()),

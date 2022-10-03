@@ -43,7 +43,6 @@ impl NodeData {
         &mut self.stx
     }
 
-    #[allow(dead_code)]
     pub fn stx_take(self) -> Syntax {
         self.stx
     }

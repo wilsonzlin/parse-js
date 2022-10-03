@@ -10,7 +10,6 @@ pub type Identifier = SourceRange;
 #[derive(Clone, Debug)]
 pub struct Symbol {
     // This should refer to an ObjectPatternProperty if shorthand property, FunctionName if function name, or IdentifierPattern otherwise.
-    #[allow(dead_code)]
     declarator_pattern: NodeId,
     // Set to 0 initially, before minification pass. WARNING: 0 is still a valid value, so do not use before setting.
     minified_name_id: usize,

@@ -1,10 +1,14 @@
-mod ast;
-mod char;
-mod error;
-mod num;
-mod operator;
-mod source;
-mod symbol;
-mod token;
-mod update;
-mod util;
+pub mod ast;
+pub mod char;
+pub mod error;
+pub mod lex;
+pub mod num;
+pub mod operator;
+pub mod parse;
+pub mod source;
+pub mod symbol;
+pub mod token;
+pub mod update;
+pub mod util;
+#[cfg(test)]
+mod serialise;
