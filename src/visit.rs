@@ -69,7 +69,7 @@ pub trait Visitor {
 
     fn visit(&mut self, node_map: &NodeMap, parent: NodeId, n: NodeId) -> () {
         let mut ctl = JourneyControls { skip: false };
-        self.on_syntax(n, parent, &mut ctl);
+        self.on_syntax(parent, n, &mut ctl);
         if ctl.skip {
             return;
         };
