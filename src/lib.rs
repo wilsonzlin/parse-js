@@ -14,8 +14,8 @@ pub mod lex;
 pub mod num;
 pub mod operator;
 pub mod parse;
-#[cfg(test)]
-mod serialise;
+#[cfg(feature = "serialize")]
+pub mod serialise;
 pub mod source;
 pub mod symbol;
 pub mod token;
@@ -37,7 +37,7 @@ pub fn parse(source: Vec<u8>, top_level_mode: TopLevelMode) -> SyntaxResult<Pars
         top_level_node_id,
         top_level_scope_id,
     } = parse_top_level(&mut parser, top_level_mode)?;
-    let (mut node_map, mut scope_map) = parser.take();
+    let (node_map, scope_map) = parser.take();
     Ok(ParseOutput {
         node_map,
         scope_map,

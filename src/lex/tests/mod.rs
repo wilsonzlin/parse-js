@@ -1,4 +1,4 @@
-use crate::error::SyntaxErrorType::{self, *};
+use crate::error::SyntaxErrorType;
 use crate::lex::{lex_next, LexMode, Lexer};
 use crate::token::TokenType::{self, *};
 

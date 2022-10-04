@@ -14,8 +14,11 @@ version = "0.2.7"
 aho-corasick = "0.7"
 lazy_static = "1.4"
 memchr = "2.3"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
 similar = "2.1.0"
+
+[features]
+serialize = ["dep:serde", "dep:serde_json"]

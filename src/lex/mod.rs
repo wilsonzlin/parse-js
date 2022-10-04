@@ -13,7 +13,7 @@ use crate::error::{SyntaxError, SyntaxErrorType, SyntaxResult};
 use crate::source::{Source, SourceRange};
 use crate::token::{Token, TokenType};
 
-#[cfg(test)]
+#[cfg(feature = "serialize")]
 mod tests;
 
 #[derive(Copy, Clone, Eq, PartialEq)]

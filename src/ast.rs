@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Index, IndexMut};
 
-#[cfg(test)]
+#[cfg(feature = "serialize")]
 use serde::Serialize;
 
 use crate::error::{SyntaxError, SyntaxErrorType};
@@ -117,7 +117,7 @@ type Pattern = NodeId;
 type Statement = NodeId;
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
-#[cfg_attr(test, derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
 pub enum VarDeclMode {
     Const,
     Let,
