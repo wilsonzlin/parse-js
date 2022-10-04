@@ -15,7 +15,7 @@ pub mod num;
 pub mod operator;
 pub mod parse;
 #[cfg(feature = "serialize")]
-pub mod serialise;
+pub mod serialize;
 pub mod source;
 pub mod symbol;
 pub mod token;

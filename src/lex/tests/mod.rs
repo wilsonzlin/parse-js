@@ -51,7 +51,11 @@ fn test_lex_literal_numbers() {
 #[test]
 fn test_lex_literal_strings() {
     check("'hello world'", &[LiteralString], None);
-    check("'hello world\n'", &[], Some(LineTerminatorInString));
+    check(
+        "'hello world\n'",
+        &[],
+        Some(SyntaxErrorType::LineTerminatorInString),
+    );
 }
 
 #[test]

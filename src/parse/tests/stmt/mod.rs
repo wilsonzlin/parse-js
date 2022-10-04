@@ -1,12 +1,12 @@
 use crate::{
     lex::Lexer,
     parse::{parser::Parser, pattern::ParsePatternSyntax, stmt::parse_stmt},
-    serialise::serialise_ast,
+    serialize::serialize_ast,
     util::test::evaluate_test_input_files,
 };
 use serde_json::Value;
 
-fn parse_stmt_and_serialise(input: Vec<u8>) -> Value {
+fn parse_stmt_and_serialize(input: Vec<u8>) -> Value {
     let mut parser = Parser::new(Lexer::new(input));
     let scope = parser.create_global_scope();
     let node_id = parse_stmt(
@@ -19,10 +19,10 @@ fn parse_stmt_and_serialise(input: Vec<u8>) -> Value {
     )
     .unwrap();
     let (node_map, _) = parser.take();
-    serialise_ast(&node_map, node_id)
+    serialize_ast(&node_map, node_id)
 }
 
 #[test]
 fn test_parse_expression() {
-    evaluate_test_input_files("parse/tests/stmt", |input| parse_stmt_and_serialise(input));
+    evaluate_test_input_files("parse/tests/stmt", |input| parse_stmt_and_serialize(input));
 }

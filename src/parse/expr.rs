@@ -339,7 +339,14 @@ pub fn parse_expr_arrow_function(
     }
     let body = match parser.peek()?.typ() {
         TokenType::BraceOpen => parse_stmt(fn_scope, parser, syntax)?,
-        _ => parse_expr_until_either(fn_scope, parser, terminator_a, terminator_b, syntax)?,
+        _ => parse_expr_until_either_with_asi(
+            fn_scope,
+            parser,
+            terminator_a,
+            terminator_b,
+            &mut Asi::can(),
+            syntax,
+        )?,
     };
     Ok(parser.create_node(
         scope,
@@ -914,7 +921,9 @@ pub fn parse_expr_with_min_prec(
         match MULTARY_OPERATOR_MAPPING.get(&t.typ()) {
             None => {
                 if asi.can_end_with_asi
-                    && (t.preceded_by_line_terminator() || t.typ() == TokenType::BraceClose)
+                    && (t.preceded_by_line_terminator()
+                        || t.typ() == TokenType::BraceClose
+                        || t.typ() == TokenType::EOF)
                 {
                     // Automatic Semicolon Insertion.
                     // TODO Exceptions (e.g. for loop header).

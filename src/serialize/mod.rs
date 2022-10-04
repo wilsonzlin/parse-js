@@ -473,6 +473,6 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
     }
 }
 
-pub fn serialise_ast(node_map: &NodeMap, top_level_node_id: NodeId) -> Value {
+pub fn serialize_ast(node_map: &NodeMap, top_level_node_id: NodeId) -> Value {
     visit_node(node_map, top_level_node_id)
 }

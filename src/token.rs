@@ -9,6 +9,8 @@ pub enum TokenType {
     // Used to represent a type that should never be seen in actual code. Similar to 0xFF from UTF-8
     // bytes perspective. Often used to represent an omitted value without having to use `Option`.
     _Dummy,
+    // Special token used to represent the end of the source code. Easier than using and handling Option everywhere.
+    EOF,
 
     Ampersand,
     AmpersandAmpersand,
@@ -44,7 +46,6 @@ pub enum TokenType {
     CommentSingle,
     Dot,
     DotDotDot,
-    EOF,
     Equals,
     EqualsChevronRight,
     EqualsEquals,
