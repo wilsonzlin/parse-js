@@ -262,7 +262,10 @@ lazy_static! {
         map.insert(TokenType::PrivateMember, b"#");
         map.insert(TokenType::Question, b"?");
         map.insert(TokenType::QuestionDot, b"?.");
+        map.insert(TokenType::QuestionDotBracketOpen, b"?.[");
+        map.insert(TokenType::QuestionDotParenthesisOpen, b"?.(");
         map.insert(TokenType::QuestionQuestion, b"??");
+        map.insert(TokenType::QuestionQuestionEquals, b"??=");
         map.insert(TokenType::Semicolon, b";");
         map.insert(TokenType::Slash, b"/");
         map.insert(TokenType::SlashEquals, b"/=");
