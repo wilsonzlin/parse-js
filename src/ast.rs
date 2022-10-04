@@ -116,7 +116,7 @@ type Expression = NodeId;
 type Pattern = NodeId;
 type Statement = NodeId;
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
 #[cfg_attr(test, derive(Serialize))]
 pub enum VarDeclMode {
     Const,
@@ -124,7 +124,7 @@ pub enum VarDeclMode {
     Var,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ArrayElement {
     Single(Expression),
     Rest(Expression),
@@ -138,7 +138,7 @@ pub enum ClassOrObjectMemberKey {
     Computed(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ClassOrObjectMemberValue {
     Getter {
         body: Statement,
@@ -159,14 +159,14 @@ pub enum ClassOrObjectMemberValue {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClassMember {
     pub key: ClassOrObjectMemberKey,
     pub statik: bool,
     pub value: ClassOrObjectMemberValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ObjectMemberType {
     Valued {
         key: ClassOrObjectMemberKey,
@@ -180,13 +180,13 @@ pub enum ObjectMemberType {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayPatternElement {
     pub target: Pattern,
     pub default_value: Option<Expression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExportName {
     // For simplicity, we always set both fields; for shorthands, both nodes are identical.
     pub target: SourceRange,
@@ -194,7 +194,7 @@ pub struct ExportName {
     pub alias: Pattern,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExportNames {
     // `import * as name`
     // `export * from "module"`
@@ -208,26 +208,26 @@ pub enum ExportNames {
     Specific(Vec<ExportName>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VariableDeclarator {
     pub pattern: Pattern,
     pub initializer: Option<Expression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ForThreeInit {
     None,
     Expression(Expression),
     Declaration(Declaration),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ForInOfStmtHeaderLhs {
     Declaration(Declaration),
     Pattern(Pattern),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ForStmtHeader {
     Three {
         init: ForThreeInit,
@@ -241,14 +241,15 @@ pub enum ForStmtHeader {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LiteralTemplatePart {
     Substitution(Expression),
     String(SourceRange),
 }
 
 // We no longer derive Eq for the AST due to use of NodeId, as it's not possible to determine structural equality without the node map. Anything that contains a NodeId/Syntax must also avoid Eq.
-#[derive(Debug)]
+// WARNING: .clone() is derived and available for shallow copies only. As nodes use NodeId refs to other nodes, it's impossible to actually deep clone from the .clone() method. Use it to quickly copy and make a few changes, while keeping most field values the same (including references to other existing nodes).
+#[derive(Debug, Clone)]
 pub enum Syntax {
     // Patterns.
     IdentifierPattern {
