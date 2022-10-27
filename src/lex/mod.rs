@@ -299,6 +299,7 @@ lazy_static! {
         map.insert(TokenType::KeywordGet, b"get");
         map.insert(TokenType::KeywordIf, b"if");
         map.insert(TokenType::KeywordImport, b"import");
+        map.insert(TokenType::KeywordImportMeta, b"import.meta");
         map.insert(TokenType::KeywordIn, b"in");
         map.insert(TokenType::KeywordInstanceof, b"instanceof");
         map.insert(TokenType::KeywordLet, b"let");

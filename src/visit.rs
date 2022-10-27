@@ -281,6 +281,7 @@ pub trait Visitor {
                     }
                 }
             }
+            Syntax::ImportMetaObject { .. } => {}
             Syntax::LiteralArrayExpr { elements } => {
                 for elem in elements {
                     match elem {

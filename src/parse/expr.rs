@@ -1,8 +1,11 @@
+use std::any::Any;
 use crate::ast::{
     ArrayElement, ArrayPatternElement, ClassOrObjectMemberKey, ClassOrObjectMemberValue,
     LiteralTemplatePart, NodeId, ObjectMemberType, Syntax,
 };
+use crate::ast::ObjectMemberType::{Shorthand, Valued};
 use crate::error::{SyntaxErrorType, SyntaxResult};
+use crate::error::SyntaxErrorType::RequiredTokenNotFound;
 use crate::lex::{lex_template_string_continue, LexMode, KEYWORDS_MAPPING};
 use crate::operator::{Associativity, OperatorName, OPERATORS};
 use crate::parse::literal::{normalise_literal_number, normalise_literal_string};
@@ -10,8 +13,10 @@ use crate::parse::operator::{MULTARY_OPERATOR_MAPPING, UNARY_OPERATOR_MAPPING};
 use crate::parse::parser::Parser;
 use crate::parse::signature::parse_signature_function;
 use crate::parse::stmt::parse_stmt;
+use crate::source::SourceRange;
 use crate::symbol::{ScopeId, ScopeType, Symbol};
-use crate::token::TokenType;
+use crate::token::{Token, TokenType};
+use crate::token::TokenType::{Identifier, ParenthesisOpen};
 use crate::update::NodeUpdates;
 
 use super::class_or_object::{
@@ -408,6 +413,31 @@ pub fn parse_expr_import(
     ))
 }
 
+pub fn parse_expr_import_meta(
+    scope: ScopeId,
+    parser: &mut Parser,
+) -> SyntaxResult<NodeId> {
+    let start = parser.require(TokenType::KeywordImportMeta)?;
+    let cp = parser.checkpoint();
+
+    while parser.consume_if(TokenType::Dot).unwrap().is_match() {
+        let next = parser.peek().unwrap();
+        match next.typ() {
+            Identifier => {}
+            _ => {
+                next.error(RequiredTokenNotFound(Identifier));
+            }
+        }
+        parser.consume_peeked();
+    }
+    let end = parser.peek().unwrap();
+    Ok(parser.create_node(
+        scope,
+        start.loc() + end.loc(),
+        Syntax::ImportMetaObject { member_chain: parser.since_checkpoint(cp) },
+    ))
+}
+
 pub fn parse_expr_function(
     scope: ScopeId,
     parser: &mut Parser,
@@ -593,6 +623,10 @@ fn parse_expr_operand(
             TokenType::KeywordImport => {
                 parser.restore_checkpoint(cp);
                 parse_expr_import(scope, parser, syntax)?
+            }
+            TokenType::KeywordImportMeta => {
+                parser.restore_checkpoint(cp);
+                parse_expr_import_meta(scope, parser)?
             }
             TokenType::KeywordSuper => {
                 parser.create_node(scope, t.loc().clone(), Syntax::SuperExpr {})

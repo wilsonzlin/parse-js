@@ -8,8 +8,9 @@ use serde::Serialize;
 use crate::error::{SyntaxError, SyntaxErrorType};
 use crate::num::JsNumber;
 use crate::operator::OperatorName;
-use crate::source::SourceRange;
-use crate::symbol::ScopeId;
+use crate::source::{Source, SourceRange};
+use crate::symbol::{Identifier, ScopeId};
+use crate::token::{Token, TokenType};
 
 pub struct NodeData {
     loc: SourceRange,
@@ -427,6 +428,9 @@ pub enum Syntax {
         test: Expression,
         consequent: Statement,
         alternate: Option<Statement>,
+    },
+    ImportMetaObject {
+        member_chain: SourceRange
     },
     ImportStmt {
         // IdentifierPattern.

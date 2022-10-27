@@ -81,6 +81,7 @@ pub enum TokenType {
     KeywordGet,
     KeywordIf,
     KeywordImport,
+    KeywordImportMeta,
     KeywordIn,
     KeywordInstanceof,
     KeywordLet,
