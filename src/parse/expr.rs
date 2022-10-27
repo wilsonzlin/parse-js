@@ -397,6 +397,14 @@ pub fn parse_expr_import(
     syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
     let start = parser.require(TokenType::KeywordImport)?;
+    if parser.consume_if(TokenType::Dot)?.is_match() {
+        // import.meta
+        let prop = parser.require(TokenType::Identifier)?;
+        if prop.loc() != "meta" {
+            return Err(prop.error(SyntaxErrorType::ExpectedSyntax("`meta` property")));
+        };
+        return Ok(parser.create_node(scope, start.loc() + prop.loc(), Syntax::ImportMeta {}));
+    }
     parser.require(TokenType::ParenthesisOpen)?;
     let module = parse_expr(scope, parser, TokenType::ParenthesisClose, syntax)?;
     parser.require(TokenType::ParenthesisClose)?;

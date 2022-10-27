@@ -262,6 +262,7 @@ pub trait Visitor {
                 };
             }
             Syntax::ImportExpr { module } => self.visit(node_map, n, *module),
+            Syntax::ImportMeta {} => {}
             Syntax::ImportStmt { default, names, .. } => {
                 if let Some(default) = default {
                     self.visit(node_map, n, *default);

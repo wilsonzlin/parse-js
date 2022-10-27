@@ -1,0 +1,1 @@
+h(import.meta.url + "");

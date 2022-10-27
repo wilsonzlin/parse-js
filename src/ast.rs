@@ -351,6 +351,7 @@ pub enum Syntax {
     ImportExpr {
         module: Expression,
     },
+    ImportMeta {},
     LiteralArrayExpr {
         elements: Vec<ArrayElement>,
     },

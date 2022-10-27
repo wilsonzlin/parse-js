@@ -1,0 +1,33 @@
+{
+  "$t": "CallExpr",
+  "arguments": [
+    {
+      "$t": "CallArg",
+      "spread": false,
+      "value": {
+        "$t": "BinaryExpr",
+        "left": {
+          "$t": "MemberExpr",
+          "left": {
+            "$t": "ImportMeta"
+          },
+          "optional_chaining": false,
+          "parenthesised": false,
+          "right": "url"
+        },
+        "operator": "Addition",
+        "parenthesised": false,
+        "right": {
+          "$t": "LiteralStringExpr",
+          "value": ""
+        }
+      }
+    }
+  ],
+  "callee": {
+    "$t": "IdentifierExpr",
+    "name": "h"
+  },
+  "optional_chaining": false,
+  "parenthesised": false
+}

@@ -215,6 +215,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "ImportExpr",
            "module": visit_node(m, *module),
         }),
+        Syntax::ImportMeta {} => json!({
+            "$t": "ImportMeta",
+        }),
         Syntax::LiteralArrayExpr { elements } => json!({
             "$t": "LiteralArrayExpr",
             "elements": elements.iter().map(|e| match e {
