@@ -1,0 +1,117 @@
+{
+  "$t": "JsxElement",
+  "attributes": [
+    {
+      "$t": "JsxAttribute",
+      "name": {
+        "$t": "JsxName",
+        "name": "x",
+        "namespace": null
+      },
+      "value": {
+        "$t": "JsxExpressionContainer",
+        "value": {
+          "$t": "LiteralNumberExpr",
+          "value": 1.0
+        }
+      }
+    },
+    {
+      "$t": "JsxAttribute",
+      "name": {
+        "$t": "JsxName",
+        "name": "y",
+        "namespace": null
+      },
+      "value": {
+        "$t": "JsxText",
+        "value": "'a'"
+      }
+    }
+  ],
+  "children": [
+    {
+      "$t": "JsxText",
+      "value": "  a\n  "
+    },
+    {
+      "$t": "JsxElement",
+      "attributes": [
+        {
+          "$t": "JsxAttribute",
+          "name": {
+            "$t": "JsxName",
+            "name": "z",
+            "namespace": "xLa"
+          },
+          "value": {
+            "$t": "JsxText",
+            "value": "\"a\""
+          }
+        }
+      ],
+      "children": [
+        {
+          "$t": "JsxExpressionContainer",
+          "value": {
+            "$t": "LiteralNumberExpr",
+            "value": 1.0
+          }
+        },
+        {
+          "$t": "JsxExpressionContainer",
+          "value": {
+            "$t": "LiteralNumberExpr",
+            "value": 2.0
+          }
+        },
+        {
+          "$t": "JsxText",
+          "value": " "
+        },
+        {
+          "$t": "JsxExpressionContainer",
+          "value": {
+            "$t": "JsxElement",
+            "attributes": [],
+            "children": [],
+            "name": {
+              "$t": "JsxName",
+              "name": "a",
+              "namespace": "nu"
+            }
+          }
+        }
+      ],
+      "name": {
+        "$t": "JsxName",
+        "name": "a43",
+        "namespace": "bc1"
+      }
+    },
+    {
+      "$t": "JsxText",
+      "value": "\n  a "
+    },
+    {
+      "$t": "JsxElement",
+      "attributes": [],
+      "children": [],
+      "name": {
+        "$t": "JsxMember",
+        "path": [
+          "red",
+          "a"
+        ]
+      }
+    }
+  ],
+  "name": {
+    "$t": "JsxMember",
+    "path": [
+      "a",
+      "b",
+      "c"
+    ]
+  }
+}

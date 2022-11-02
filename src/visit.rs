@@ -282,6 +282,12 @@ pub trait Visitor {
                     }
                 }
             }
+            Syntax::JsxAttribute { .. } => {}
+            Syntax::JsxElement { .. } => {}
+            Syntax::JsxExpressionContainer { .. } => {}
+            Syntax::JsxMember { .. } => {}
+            Syntax::JsxName { .. } => {}
+            Syntax::JsxText { .. } => {}
             Syntax::LiteralArrayExpr { elements } => {
                 for elem in elements {
                     match elem {

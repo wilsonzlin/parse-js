@@ -18,6 +18,7 @@ mod tests;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum LexMode {
+    JsxTextContent,
     SlashIsRegex,
     Standard,
 }
@@ -136,6 +137,12 @@ impl Lexer {
         memchr(c, &self.source.code()[self.next..])
             .map(|pos| Match { len: pos + 1 })
             .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
+    }
+
+    fn while_not_char(&self, a: u8) -> Match {
+        Match {
+            len: memchr(a, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
+        }
     }
 
     fn while_not_2_chars(&self, a: u8, b: u8) -> Match {
@@ -338,6 +345,7 @@ lazy_static! {
         for (&k, &v) in KEYWORDS_MAPPING.iter() {
           patterns.push((k, &v));
         };
+        patterns.push((TokenType::ChevronLeftSlash, b"</"));
         patterns.push((TokenType::CommentMultiple, b"/*"));
         patterns.push((TokenType::CommentSingle, b"//"));
         for c in ID_START_CHARSTR.chunks(1) {
@@ -611,6 +619,17 @@ fn lex_template(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxR
 pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
     let mut preceded_by_line_terminator = false;
     loop {
+        if mode == LexMode::JsxTextContent {
+            let cp = lexer.checkpoint();
+            // TODO Technically the spec specificies JSXText cannot contain '>' or '}' either.
+            lexer.consume(lexer.while_not_2_chars(b'{', b'<'));
+            return Ok(Token::new(
+                lexer.since_checkpoint(cp),
+                TokenType::JsxTextContent,
+                false,
+            ));
+        };
+
         let ws = lexer.while_chars(&WHITESPACE);
         lexer.consume(ws);
         // If we are not in the first loop, we've skipped some comments, so preserve preceded_by_line_terminator set before any previous comment.

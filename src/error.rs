@@ -19,6 +19,7 @@ pub enum SyntaxErrorType {
     LineTerminatorInRegex,
     LineTerminatorInString,
     MalformedLiteralNumber,
+    JsxClosingTagMismatch,
     RequiredTokenNotFound(TokenType),
     TryStatementHasNoCatchOrFinally,
     UnexpectedEnd,

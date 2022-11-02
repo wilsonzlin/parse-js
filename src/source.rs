@@ -16,6 +16,14 @@ pub struct SourceRange {
 }
 
 impl SourceRange {
+    pub fn add_option(&self, rhs: Option<&SourceRange>) -> SourceRange {
+        SourceRange {
+            source: self.source.clone(),
+            start: min(self.start, rhs.map(|l| l.start).unwrap_or(0)),
+            end: max(self.end, rhs.map(|l| l.end).unwrap_or(0)),
+        }
+    }
+
     pub fn anonymous<T: Into<Vec<u8>>>(code: T) -> SourceRange {
         let code = code.into();
         let end = code.len();
@@ -24,6 +32,10 @@ impl SourceRange {
             start: 0,
             end,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.end == self.start
     }
 
     pub fn is_eof(&self) -> bool {

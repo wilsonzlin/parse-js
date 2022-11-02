@@ -8,6 +8,7 @@ use crate::symbol::{ScopeData, ScopeId, ScopeMap, ScopeType};
 use crate::token::{Token, TokenType};
 
 #[derive(Debug)]
+#[must_use]
 pub struct MaybeToken {
     typ: TokenType,
     range: SourceRange,

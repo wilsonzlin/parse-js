@@ -42,6 +42,202 @@ impl Asi {
     }
 }
 
+pub fn parse_jsx_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeId> {
+    let start = parser.require(TokenType::Identifier)?;
+    Ok(if parser.consume_if(TokenType::Colon)?.is_match() {
+        // Namespaced name.
+        let name = parser.require(TokenType::Identifier)?;
+        parser.create_node(
+            scope,
+            start.loc() + name.loc(),
+            Syntax::JsxName {
+                namespace: Some(start.loc().clone()),
+                name: name.loc().clone(),
+            },
+        )
+    } else {
+        // Plain name.
+        parser.create_node(
+            scope,
+            start.loc().clone(),
+            Syntax::JsxName {
+                namespace: None,
+                name: start.loc().clone(),
+            },
+        )
+    })
+}
+
+pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeId> {
+    let start = parser.require(TokenType::Identifier)?;
+    Ok(if parser.consume_if(TokenType::Colon)?.is_match() {
+        // Namespaced name.
+        let name = parser.require(TokenType::Identifier)?;
+        parser.create_node(
+            scope,
+            start.loc() + name.loc(),
+            Syntax::JsxName {
+                namespace: Some(start.loc().clone()),
+                name: name.loc().clone(),
+            },
+        )
+    } else if parser.peek()?.typ() == TokenType::Dot {
+        // Member name.
+        let mut path = vec![start.loc().clone()];
+        while parser.consume_if(TokenType::Dot)?.is_match() {
+            path.push(parser.require(TokenType::Identifier)?.loc().clone());
+        }
+        parser.create_node(
+            scope,
+            &path[0] + path.last().unwrap(),
+            Syntax::JsxMember { path },
+        )
+    } else {
+        // Plain name.
+        parser.create_node(
+            scope,
+            start.loc().clone(),
+            Syntax::JsxName {
+                namespace: None,
+                name: start.loc().clone(),
+            },
+        )
+    })
+}
+
+fn jsx_tag_names_are_equal(a: &Syntax, b: &Syntax) -> bool {
+    match (a, b) {
+        (Syntax::JsxMember { path: a_path }, Syntax::JsxMember { path: b_path }) => {
+            a_path == b_path
+        }
+        (
+            Syntax::JsxName {
+                name: a_name,
+                namespace: a_ns,
+            },
+            Syntax::JsxName {
+                name: b_name,
+                namespace: b_ns,
+            },
+        ) => a_ns == b_ns && a_name == b_name,
+        _ => false,
+    }
+}
+
+fn is_chevron_right_or_slash(typ: TokenType) -> bool {
+    typ == TokenType::ChevronRight || typ == TokenType::Slash
+}
+
+// https://facebook.github.io/jsx/
+pub fn parse_jsx_element(
+    scope: ScopeId,
+    parser: &mut Parser,
+    syntax: &ParsePatternSyntax,
+) -> SyntaxResult<NodeId> {
+    parser.require(TokenType::ChevronLeft)?;
+    // TODO Fragment
+    let tag_name = parse_jsx_tag_name(scope, parser)?;
+
+    // Attributes.
+    let mut attributes = vec![];
+    while !is_chevron_right_or_slash(parser.peek()?.typ()) {
+        let name = parse_jsx_name(scope, parser)?;
+        let value = if !parser.consume_if(TokenType::Equals)?.is_match() {
+            None
+        } else {
+            // TODO JSXSpreadAttribute
+            // TODO Attr values can be an element or fragment.
+            Some(if parser.consume_if(TokenType::BraceOpen)?.is_match() {
+                let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
+                let expr = parser.create_node(
+                    scope,
+                    parser[value].loc().clone(),
+                    Syntax::JsxExpressionContainer { value },
+                );
+                parser.require(TokenType::BraceClose)?;
+                expr
+            } else {
+                let value = parser.require(TokenType::LiteralString)?;
+                parser.create_node(
+                    scope,
+                    value.loc().clone(),
+                    Syntax::JsxText {
+                        value: value.loc().clone(),
+                    },
+                )
+            })
+        };
+        attributes.push(
+            parser.create_node(
+                scope,
+                parser[name]
+                    .loc()
+                    .add_option(value.map(|n| parser[n].loc())),
+                Syntax::JsxAttribute { name, value },
+            ),
+        )
+    }
+
+    Ok(if parser.consume_if(TokenType::Slash)?.is_match() {
+        // Self closing.
+        let end = parser.require(TokenType::ChevronRight)?;
+        parser.create_node(
+            scope,
+            parser[tag_name].loc() + end.loc(),
+            Syntax::JsxElement {
+                name: tag_name,
+                attributes,
+                children: vec![],
+            },
+        )
+    } else {
+        parser.require(TokenType::ChevronRight)?;
+
+        // Children.
+        let mut children = vec![];
+        while !parser.consume_if(TokenType::ChevronLeftSlash)?.is_match() {
+            let text =
+                parser.require_with_mode(TokenType::JsxTextContent, LexMode::JsxTextContent)?;
+            if !text.loc().is_empty() {
+                children.push(parser.create_node(
+                    scope,
+                    text.loc().clone(),
+                    Syntax::JsxText {
+                        value: text.loc().clone(),
+                    },
+                ));
+            };
+            if parser.peek()?.typ() == TokenType::ChevronLeft {
+                children.push(parse_jsx_element(scope, parser, syntax)?);
+            };
+            if parser.consume_if(TokenType::BraceOpen)?.is_match() {
+                // TODO Allow empty expr.
+                let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
+                children.push(parser.create_node(
+                    scope,
+                    parser[value].loc().clone(),
+                    Syntax::JsxExpressionContainer { value },
+                ));
+                parser.require(TokenType::BraceClose)?;
+            };
+        }
+        let end_name = parse_jsx_tag_name(scope, parser)?;
+        if !jsx_tag_names_are_equal(parser[tag_name].stx(), parser[end_name].stx()) {
+            return Err(parser[end_name].error(SyntaxErrorType::JsxClosingTagMismatch));
+        };
+        let end = parser.require(TokenType::ChevronRight)?;
+        parser.create_node(
+            scope,
+            parser[tag_name].loc() + end.loc(),
+            Syntax::JsxElement {
+                name: tag_name,
+                attributes,
+                children,
+            },
+        )
+    })
+}
+
 pub fn parse_call_args(
     scope: ScopeId,
     parser: &mut Parser,
@@ -544,6 +740,10 @@ fn parse_expr_operand(
             TokenType::BraceOpen => {
                 parser.restore_checkpoint(cp);
                 parse_expr_object(scope, parser, syntax)?
+            }
+            TokenType::ChevronLeft => {
+                parser.restore_checkpoint(cp);
+                parse_jsx_element(scope, parser, syntax)?
             }
             // Check this before is_valid_pattern_identifier.
             TokenType::KeywordAsync => {

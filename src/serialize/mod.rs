@@ -218,6 +218,38 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         Syntax::ImportMeta {} => json!({
             "$t": "ImportMeta",
         }),
+        Syntax::JsxAttribute { name, value } => json!({
+            "$t": "JsxAttribute",
+            "name": visit_node(m, *name),
+            "value": value.map(|n| visit_node(m, n)),
+        }),
+        Syntax::JsxName { namespace, name } => json!({
+            "$t": "JsxName",
+            "namespace": namespace.as_ref().map(|n| n.as_str().to_string()),
+            "name": name.as_str().to_string(),
+        }),
+        Syntax::JsxMember { path } => json!({
+            "$t": "JsxMember",
+            "path": path.iter().map(|c| c.as_str().to_string()).collect::<Vec<_>>(),
+        }),
+        Syntax::JsxExpressionContainer { value } => json!({
+            "$t": "JsxExpressionContainer",
+            "value": visit_node(m, *value),
+        }),
+        Syntax::JsxText { value } => json!({
+            "$t": "JsxText",
+            "value": value.as_str().to_string(),
+        }),
+        Syntax::JsxElement {
+            name,
+            attributes,
+            children,
+        } => json!({
+            "$t": "JsxElement",
+            "name": visit_node(m, *name),
+            "attributes": attributes.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "children": children.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+        }),
         Syntax::LiteralArrayExpr { elements } => json!({
             "$t": "LiteralArrayExpr",
             "elements": elements.iter().map(|e| match e {

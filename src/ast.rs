@@ -352,6 +352,28 @@ pub enum Syntax {
         module: Expression,
     },
     ImportMeta {},
+    JsxAttribute {
+        name: Expression,          // JsxName
+        value: Option<Expression>, // JsxExpressionContainer or JsxText
+    },
+    JsxName {
+        namespace: Option<SourceRange>,
+        name: SourceRange,
+    },
+    JsxMember {
+        path: Vec<SourceRange>,
+    },
+    JsxElement {
+        name: Expression,            // JsxName or JsxMember
+        attributes: Vec<Expression>, // JsxAttribute
+        children: Vec<Expression>,   // JsxElement or JsxExpressionContainer or JsxText
+    },
+    JsxExpressionContainer {
+        value: Expression,
+    },
+    JsxText {
+        value: SourceRange,
+    },
     LiteralArrayExpr {
         elements: Vec<ArrayElement>,
     },
