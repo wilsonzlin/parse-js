@@ -282,9 +282,28 @@ pub trait Visitor {
                     }
                 }
             }
-            Syntax::JsxAttribute { .. } => {}
-            Syntax::JsxElement { .. } => {}
-            Syntax::JsxExpressionContainer { .. } => {}
+            Syntax::JsxAttribute { name, value } => {
+                self.visit(node_map, n, *name);
+                if let Some(value) = value {
+                    self.visit(node_map, n, *value);
+                };
+            }
+            Syntax::JsxElement {
+                attributes,
+                children,
+                name,
+            } => {
+                self.visit(node_map, n, *name);
+                for attr in attributes {
+                    self.visit(node_map, n, *attr);
+                }
+                for child in children {
+                    self.visit(node_map, n, *child);
+                }
+            }
+            Syntax::JsxExpressionContainer { value } => {
+                self.visit(node_map, n, *value);
+            }
             Syntax::JsxMember { .. } => {}
             Syntax::JsxName { .. } => {}
             Syntax::JsxText { .. } => {}

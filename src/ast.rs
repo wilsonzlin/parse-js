@@ -356,13 +356,6 @@ pub enum Syntax {
         name: Expression,          // JsxName
         value: Option<Expression>, // JsxExpressionContainer or JsxText
     },
-    JsxName {
-        namespace: Option<SourceRange>,
-        name: SourceRange,
-    },
-    JsxMember {
-        path: Vec<SourceRange>,
-    },
     JsxElement {
         name: Expression,            // JsxName or JsxMember
         attributes: Vec<Expression>, // JsxAttribute
@@ -370,6 +363,13 @@ pub enum Syntax {
     },
     JsxExpressionContainer {
         value: Expression,
+    },
+    JsxMember {
+        path: Vec<SourceRange>,
+    },
+    JsxName {
+        namespace: Option<SourceRange>,
+        name: SourceRange,
     },
     JsxText {
         value: SourceRange,
