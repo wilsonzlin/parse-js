@@ -3,7 +3,7 @@ use crate::error::{SyntaxErrorType, SyntaxResult};
 use crate::parse::expr::parse_expr_until_either;
 use crate::parse::literal::parse_class_or_object_member_key;
 use crate::parse::parser::Parser;
-use crate::symbol::{ScopeId, Symbol};
+use crate::symbol::ScopeId;
 use crate::token::{TokenType, UNRESERVED_KEYWORDS};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -54,11 +54,11 @@ fn parse_pattern_identifier(
         ParsePatternAction::None => {}
         ParsePatternAction::AddToBlockScope => {
             let scope = &mut parser[scope];
-            scope.add_block_symbol(t.loc().clone(), (node_id))?;
+            scope.add_block_symbol(t.loc().clone(), node_id)?;
         }
         ParsePatternAction::AddToClosureScope => {
             if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
-                parser[closure_id].add_symbol(t.loc().clone(), (node_id))?;
+                parser[closure_id].add_symbol(t.loc().clone(), node_id)?;
             };
         }
     };
@@ -133,11 +133,11 @@ pub fn parse_pattern(
                 properties.push(property);
                 match (direct_key_name, target, action) {
                     (Some(name), None, ParsePatternAction::AddToBlockScope) => {
-                        parser[scope].add_block_symbol(name, (property))?;
+                        parser[scope].add_block_symbol(name, property)?;
                     }
                     (Some(name), None, ParsePatternAction::AddToClosureScope) => {
                         if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
-                            parser[closure_id].add_symbol(name, (property))?;
+                            parser[closure_id].add_symbol(name, property)?;
                         }
                     }
                     _ => {}

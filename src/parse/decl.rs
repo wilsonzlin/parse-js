@@ -4,7 +4,7 @@ use crate::parse::parser::Parser;
 use crate::parse::pattern::parse_pattern;
 use crate::parse::signature::parse_signature_function;
 use crate::parse::stmt::parse_stmt_block;
-use crate::symbol::{ScopeId, ScopeType, Symbol};
+use crate::symbol::{ScopeId, ScopeType};
 use crate::token::TokenType;
 
 use super::class_or_object::{parse_class_body, ParseClassBodyResult};
@@ -149,7 +149,7 @@ pub fn parse_decl_class(
                 name.clone(),
                 Syntax::ClassOrFunctionName { name: name.clone() },
             );
-            parser[scope].add_block_symbol(name.clone(), (name_node))?;
+            parser[scope].add_block_symbol(name.clone(), name_node)?;
             Some(name_node)
         }
         None => None,

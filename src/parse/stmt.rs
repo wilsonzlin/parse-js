@@ -8,7 +8,7 @@ use crate::parse::literal::parse_and_normalise_literal_string;
 use crate::parse::parser::Parser;
 use crate::parse::pattern::{parse_pattern, ParsePatternAction};
 use crate::source::SourceRange;
-use crate::symbol::{ScopeId, ScopeType, Symbol};
+use crate::symbol::{ScopeId, ScopeType};
 use crate::token::TokenType;
 
 use super::decl::{parse_decl_class, VarDeclParseMode};
@@ -48,7 +48,7 @@ fn parse_import_or_export_name(
         },
     );
     if add_to_scope {
-        parser[scope].add_symbol(alias.clone(), (alias_node))?;
+        parser[scope].add_symbol(alias.clone(), alias_node)?;
     };
     Ok(ExportName {
         target,
@@ -502,7 +502,7 @@ pub fn parse_stmt_import_or_expr_import(
                     name: alias.clone(),
                 },
             );
-            parser[scope].add_symbol(alias.clone(), (alias_node))?;
+            parser[scope].add_symbol(alias.clone(), alias_node)?;
             (
                 Some(alias_node),
                 parser.consume_if(TokenType::Comma)?.is_match(),
@@ -522,7 +522,7 @@ pub fn parse_stmt_import_or_expr_import(
                 name: alias.clone(),
             },
         );
-        parser[scope].add_symbol(alias.clone(), (alias_node))?;
+        parser[scope].add_symbol(alias.clone(), alias_node)?;
         Some(ExportNames::All(Some(alias_node)))
     } else {
         parser.require(TokenType::BraceOpen)?;
