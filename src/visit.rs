@@ -321,6 +321,7 @@ pub trait Visitor {
                     }
                 }
             }
+            Syntax::LiteralBigIntExpr { .. } => {}
             Syntax::LiteralBooleanExpr { .. } => {}
             Syntax::LiteralNull {} => {}
             Syntax::LiteralNumberExpr { .. } => {}

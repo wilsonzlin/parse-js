@@ -1,8 +1,9 @@
 use serde_json::{json, Value};
 
 use crate::ast::{
-    ArrayElement, ClassOrObjectMemberKey, ClassOrObjectMemberValue, ForInOfStmtHeaderLhs,
-    ForStmtHeader, ForThreeInit, LiteralTemplatePart, NodeId, NodeMap, ObjectMemberType, Syntax,
+    ArrayElement, ClassOrObjectMemberKey, ClassOrObjectMemberValue, ExportNames,
+    ForInOfStmtHeaderLhs, ForStmtHeader, ForThreeInit, LiteralTemplatePart, NodeId, NodeMap,
+    ObjectMemberType, Syntax,
 };
 
 fn visit_class_or_object_member_key(m: &NodeMap, key: &ClassOrObjectMemberKey) -> Value {
@@ -267,6 +268,10 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
                 ArrayElement::Empty => Value::Null,
             }).collect::<Vec<_>>(),
         }),
+        Syntax::LiteralBigIntExpr { value } => json!({
+            "$t": "LiteralBigIntExpr",
+            "value": value,
+        }),
         Syntax::LiteralBooleanExpr { value } => json!({
             "$t": "LiteralBooleanExpr",
             "value": value,
@@ -361,7 +366,21 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "ExportDefaultStmt",
             "expression": visit_node(m, *expression),
         }),
-        Syntax::ExportListStmt { names, from } => todo!(),
+        Syntax::ExportListStmt { names, from } => json!({
+            "$t": "ExportListStmt",
+            "names": match names {
+              ExportNames::All(p) => json!({
+                  "all": p.map(|n| visit_node(m, n)),
+              }),
+              ExportNames::Specific(names) => json!({
+                  "specific": names.iter().map(|n| json!({
+                      "target": n.target.as_str().to_string(),
+                      "alias": visit_node(m, n.alias),
+                  })).collect::<Vec<_>>(),
+              })
+            },
+            "from": from,
+        }),
         Syntax::ExpressionStmt { expression } => json!({
             "$t": "ExpressionStmt",
             "expression": visit_node(m, *expression),

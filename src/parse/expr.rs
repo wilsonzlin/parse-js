@@ -854,6 +854,14 @@ fn parse_expr_operand(
             TokenType::KeywordThis => {
                 parser.create_node(scope, t.loc().clone(), Syntax::ThisExpr {})
             }
+            TokenType::LiteralBigInt => parser.create_node(
+                scope,
+                t.loc().clone(),
+                Syntax::LiteralBigIntExpr {
+                    // TODO Normalise.
+                    value: t.loc().as_str().to_string(),
+                },
+            ),
             TokenType::LiteralTrue | TokenType::LiteralFalse => parser.create_node(
                 scope,
                 t.loc().clone(),

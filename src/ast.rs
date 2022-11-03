@@ -382,6 +382,9 @@ pub enum Syntax {
     LiteralArrayExpr {
         elements: Vec<ArrayElement>,
     },
+    LiteralBigIntExpr {
+        value: String,
+    },
     LiteralBooleanExpr {
         value: bool,
     },
