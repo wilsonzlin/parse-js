@@ -153,7 +153,6 @@ pub fn parse_jsx_element(
     syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
     let tag_start = parser.require(TokenType::ChevronLeft)?;
-    // TODO Add name to symbols.
     let tag_name = parse_jsx_tag_name(scope, parser)?;
 
     // Attributes.

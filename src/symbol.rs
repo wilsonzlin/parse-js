@@ -7,28 +7,28 @@ use crate::source::SourceRange;
 
 pub type Identifier = SourceRange;
 
+// ScopeId, index in symbol_declaration_order.
+pub struct SymbolId(usize, usize);
+
+impl SymbolId {
+    pub fn scope_id(&self) -> usize {
+        self.0
+    }
+
+    pub fn ordinal_in_scope(&self) -> usize {
+        self.1
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Symbol {
     // This should refer to an ObjectPatternProperty if shorthand property, FunctionName if function name, or IdentifierPattern otherwise.
     declarator_pattern: NodeId,
-    // Set to 0 initially, before minification pass. WARNING: 0 is still a valid value, so do not use before setting.
-    minified_name_id: usize,
 }
 
 impl Symbol {
     pub fn new(declarator_pattern: NodeId) -> Symbol {
-        Symbol {
-            declarator_pattern,
-            minified_name_id: 0,
-        }
-    }
-
-    pub fn minified_name_id(&self) -> usize {
-        self.minified_name_id
-    }
-
-    pub fn set_minified_name_id(&mut self, id: usize) -> () {
-        self.minified_name_id = id;
+        Symbol { declarator_pattern }
     }
 }
 
@@ -71,11 +71,10 @@ impl ScopeData {
     pub fn add_symbol(&mut self, identifier: Identifier, symbol: Symbol) -> SyntaxResult<()> {
         if self.symbols.insert(identifier.clone(), symbol).is_some() {
             // TODO Investigate raising an error; however, many production codebases redeclare `var`.
-            Ok(())
         } else {
             self.symbol_declaration_order.push(identifier);
-            Ok(())
-        }
+        };
+        Ok(())
     }
 
     pub fn add_block_symbol(&mut self, identifier: Identifier, symbol: Symbol) -> SyntaxResult<()> {
@@ -178,5 +177,52 @@ impl Index<ScopeId> for ScopeMap {
 impl IndexMut<ScopeId> for ScopeMap {
     fn index_mut(&mut self, index: ScopeId) -> &mut Self::Output {
         &mut self.scopes[index.0]
+    }
+}
+
+impl Index<SymbolId> for ScopeMap {
+    type Output = Symbol;
+
+    fn index(&self, index: SymbolId) -> &Self::Output {
+        let scope = &self.scopes[index.0];
+        &scope.symbols[&scope.symbol_declaration_order[index.1]]
+    }
+}
+
+/// Use this to associate additional state with a Symbol, identified by a SymbolId.
+/// We prefer this instead of adding an extra generic state field on Symbol, as that would require propagating the generic type everywhere.
+/// Use as many of these as desired. To allow for initialisation and referencing without Option, the state value must have a default.
+pub struct SymbolMap<T> {
+    data: Vec<Vec<T>>,
+}
+
+impl<T> SymbolMap<T> {
+    pub fn new<U: Default>(scope_map: &ScopeMap) -> SymbolMap<U> {
+        SymbolMap {
+            data: scope_map
+                .scopes
+                .iter()
+                .map(|s| {
+                    s.symbol_declaration_order
+                        .iter()
+                        .map(|_| U::default())
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+}
+
+impl<T> Index<SymbolId> for SymbolMap<T> {
+    type Output = T;
+
+    fn index(&self, index: SymbolId) -> &Self::Output {
+        &self.data[index.0][index.1]
+    }
+}
+
+impl<T> IndexMut<SymbolId> for SymbolMap<T> {
+    fn index_mut(&mut self, index: SymbolId) -> &mut Self::Output {
+        &mut self.data[index.0][index.1]
     }
 }
