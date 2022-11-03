@@ -100,6 +100,12 @@ lazy_static! {
         filter
     };
 
+    pub static ref ID_CONTINUE_JSX: CharFilter = {
+        let mut filter = ID_CONTINUE.clone();
+        filter.add_char(b'-');
+        filter
+    };
+
     pub static ref ID_CONTINUE_OR_PARENTHESIS_CLOSE_OR_BRACKET_CLOSE: CharFilter = {
         let mut filter = ID_CONTINUE.clone();
         filter.add_char(b')');

@@ -43,10 +43,10 @@ impl Asi {
 }
 
 pub fn parse_jsx_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeId> {
-    let start = parser.require(TokenType::Identifier)?;
+    let start = parser.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
     Ok(if parser.consume_if(TokenType::Colon)?.is_match() {
         // Namespaced name.
-        let name = parser.require(TokenType::Identifier)?;
+        let name = parser.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
         parser.create_node(
             scope,
             start.loc() + name.loc(),
@@ -70,13 +70,16 @@ pub fn parse_jsx_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeI
 
 pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<Option<NodeId>> {
     Ok(
-        match parser.consume_if(TokenType::Identifier)?.match_loc() {
+        match parser
+            .maybe_with_mode(TokenType::Identifier, LexMode::JsxTag)?
+            .match_loc()
+        {
             // Fragment.
             None => None,
             Some(start) => Some({
                 if parser.consume_if(TokenType::Colon)?.is_match() {
                     // Namespaced name.
-                    let name = parser.require(TokenType::Identifier)?;
+                    let name = parser.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
                     parser.create_node(
                         scope,
                         start + name.loc(),
@@ -85,7 +88,9 @@ pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<O
                             name: name.loc().clone(),
                         },
                     )
-                } else if parser.peek()?.typ() == TokenType::Dot {
+                } else if parser.peek()?.typ() == TokenType::Dot
+                    && !start.as_slice().contains(&b'-')
+                {
                     // Member name.
                     let mut path = vec![];
                     while parser.consume_if(TokenType::Dot)?.is_match() {

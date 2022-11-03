@@ -6,8 +6,8 @@ use lazy_static::lazy_static;
 use memchr::{memchr, memchr2, memchr3};
 
 use crate::char::{
-    CharFilter, DIGIT, DIGIT_BIN, DIGIT_HEX, DIGIT_OCT, ID_CONTINUE, ID_START, ID_START_CHARSTR,
-    WHITESPACE,
+    CharFilter, DIGIT, DIGIT_BIN, DIGIT_HEX, DIGIT_OCT, ID_CONTINUE, ID_CONTINUE_JSX, ID_START,
+    ID_START_CHARSTR, WHITESPACE,
 };
 use crate::error::{SyntaxError, SyntaxErrorType, SyntaxResult};
 use crate::source::{Source, SourceRange};
@@ -18,6 +18,7 @@ mod tests;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum LexMode {
+    JsxTag,
     JsxTextContent,
     SlashIsRegex,
     Standard,
@@ -398,12 +399,20 @@ fn lex_single_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
     Ok(())
 }
 
-fn lex_identifier(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_identifier(
+    lexer: &mut Lexer,
+    mode: LexMode,
+    preceded_by_line_terminator: bool,
+) -> SyntaxResult<Token> {
     let cp = lexer.checkpoint();
     // Consume starter.
     lexer.skip_expect(1);
     loop {
-        lexer.consume(lexer.while_chars(&ID_CONTINUE));
+        lexer.consume(lexer.while_chars(if mode == LexMode::JsxTag {
+            &ID_CONTINUE_JSX
+        } else {
+            &ID_CONTINUE
+        }));
         // TODO We assume if it's not ASCII it's part of a UTF-8 byte sequence, and that sequence represents a valid JS identifier continue code point.
         if lexer.peek_or_eof(0).filter(|c| !c.is_ascii()).is_none() {
             break;
@@ -653,7 +662,7 @@ pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
         };
 
         if is_utf8_start {
-            return lex_identifier(lexer, preceded_by_line_terminator);
+            return lex_identifier(lexer, mode, preceded_by_line_terminator);
         };
 
         let AhoCorasickMatch { id, mut mat } = lexer.aho_corasick(&MATCHER)?;
@@ -666,7 +675,9 @@ pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
             }
             pat => {
                 return match pat {
-                    TokenType::Identifier => lex_identifier(lexer, preceded_by_line_terminator),
+                    TokenType::Identifier => {
+                        lex_identifier(lexer, mode, preceded_by_line_terminator)
+                    }
                     TokenType::LiteralNumber => lex_number(lexer, preceded_by_line_terminator),
                     TokenType::LiteralNumberBin => {
                         lex_number_bin(lexer, preceded_by_line_terminator)
@@ -698,7 +709,7 @@ pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
                                 .is_some()
                         {
                             // We've accidentally matched a prefix of an identifier as a keyword.
-                            return lex_identifier(lexer, preceded_by_line_terminator);
+                            return lex_identifier(lexer, mode, preceded_by_line_terminator);
                         };
                         let loc = lexer.range(mat);
                         lexer.consume(mat);
