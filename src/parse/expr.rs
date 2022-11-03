@@ -748,53 +748,91 @@ fn parse_expr_operand(
 ) -> SyntaxResult<NodeId> {
     let cp = parser.checkpoint();
     let t = parser.next_with_mode(LexMode::SlashIsRegex)?;
-    let operand = if let Some(operator) = UNARY_OPERATOR_MAPPING.get(&t.typ()) {
-        let operator = if operator.name == OperatorName::Yield
-            && parser.consume_if(TokenType::Asterisk)?.is_match()
+    let operand = match UNARY_OPERATOR_MAPPING.get(&t.typ()) {
+        Some(operator)
+            if (
+                // TODO Is this correct? Should it be possible to use as operator or keyword depending on whether there is an operand following?
+                (operator.name != OperatorName::Await && operator.name != OperatorName::Yield)
+                    || (operator.name == OperatorName::Await && !syntax.await_allowed)
+                    || (operator.name == OperatorName::Yield && !syntax.yield_allowed)
+            ) =>
         {
-            &OPERATORS[&OperatorName::YieldDelegated]
-        } else {
-            *operator
-        };
-        let next_min_prec =
-            operator.precedence + (operator.associativity == Associativity::Left) as u8;
-        let operand = parse_expr_with_min_prec(
-            scope,
-            parser,
-            next_min_prec,
-            terminator_a,
-            terminator_b,
-            false,
-            asi,
-            syntax,
-        )?;
-        parser.create_node(
-            scope,
-            t.loc() + parser[operand].loc(),
-            Syntax::UnaryExpr {
-                parenthesised: false,
-                operator: operator.name,
-                argument: operand,
-            },
-        )
-    } else {
-        match t.typ() {
-            TokenType::BracketOpen => {
-                parser.restore_checkpoint(cp);
-                parse_expr_array(scope, parser, syntax)?
-            }
-            TokenType::BraceOpen => {
-                parser.restore_checkpoint(cp);
-                parse_expr_object(scope, parser, syntax)?
-            }
-            TokenType::ChevronLeft => {
-                parser.restore_checkpoint(cp);
-                parse_jsx_element(scope, parser, syntax)?
-            }
-            // Check this before is_valid_pattern_identifier.
-            TokenType::KeywordAsync => {
-                match parser.peek()?.typ() {
-                    TokenType::ParenthesisOpen => {
+            let operator = if operator.name == OperatorName::Yield
+                && parser.consume_if(TokenType::Asterisk)?.is_match()
+            {
+                &OPERATORS[&OperatorName::YieldDelegated]
+            } else {
+                *operator
+            };
+            let next_min_prec =
+                operator.precedence + (operator.associativity == Associativity::Left) as u8;
+            let operand = parse_expr_with_min_prec(
+                scope,
+                parser,
+                next_min_prec,
+                terminator_a,
+                terminator_b,
+                false,
+                asi,
+                syntax,
+            )?;
+            parser.create_node(
+                scope,
+                t.loc() + parser[operand].loc(),
+                Syntax::UnaryExpr {
+                    parenthesised: false,
+                    operator: operator.name,
+                    argument: operand,
+                },
+            )
+        }
+        _ => {
+            match t.typ() {
+                TokenType::BracketOpen => {
+                    parser.restore_checkpoint(cp);
+                    parse_expr_array(scope, parser, syntax)?
+                }
+                TokenType::BraceOpen => {
+                    parser.restore_checkpoint(cp);
+                    parse_expr_object(scope, parser, syntax)?
+                }
+                TokenType::ChevronLeft => {
+                    parser.restore_checkpoint(cp);
+                    parse_jsx_element(scope, parser, syntax)?
+                }
+                // Check this before is_valid_pattern_identifier.
+                TokenType::KeywordAsync => {
+                    match parser.peek()?.typ() {
+                        TokenType::ParenthesisOpen => {
+                            parser.restore_checkpoint(cp);
+                            parse_expr_arrow_function(
+                                scope,
+                                parser,
+                                terminator_a,
+                                terminator_b,
+                                syntax,
+                            )?
+                        }
+                        TokenType::KeywordFunction => {
+                            parser.restore_checkpoint(cp);
+                            parse_expr_function(scope, parser, syntax)?
+                        }
+                        _ => {
+                            // `await` is being used as an identifier.
+                            parser.create_node(
+                                scope,
+                                t.loc().clone(),
+                                Syntax::IdentifierExpr {
+                                    name: t.loc().clone(),
+                                },
+                            )
+                        }
+                    }
+                }
+                typ if is_valid_pattern_identifier(typ, syntax) => {
+                    if parser.peek()?.typ() == TokenType::EqualsChevronRight {
+                        // Single-unparenthesised-parameter arrow function.
+                        // NOTE: `await` is not allowed as an arrow function parameter, but we'll check this in parse_expr_arrow_function.
                         parser.restore_checkpoint(cp);
                         parse_expr_arrow_function(
                             scope,
@@ -803,13 +841,7 @@ fn parse_expr_operand(
                             terminator_b,
                             syntax,
                         )?
-                    }
-                    TokenType::KeywordFunction => {
-                        parser.restore_checkpoint(cp);
-                        parse_expr_function(scope, parser, syntax)?
-                    }
-                    _ => {
-                        // `await` is being used as an identifier.
+                    } else {
                         parser.create_node(
                             scope,
                             t.loc().clone(),
@@ -819,117 +851,102 @@ fn parse_expr_operand(
                         )
                     }
                 }
-            }
-            typ if is_valid_pattern_identifier(typ, syntax) => {
-                if parser.peek()?.typ() == TokenType::EqualsChevronRight {
-                    // Single-unparenthesised-parameter arrow function.
-                    // NOTE: `await` is not allowed as an arrow function parameter, but we'll check this in parse_expr_arrow_function.
+                TokenType::KeywordClass => {
                     parser.restore_checkpoint(cp);
-                    parse_expr_arrow_function(scope, parser, terminator_a, terminator_b, syntax)?
-                } else {
+                    parse_expr_class(scope, parser, syntax)?
+                }
+                TokenType::KeywordFunction => {
+                    parser.restore_checkpoint(cp);
+                    parse_expr_function(scope, parser, syntax)?
+                }
+                TokenType::KeywordImport => {
+                    parser.restore_checkpoint(cp);
+                    parse_expr_import(scope, parser, syntax)?
+                }
+                TokenType::KeywordSuper => {
+                    parser.create_node(scope, t.loc().clone(), Syntax::SuperExpr {})
+                }
+                TokenType::KeywordThis => {
+                    parser.create_node(scope, t.loc().clone(), Syntax::ThisExpr {})
+                }
+                TokenType::LiteralBigInt => parser.create_node(
+                    scope,
+                    t.loc().clone(),
+                    Syntax::LiteralBigIntExpr {
+                        // TODO Normalise.
+                        value: t.loc().as_str().to_string(),
+                    },
+                ),
+                TokenType::LiteralTrue | TokenType::LiteralFalse => parser.create_node(
+                    scope,
+                    t.loc().clone(),
+                    Syntax::LiteralBooleanExpr {
+                        value: t.typ() == TokenType::LiteralTrue,
+                    },
+                ),
+                TokenType::LiteralNull => {
+                    parser.create_node(scope, t.loc().clone(), Syntax::LiteralNull {})
+                }
+                TokenType::LiteralNumber => parser.create_node(
+                    scope,
+                    t.loc().clone(),
+                    Syntax::LiteralNumberExpr {
+                        value: normalise_literal_number(t.loc())?,
+                    },
+                ),
+                TokenType::LiteralRegex => {
+                    parser.create_node(scope, t.loc().clone(), Syntax::LiteralRegexExpr {})
+                }
+                TokenType::LiteralString => parser.create_node(
+                    scope,
+                    t.loc().clone(),
+                    Syntax::LiteralStringExpr {
+                        value: normalise_literal_string(t.loc())?,
+                    },
+                ),
+                TokenType::LiteralTemplatePartString => {
+                    let mut loc = t.loc().clone();
+                    let mut parts = vec![LiteralTemplatePart::String(t.loc().clone())];
+                    loop {
+                        let substitution =
+                            parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
+                        parser.require(TokenType::BraceClose)?;
+                        parts.push(LiteralTemplatePart::Substitution(substitution));
+                        let string = lex_template_string_continue(parser.lexer_mut(), false)?;
+                        loc.extend(string.loc());
+                        parts.push(LiteralTemplatePart::String(string.loc().clone()));
+                        parser.clear_buffered();
+                        match string.typ() {
+                            TokenType::LiteralTemplatePartStringEnd => break,
+                            _ => {}
+                        };
+                    }
+                    parser.create_node(scope, loc, Syntax::LiteralTemplateExpr { parts })
+                }
+                TokenType::LiteralTemplatePartStringEnd => {
+                    let parts = vec![LiteralTemplatePart::String(t.loc().clone())];
                     parser.create_node(
                         scope,
                         t.loc().clone(),
-                        Syntax::IdentifierExpr {
-                            name: t.loc().clone(),
-                        },
+                        Syntax::LiteralTemplateExpr { parts },
                     )
                 }
-            }
-            TokenType::KeywordClass => {
-                parser.restore_checkpoint(cp);
-                parse_expr_class(scope, parser, syntax)?
-            }
-            TokenType::KeywordFunction => {
-                parser.restore_checkpoint(cp);
-                parse_expr_function(scope, parser, syntax)?
-            }
-            TokenType::KeywordImport => {
-                parser.restore_checkpoint(cp);
-                parse_expr_import(scope, parser, syntax)?
-            }
-            TokenType::KeywordSuper => {
-                parser.create_node(scope, t.loc().clone(), Syntax::SuperExpr {})
-            }
-            TokenType::KeywordThis => {
-                parser.create_node(scope, t.loc().clone(), Syntax::ThisExpr {})
-            }
-            TokenType::LiteralBigInt => parser.create_node(
-                scope,
-                t.loc().clone(),
-                Syntax::LiteralBigIntExpr {
-                    // TODO Normalise.
-                    value: t.loc().as_str().to_string(),
-                },
-            ),
-            TokenType::LiteralTrue | TokenType::LiteralFalse => parser.create_node(
-                scope,
-                t.loc().clone(),
-                Syntax::LiteralBooleanExpr {
-                    value: t.typ() == TokenType::LiteralTrue,
-                },
-            ),
-            TokenType::LiteralNull => {
-                parser.create_node(scope, t.loc().clone(), Syntax::LiteralNull {})
-            }
-            TokenType::LiteralNumber => parser.create_node(
-                scope,
-                t.loc().clone(),
-                Syntax::LiteralNumberExpr {
-                    value: normalise_literal_number(t.loc())?,
-                },
-            ),
-            TokenType::LiteralRegex => {
-                parser.create_node(scope, t.loc().clone(), Syntax::LiteralRegexExpr {})
-            }
-            TokenType::LiteralString => parser.create_node(
-                scope,
-                t.loc().clone(),
-                Syntax::LiteralStringExpr {
-                    value: normalise_literal_string(t.loc())?,
-                },
-            ),
-            TokenType::LiteralTemplatePartString => {
-                let mut loc = t.loc().clone();
-                let mut parts = vec![LiteralTemplatePart::String(t.loc().clone())];
-                loop {
-                    let substitution = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
-                    parser.require(TokenType::BraceClose)?;
-                    parts.push(LiteralTemplatePart::Substitution(substitution));
-                    let string = lex_template_string_continue(parser.lexer_mut(), false)?;
-                    loc.extend(string.loc());
-                    parts.push(LiteralTemplatePart::String(string.loc().clone()));
-                    parser.clear_buffered();
-                    match string.typ() {
-                        TokenType::LiteralTemplatePartStringEnd => break,
-                        _ => {}
-                    };
+                TokenType::LiteralUndefined => {
+                    parser.create_node(scope, t.loc().clone(), Syntax::LiteralUndefined {})
                 }
-                parser.create_node(scope, loc, Syntax::LiteralTemplateExpr { parts })
+                TokenType::ParenthesisOpen => {
+                    parser.restore_checkpoint(cp);
+                    parse_expr_arrow_function_or_grouping(
+                        scope,
+                        parser,
+                        terminator_a,
+                        terminator_b,
+                        asi,
+                        syntax,
+                    )?
+                }
+                _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("expression operand"))),
             }
-            TokenType::LiteralTemplatePartStringEnd => {
-                let parts = vec![LiteralTemplatePart::String(t.loc().clone())];
-                parser.create_node(
-                    scope,
-                    t.loc().clone(),
-                    Syntax::LiteralTemplateExpr { parts },
-                )
-            }
-            TokenType::LiteralUndefined => {
-                parser.create_node(scope, t.loc().clone(), Syntax::LiteralUndefined {})
-            }
-            TokenType::ParenthesisOpen => {
-                parser.restore_checkpoint(cp);
-                parse_expr_arrow_function_or_grouping(
-                    scope,
-                    parser,
-                    terminator_a,
-                    terminator_b,
-                    asi,
-                    syntax,
-                )?
-            }
-            _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("expression operand"))),
         }
     };
     Ok(operand)

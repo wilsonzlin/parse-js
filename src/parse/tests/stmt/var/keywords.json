@@ -1,0 +1,147 @@
+{
+  "$t": "VarStmt",
+  "declaration": {
+    "$t": "VarDecl",
+    "declarators": [
+      {
+        "initializer": {
+          "$t": "LiteralObjectExpr",
+          "members": [
+            {
+              "$t": "ObjectMember",
+              "typ": {
+                "valued": {
+                  "key": "get",
+                  "value": {
+                    "property": {
+                      "initializer": {
+                        "$t": "LiteralArrayExpr",
+                        "elements": [
+                          {
+                            "single": {
+                              "$t": "IdentifierExpr",
+                              "name": "set"
+                            }
+                          },
+                          {
+                            "single": {
+                              "$t": "IdentifierExpr",
+                              "name": "get"
+                            }
+                          },
+                          {
+                            "single": {
+                              "$t": "IdentifierExpr",
+                              "name": "await"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "pattern": {
+          "$t": "IdentifierPattern",
+          "name": "set"
+        }
+      },
+      {
+        "initializer": null,
+        "pattern": {
+          "$t": "IdentifierPattern",
+          "name": "of"
+        }
+      },
+      {
+        "initializer": {
+          "$t": "LiteralObjectExpr",
+          "members": [
+            {
+              "$t": "ObjectMember",
+              "typ": {
+                "shorthand": "await"
+              }
+            },
+            {
+              "$t": "ObjectMember",
+              "typ": {
+                "shorthand": "of"
+              }
+            },
+            {
+              "$t": "ObjectMember",
+              "typ": {
+                "shorthand": "let"
+              }
+            }
+          ]
+        },
+        "pattern": {
+          "$t": "ObjectPattern",
+          "properties": [
+            {
+              "$t": "ObjectPatternProperty",
+              "default": null,
+              "key": "get",
+              "target": null
+            },
+            {
+              "$t": "ObjectPatternProperty",
+              "default": null,
+              "key": "set",
+              "target": null
+            },
+            {
+              "$t": "ObjectPatternProperty",
+              "default": null,
+              "key": "yield",
+              "target": {
+                "$t": "ArrayPattern",
+                "elements": [
+                  {
+                    "default_value": null,
+                    "target": {
+                      "$t": "IdentifierPattern",
+                      "name": "await"
+                    }
+                  },
+                  {
+                    "default_value": null,
+                    "target": {
+                      "$t": "IdentifierPattern",
+                      "name": "of"
+                    }
+                  }
+                ],
+                "rest": null
+              }
+            }
+          ],
+          "rest": null
+        }
+      },
+      {
+        "initializer": {
+          "$t": "IdentifierExpr",
+          "name": "let"
+        },
+        "pattern": {
+          "$t": "IdentifierPattern",
+          "name": "await"
+        }
+      },
+      {
+        "initializer": null,
+        "pattern": {
+          "$t": "IdentifierPattern",
+          "name": "yield"
+        }
+      }
+    ],
+    "mode": "Var"
+  }
+}

@@ -9,7 +9,7 @@ use crate::source::SourceRange;
 use crate::symbol::ScopeId;
 use crate::token::TokenType;
 
-use super::pattern::ParsePatternSyntax;
+use super::pattern::{is_valid_pattern_identifier, ParsePatternSyntax};
 
 fn parse_radix(raw: &str, radix: u32) -> Result<f64, ()> {
     u64::from_str_radix(raw, radix)
@@ -52,7 +52,10 @@ pub fn parse_class_or_object_member_key(
         parser.require(TokenType::BracketClose)?;
         ClassOrObjectMemberKey::Computed(expr)
     } else {
-        let name = parser.require(TokenType::Identifier)?;
+        let name = parser.next()?;
+        if !is_valid_pattern_identifier(name.typ(), syntax) {
+            return Err(name.error(SyntaxErrorType::ExpectedNotFound));
+        };
         ClassOrObjectMemberKey::Direct(name.loc().clone())
     })
 }
