@@ -365,6 +365,8 @@ pub enum Syntax {
         value: Expression,
     },
     JsxMember {
+        // This is a separate property to indicate it's required and for easier pattern matching.
+        base: SourceRange,
         path: Vec<SourceRange>,
     },
     JsxName {

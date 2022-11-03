@@ -228,8 +228,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "namespace": namespace.as_ref().map(|n| n.as_str().to_string()),
             "name": name.as_str().to_string(),
         }),
-        Syntax::JsxMember { path } => json!({
+        Syntax::JsxMember { base, path } => json!({
             "$t": "JsxMember",
+            "base": base.as_str().to_string(),
             "path": path.iter().map(|c| c.as_str().to_string()).collect::<Vec<_>>(),
         }),
         Syntax::JsxExpressionContainer { value } => json!({

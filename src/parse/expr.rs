@@ -87,14 +87,17 @@ pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<O
                     )
                 } else if parser.peek()?.typ() == TokenType::Dot {
                     // Member name.
-                    let mut path = vec![start.clone()];
+                    let mut path = vec![];
                     while parser.consume_if(TokenType::Dot)?.is_match() {
                         path.push(parser.require(TokenType::Identifier)?.loc().clone());
                     }
                     parser.create_node(
                         scope,
-                        &path[0] + path.last().unwrap(),
-                        Syntax::JsxMember { path },
+                        start.add_option(path.last()),
+                        Syntax::JsxMember {
+                            base: start.clone(),
+                            path,
+                        },
                     )
                 } else {
                     // Plain name.
@@ -115,9 +118,16 @@ pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<O
 fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(Syntax::JsxMember { path: a_path }), Some(Syntax::JsxMember { path: b_path })) => {
-            a_path == b_path
-        }
+        (
+            Some(Syntax::JsxMember {
+                base: a_base,
+                path: a_path,
+            }),
+            Some(Syntax::JsxMember {
+                base: b_base,
+                path: b_path,
+            }),
+        ) => a_base == b_base && a_path == b_path,
         (
             Some(Syntax::JsxName {
                 name: a_name,

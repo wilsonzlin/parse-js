@@ -99,8 +99,8 @@
       "children": [],
       "name": {
         "$t": "JsxMember",
+        "base": "red",
         "path": [
-          "red",
           "a"
         ]
       }
@@ -118,8 +118,8 @@
   ],
   "name": {
     "$t": "JsxMember",
+    "base": "a",
     "path": [
-      "a",
       "b",
       "c"
     ]
