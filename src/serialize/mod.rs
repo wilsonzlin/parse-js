@@ -237,6 +237,10 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "JsxExpressionContainer",
             "value": visit_node(m, *value),
         }),
+        Syntax::JsxSpreadAttribute { value } => json!({
+            "$t": "JsxSpreadAttribute",
+            "value": visit_node(m, *value),
+        }),
         Syntax::JsxText { value } => json!({
             "$t": "JsxText",
             "value": value.as_str().to_string(),

@@ -308,6 +308,9 @@ pub trait Visitor {
             }
             Syntax::JsxMember { .. } => {}
             Syntax::JsxName { .. } => {}
+            Syntax::JsxSpreadAttribute { value } => {
+                self.visit(node_map, n, *value);
+            }
             Syntax::JsxText { .. } => {}
             Syntax::LiteralArrayExpr { elements } => {
                 for elem in elements {

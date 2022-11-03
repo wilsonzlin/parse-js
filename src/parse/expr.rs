@@ -153,18 +153,34 @@ pub fn parse_jsx_element(
     syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
     let tag_start = parser.require(TokenType::ChevronLeft)?;
+    // TODO Add name to symbols.
     let tag_name = parse_jsx_tag_name(scope, parser)?;
 
     // Attributes.
     let mut attributes = vec![];
     if tag_name.is_some() {
-        while !is_chevron_right_or_slash(parser.peek()?.typ()) {
+        loop {
+            if is_chevron_right_or_slash(parser.peek()?.typ()) {
+                break;
+            }
+            if parser.consume_if(TokenType::BraceOpen)?.is_match() {
+                let start = parser.require(TokenType::DotDotDot)?;
+                let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
+                let end = parser.require(TokenType::BraceClose)?;
+                attributes.push(parser.create_node(
+                    scope,
+                    start.loc() + end.loc(),
+                    Syntax::JsxSpreadAttribute { value },
+                ));
+                continue;
+            }
+
             let name = parse_jsx_name(scope, parser)?;
             let value = if !parser.consume_if(TokenType::Equals)?.is_match() {
                 None
             } else {
                 // TODO JSXSpreadAttribute
-                // TODO Attr values can be an element or fragment.
+                // TODO Attr values can be an element or fragment directly e.g. `a=<div/>`.
                 Some(if parser.consume_if(TokenType::BraceOpen)?.is_match() {
                     let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
                     let expr = parser.create_node(

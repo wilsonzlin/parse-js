@@ -73,7 +73,38 @@
           "$t": "JsxExpressionContainer",
           "value": {
             "$t": "JsxElement",
-            "attributes": [],
+            "attributes": [
+              {
+                "$t": "JsxSpreadAttribute",
+                "value": {
+                  "$t": "LiteralObjectExpr",
+                  "members": [
+                    {
+                      "$t": "ObjectMember",
+                      "typ": {
+                        "valued": {
+                          "key": "a",
+                          "value": {
+                            "property": {
+                              "initializer": {
+                                "$t": "IdentifierExpr",
+                                "name": "b"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$t": "ObjectMember",
+                      "typ": {
+                        "shorthand": "c"
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
             "children": [],
             "name": {
               "$t": "JsxName",

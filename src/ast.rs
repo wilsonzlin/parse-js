@@ -358,7 +358,7 @@ pub enum Syntax {
     },
     JsxElement {
         name: Option<Expression>,    // JsxName or JsxMember; None if fragment
-        attributes: Vec<Expression>, // JsxAttribute; always empty if fragment
+        attributes: Vec<Expression>, // JsxAttribute or JsxSpreadAttribute; always empty if fragment
         children: Vec<Expression>,   // JsxElement or JsxExpressionContainer or JsxText
     },
     JsxExpressionContainer {
@@ -372,6 +372,9 @@ pub enum Syntax {
     JsxName {
         namespace: Option<SourceRange>,
         name: SourceRange,
+    },
+    JsxSpreadAttribute {
+        value: Expression,
     },
     JsxText {
         value: SourceRange,
