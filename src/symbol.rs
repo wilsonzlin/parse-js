@@ -9,6 +9,7 @@ use crate::source::SourceRange;
 pub type Identifier = SourceRange;
 
 // ScopeId, index in symbol_declaration_order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SymbolId(ScopeId, usize);
 
 impl SymbolId {
@@ -21,7 +22,8 @@ impl SymbolId {
     }
 }
 
-#[derive(Clone, Debug)]
+// WARNING: Clone should not be derived, as ordinal_in_scope is a unique value.
+#[derive(Debug)]
 pub struct Symbol {
     // Index in the containing ScopeData's symbol_declaration_order Vec.
     ordinal_in_scope: usize,
