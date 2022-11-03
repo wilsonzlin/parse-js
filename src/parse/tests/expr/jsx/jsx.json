@@ -104,6 +104,16 @@
           "a"
         ]
       }
+    },
+    {
+      "$t": "JsxText",
+      "value": " bb\n    bb  "
+    },
+    {
+      "$t": "JsxElement",
+      "attributes": [],
+      "children": [],
+      "name": null
     }
   ],
   "name": {

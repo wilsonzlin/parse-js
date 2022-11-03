@@ -246,7 +246,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             children,
         } => json!({
             "$t": "JsxElement",
-            "name": visit_node(m, *name),
+            "name": name.map(|n| visit_node(m, n)),
             "attributes": attributes.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
             "children": children.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
         }),

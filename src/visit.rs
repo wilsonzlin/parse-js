@@ -293,7 +293,9 @@ pub trait Visitor {
                 children,
                 name,
             } => {
-                self.visit(node_map, n, *name);
+                if let Some(name) = name {
+                    self.visit(node_map, n, *name);
+                }
                 for attr in attributes {
                     self.visit(node_map, n, *attr);
                 }

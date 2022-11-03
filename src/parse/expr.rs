@@ -68,57 +68,65 @@ pub fn parse_jsx_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeI
     })
 }
 
-pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<NodeId> {
-    let start = parser.require(TokenType::Identifier)?;
-    Ok(if parser.consume_if(TokenType::Colon)?.is_match() {
-        // Namespaced name.
-        let name = parser.require(TokenType::Identifier)?;
-        parser.create_node(
-            scope,
-            start.loc() + name.loc(),
-            Syntax::JsxName {
-                namespace: Some(start.loc().clone()),
-                name: name.loc().clone(),
-            },
-        )
-    } else if parser.peek()?.typ() == TokenType::Dot {
-        // Member name.
-        let mut path = vec![start.loc().clone()];
-        while parser.consume_if(TokenType::Dot)?.is_match() {
-            path.push(parser.require(TokenType::Identifier)?.loc().clone());
-        }
-        parser.create_node(
-            scope,
-            &path[0] + path.last().unwrap(),
-            Syntax::JsxMember { path },
-        )
-    } else {
-        // Plain name.
-        parser.create_node(
-            scope,
-            start.loc().clone(),
-            Syntax::JsxName {
-                namespace: None,
-                name: start.loc().clone(),
-            },
-        )
-    })
+pub fn parse_jsx_tag_name(scope: ScopeId, parser: &mut Parser) -> SyntaxResult<Option<NodeId>> {
+    Ok(
+        match parser.consume_if(TokenType::Identifier)?.match_loc() {
+            // Fragment.
+            None => None,
+            Some(start) => Some({
+                if parser.consume_if(TokenType::Colon)?.is_match() {
+                    // Namespaced name.
+                    let name = parser.require(TokenType::Identifier)?;
+                    parser.create_node(
+                        scope,
+                        start + name.loc(),
+                        Syntax::JsxName {
+                            namespace: Some(start.clone()),
+                            name: name.loc().clone(),
+                        },
+                    )
+                } else if parser.peek()?.typ() == TokenType::Dot {
+                    // Member name.
+                    let mut path = vec![start.clone()];
+                    while parser.consume_if(TokenType::Dot)?.is_match() {
+                        path.push(parser.require(TokenType::Identifier)?.loc().clone());
+                    }
+                    parser.create_node(
+                        scope,
+                        &path[0] + path.last().unwrap(),
+                        Syntax::JsxMember { path },
+                    )
+                } else {
+                    // Plain name.
+                    parser.create_node(
+                        scope,
+                        start.clone(),
+                        Syntax::JsxName {
+                            namespace: None,
+                            name: start.clone(),
+                        },
+                    )
+                }
+            }),
+        },
+    )
 }
 
-fn jsx_tag_names_are_equal(a: &Syntax, b: &Syntax) -> bool {
+fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
     match (a, b) {
-        (Syntax::JsxMember { path: a_path }, Syntax::JsxMember { path: b_path }) => {
+        (None, None) => true,
+        (Some(Syntax::JsxMember { path: a_path }), Some(Syntax::JsxMember { path: b_path })) => {
             a_path == b_path
         }
         (
-            Syntax::JsxName {
+            Some(Syntax::JsxName {
                 name: a_name,
                 namespace: a_ns,
-            },
-            Syntax::JsxName {
+            }),
+            Some(Syntax::JsxName {
                 name: b_name,
                 namespace: b_ns,
-            },
+            }),
         ) => a_ns == b_ns && a_name == b_name,
         _ => false,
     }
@@ -134,48 +142,49 @@ pub fn parse_jsx_element(
     parser: &mut Parser,
     syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
-    parser.require(TokenType::ChevronLeft)?;
-    // TODO Fragment
+    let tag_start = parser.require(TokenType::ChevronLeft)?;
     let tag_name = parse_jsx_tag_name(scope, parser)?;
 
     // Attributes.
     let mut attributes = vec![];
-    while !is_chevron_right_or_slash(parser.peek()?.typ()) {
-        let name = parse_jsx_name(scope, parser)?;
-        let value = if !parser.consume_if(TokenType::Equals)?.is_match() {
-            None
-        } else {
-            // TODO JSXSpreadAttribute
-            // TODO Attr values can be an element or fragment.
-            Some(if parser.consume_if(TokenType::BraceOpen)?.is_match() {
-                let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
-                let expr = parser.create_node(
-                    scope,
-                    parser[value].loc().clone(),
-                    Syntax::JsxExpressionContainer { value },
-                );
-                parser.require(TokenType::BraceClose)?;
-                expr
+    if tag_name.is_some() {
+        while !is_chevron_right_or_slash(parser.peek()?.typ()) {
+            let name = parse_jsx_name(scope, parser)?;
+            let value = if !parser.consume_if(TokenType::Equals)?.is_match() {
+                None
             } else {
-                let value = parser.require(TokenType::LiteralString)?;
+                // TODO JSXSpreadAttribute
+                // TODO Attr values can be an element or fragment.
+                Some(if parser.consume_if(TokenType::BraceOpen)?.is_match() {
+                    let value = parse_expr(scope, parser, TokenType::BraceClose, syntax)?;
+                    let expr = parser.create_node(
+                        scope,
+                        parser[value].loc().clone(),
+                        Syntax::JsxExpressionContainer { value },
+                    );
+                    parser.require(TokenType::BraceClose)?;
+                    expr
+                } else {
+                    let value = parser.require(TokenType::LiteralString)?;
+                    parser.create_node(
+                        scope,
+                        value.loc().clone(),
+                        Syntax::JsxText {
+                            value: value.loc().clone(),
+                        },
+                    )
+                })
+            };
+            attributes.push(
                 parser.create_node(
                     scope,
-                    value.loc().clone(),
-                    Syntax::JsxText {
-                        value: value.loc().clone(),
-                    },
-                )
-            })
-        };
-        attributes.push(
-            parser.create_node(
-                scope,
-                parser[name]
-                    .loc()
-                    .add_option(value.map(|n| parser[n].loc())),
-                Syntax::JsxAttribute { name, value },
-            ),
-        )
+                    parser[name]
+                        .loc()
+                        .add_option(value.map(|n| parser[n].loc())),
+                    Syntax::JsxAttribute { name, value },
+                ),
+            )
+        }
     }
 
     Ok(if parser.consume_if(TokenType::Slash)?.is_match() {
@@ -183,7 +192,7 @@ pub fn parse_jsx_element(
         let end = parser.require(TokenType::ChevronRight)?;
         parser.create_node(
             scope,
-            parser[tag_name].loc() + end.loc(),
+            tag_start.loc() + end.loc(),
             Syntax::JsxElement {
                 name: tag_name,
                 attributes,
@@ -195,7 +204,11 @@ pub fn parse_jsx_element(
 
         // Children.
         let mut children = vec![];
-        while !parser.consume_if(TokenType::ChevronLeftSlash)?.is_match() {
+        let close_start = loop {
+            match parser.consume_if(TokenType::ChevronLeftSlash)? {
+                t if t.is_match() => break t,
+                _ => {}
+            };
             let text =
                 parser.require_with_mode(TokenType::JsxTextContent, LexMode::JsxTextContent)?;
             if !text.loc().is_empty() {
@@ -220,15 +233,18 @@ pub fn parse_jsx_element(
                 ));
                 parser.require(TokenType::BraceClose)?;
             };
-        }
+        };
         let end_name = parse_jsx_tag_name(scope, parser)?;
-        if !jsx_tag_names_are_equal(parser[tag_name].stx(), parser[end_name].stx()) {
-            return Err(parser[end_name].error(SyntaxErrorType::JsxClosingTagMismatch));
+        if !jsx_tag_names_are_equal(
+            tag_name.map(|n| parser[n].stx()),
+            end_name.map(|n| parser[n].stx()),
+        ) {
+            return Err(close_start.error(SyntaxErrorType::JsxClosingTagMismatch));
         };
         let end = parser.require(TokenType::ChevronRight)?;
         parser.create_node(
             scope,
-            parser[tag_name].loc() + end.loc(),
+            tag_start.loc() + end.loc(),
             Syntax::JsxElement {
                 name: tag_name,
                 attributes,

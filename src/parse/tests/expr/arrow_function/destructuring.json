@@ -1,0 +1,99 @@
+{
+  "$t": "BinaryExpr",
+  "left": {
+    "$t": "ArrowFunctionExpr",
+    "async": false,
+    "body": {
+      "$t": "BlockStmt",
+      "body": []
+    },
+    "signature": {
+      "$t": "FunctionSignature",
+      "parameters": [
+        {
+          "$t": "ParamDecl",
+          "default_value": null,
+          "pattern": {
+            "$t": "ObjectPattern",
+            "properties": [],
+            "rest": null
+          },
+          "rest": false
+        }
+      ]
+    }
+  },
+  "operator": "Comma",
+  "parenthesised": false,
+  "right": {
+    "$t": "ArrowFunctionExpr",
+    "async": false,
+    "body": {
+      "$t": "BinaryExpr",
+      "left": {
+        "$t": "LiteralNumberExpr",
+        "value": 1.0
+      },
+      "operator": "Comma",
+      "parenthesised": false,
+      "right": {
+        "$t": "ArrowFunctionExpr",
+        "async": false,
+        "body": {
+          "$t": "LiteralArrayExpr",
+          "elements": []
+        },
+        "signature": {
+          "$t": "FunctionSignature",
+          "parameters": [
+            {
+              "$t": "ParamDecl",
+              "default_value": null,
+              "pattern": {
+                "$t": "ObjectPattern",
+                "properties": [
+                  {
+                    "$t": "ObjectPatternProperty",
+                    "default": null,
+                    "key": "a",
+                    "target": null
+                  },
+                  {
+                    "$t": "ObjectPatternProperty",
+                    "default": null,
+                    "key": "b",
+                    "target": null
+                  }
+                ],
+                "rest": null
+              },
+              "rest": false
+            }
+          ]
+        }
+      }
+    },
+    "signature": {
+      "$t": "FunctionSignature",
+      "parameters": [
+        {
+          "$t": "ParamDecl",
+          "default_value": null,
+          "pattern": {
+            "$t": "ObjectPattern",
+            "properties": [
+              {
+                "$t": "ObjectPatternProperty",
+                "default": null,
+                "key": "a",
+                "target": null
+              }
+            ],
+            "rest": null
+          },
+          "rest": false
+        }
+      ]
+    }
+  }
+}

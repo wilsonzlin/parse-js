@@ -1,0 +1,38 @@
+{
+  "$t": "VarStmt",
+  "declaration": {
+    "$t": "VarDecl",
+    "declarators": [
+      {
+        "initializer": {
+          "$t": "ArrowFunctionExpr",
+          "async": false,
+          "body": {
+            "$t": "BlockStmt",
+            "body": []
+          },
+          "signature": {
+            "$t": "FunctionSignature",
+            "parameters": [
+              {
+                "$t": "ParamDecl",
+                "default_value": null,
+                "pattern": {
+                  "$t": "ObjectPattern",
+                  "properties": [],
+                  "rest": null
+                },
+                "rest": false
+              }
+            ]
+          }
+        },
+        "pattern": {
+          "$t": "IdentifierPattern",
+          "name": "x"
+        }
+      }
+    ],
+    "mode": "Const"
+  }
+}

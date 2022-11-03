@@ -357,8 +357,8 @@ pub enum Syntax {
         value: Option<Expression>, // JsxExpressionContainer or JsxText
     },
     JsxElement {
-        name: Expression,            // JsxName or JsxMember
-        attributes: Vec<Expression>, // JsxAttribute
+        name: Option<Expression>,    // JsxName or JsxMember; None if fragment
+        attributes: Vec<Expression>, // JsxAttribute; always empty if fragment
         children: Vec<Expression>,   // JsxElement or JsxExpressionContainer or JsxText
     },
     JsxExpressionContainer {
