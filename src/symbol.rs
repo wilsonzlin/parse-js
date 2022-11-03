@@ -8,10 +8,10 @@ use crate::source::SourceRange;
 pub type Identifier = SourceRange;
 
 // ScopeId, index in symbol_declaration_order.
-pub struct SymbolId(usize, usize);
+pub struct SymbolId(ScopeId, usize);
 
 impl SymbolId {
-    pub fn scope_id(&self) -> usize {
+    pub fn scope_id(&self) -> ScopeId {
         self.0
     }
 
@@ -102,12 +102,8 @@ impl ScopeData {
         self.symbols.len()
     }
 
-    pub fn symbols_update<F: FnMut(usize, &mut Symbol) -> ()>(&mut self, mut f: F) -> () {
-        for i in 0..self.symbol_declaration_order.len() {
-            let name = &self.symbol_declaration_order[i];
-            let symbol = self.symbols.get_mut(name).unwrap();
-            f(i, symbol);
-        }
+    pub fn symbols_iter<'a>(&'a self) -> impl Iterator<Item = SymbolId> + 'a {
+        (0..self.symbol_declaration_order.len()).map(|i| SymbolId(self.id, i))
     }
 
     pub fn parent(&self) -> Option<ScopeId> {
@@ -184,7 +180,7 @@ impl Index<SymbolId> for ScopeMap {
     type Output = Symbol;
 
     fn index(&self, index: SymbolId) -> &Self::Output {
-        let scope = &self.scopes[index.0];
+        let scope = &self.scopes[index.0 .0];
         &scope.symbols[&scope.symbol_declaration_order[index.1]]
     }
 }
@@ -217,12 +213,12 @@ impl<T> Index<SymbolId> for SymbolMap<T> {
     type Output = T;
 
     fn index(&self, index: SymbolId) -> &Self::Output {
-        &self.data[index.0][index.1]
+        &self.data[index.0 .0][index.1]
     }
 }
 
 impl<T> IndexMut<SymbolId> for SymbolMap<T> {
     fn index_mut(&mut self, index: SymbolId) -> &mut Self::Output {
-        &mut self.data[index.0][index.1]
+        &mut self.data[index.0 .0][index.1]
     }
 }
