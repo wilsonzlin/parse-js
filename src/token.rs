@@ -102,6 +102,7 @@ pub enum TokenType {
     KeywordWhile,
     KeywordWith,
     KeywordYield,
+    LiteralBigInt,
     LiteralFalse,
     LiteralNull,
     LiteralNumber,

@@ -49,6 +49,16 @@ fn test_lex_literal_numbers() {
 }
 
 #[test]
+fn test_lex_literal_bigints() {
+    check("1n", &[LiteralBigInt], None);
+    check("929n", &[LiteralBigInt], None);
+    check("10000n", &[LiteralBigInt], None);
+    check("0x800faceb00cn", &[LiteralBigInt], None);
+    check("0b110101010n", &[LiteralBigInt], None);
+    check("0o12077n", &[LiteralBigInt], None);
+}
+
+#[test]
 fn test_lex_literal_strings() {
     check("'hello world'", &[LiteralString], None);
     check(

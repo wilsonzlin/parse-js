@@ -43,6 +43,10 @@ impl Match {
         debug_assert!(n <= self.len);
         Match { len: n }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -183,8 +187,9 @@ impl Lexer {
         }
     }
 
-    fn consume(&mut self, m: Match) -> () {
+    fn consume(&mut self, m: Match) -> Match {
         self.next += m.len;
+        m
     }
 
     fn consume_next(&mut self) -> SyntaxResult<u8> {
@@ -426,10 +431,20 @@ fn lex_identifier(
     ))
 }
 
-fn lex_number(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_bigint_or_number(
+    lexer: &mut Lexer,
+    preceded_by_line_terminator: bool,
+) -> SyntaxResult<Token> {
     let cp = lexer.checkpoint();
     // TODO
     lexer.consume(lexer.while_chars(&DIGIT));
+    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+        return Ok(Token::new(
+            lexer.since_checkpoint(cp),
+            TokenType::LiteralBigInt,
+            preceded_by_line_terminator,
+        ));
+    }
     lexer.consume(lexer.if_char(b'.'));
     lexer.consume(lexer.while_chars(&DIGIT));
     if lexer
@@ -451,10 +466,20 @@ fn lex_number(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxRes
     ))
 }
 
-fn lex_number_bin(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_bigint_or_number_bin(
+    lexer: &mut Lexer,
+    preceded_by_line_terminator: bool,
+) -> SyntaxResult<Token> {
     let cp = lexer.checkpoint();
     lexer.skip_expect(2);
     lexer.consume(lexer.while_chars(&DIGIT_BIN));
+    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+        return Ok(Token::new(
+            lexer.since_checkpoint(cp),
+            TokenType::LiteralBigInt,
+            preceded_by_line_terminator,
+        ));
+    }
     Ok(Token::new(
         lexer.since_checkpoint(cp),
         TokenType::LiteralNumber,
@@ -462,10 +487,20 @@ fn lex_number_bin(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> Synta
     ))
 }
 
-fn lex_number_hex(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_bigint_or_number_hex(
+    lexer: &mut Lexer,
+    preceded_by_line_terminator: bool,
+) -> SyntaxResult<Token> {
     let cp = lexer.checkpoint();
     lexer.skip_expect(2);
     lexer.consume(lexer.while_chars(&DIGIT_HEX));
+    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+        return Ok(Token::new(
+            lexer.since_checkpoint(cp),
+            TokenType::LiteralBigInt,
+            preceded_by_line_terminator,
+        ));
+    }
     Ok(Token::new(
         lexer.since_checkpoint(cp),
         TokenType::LiteralNumber,
@@ -473,10 +508,20 @@ fn lex_number_hex(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> Synta
     ))
 }
 
-fn lex_number_oct(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_bigint_or_number_oct(
+    lexer: &mut Lexer,
+    preceded_by_line_terminator: bool,
+) -> SyntaxResult<Token> {
     let cp = lexer.checkpoint();
     lexer.skip_expect(2);
     lexer.consume(lexer.while_chars(&DIGIT_OCT));
+    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+        return Ok(Token::new(
+            lexer.since_checkpoint(cp),
+            TokenType::LiteralBigInt,
+            preceded_by_line_terminator,
+        ));
+    }
     Ok(Token::new(
         lexer.since_checkpoint(cp),
         TokenType::LiteralNumber,
@@ -678,15 +723,17 @@ pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
                     TokenType::Identifier => {
                         lex_identifier(lexer, mode, preceded_by_line_terminator)
                     }
-                    TokenType::LiteralNumber => lex_number(lexer, preceded_by_line_terminator),
+                    TokenType::LiteralNumber => {
+                        lex_bigint_or_number(lexer, preceded_by_line_terminator)
+                    }
                     TokenType::LiteralNumberBin => {
-                        lex_number_bin(lexer, preceded_by_line_terminator)
+                        lex_bigint_or_number_bin(lexer, preceded_by_line_terminator)
                     }
                     TokenType::LiteralNumberHex => {
-                        lex_number_hex(lexer, preceded_by_line_terminator)
+                        lex_bigint_or_number_hex(lexer, preceded_by_line_terminator)
                     }
                     TokenType::LiteralNumberOct => {
-                        lex_number_oct(lexer, preceded_by_line_terminator)
+                        lex_bigint_or_number_oct(lexer, preceded_by_line_terminator)
                     }
                     TokenType::LiteralString => lex_string(lexer, preceded_by_line_terminator),
                     TokenType::LiteralTemplatePartString => {
