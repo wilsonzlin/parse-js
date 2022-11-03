@@ -111,7 +111,7 @@ pub fn parse_decl_function(
                 Syntax::ClassOrFunctionName { name: name.clone() },
             );
             if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
-                parser[closure_id].add_symbol(name.clone(), Symbol::new(name_node))?;
+                parser[closure_id].add_symbol(name.clone(), name_node)?;
             };
             Some(name_node)
         }
@@ -149,7 +149,7 @@ pub fn parse_decl_class(
                 name.clone(),
                 Syntax::ClassOrFunctionName { name: name.clone() },
             );
-            parser[scope].add_block_symbol(name.clone(), Symbol::new(name_node))?;
+            parser[scope].add_block_symbol(name.clone(), (name_node))?;
             Some(name_node)
         }
         None => None,

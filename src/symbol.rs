@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::{Index, IndexMut};
 
@@ -22,14 +23,10 @@ impl SymbolId {
 
 #[derive(Clone, Debug)]
 pub struct Symbol {
+    // Index in the containing ScopeData's symbol_declaration_order Vec.
+    ordinal_in_scope: usize,
     // This should refer to an ObjectPatternProperty if shorthand property, FunctionName if function name, or IdentifierPattern otherwise.
     declarator_pattern: NodeId,
-}
-
-impl Symbol {
-    pub fn new(declarator_pattern: NodeId) -> Symbol {
-        Symbol { declarator_pattern }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -44,7 +41,7 @@ pub enum ScopeType {
 pub struct ScopeData {
     id: ScopeId,
     symbols: HashMap<Identifier, Symbol>,
-    // For deterministic outputs.
+    // For deterministic outputs, and to give each Symbol an ID.
     symbol_declaration_order: Vec<Identifier>,
     // Nearest ancestor. Does not exist for top-level.
     // NOTE: Self could be a closure.
@@ -68,18 +65,35 @@ impl ScopeData {
         }
     }
 
-    pub fn add_symbol(&mut self, identifier: Identifier, symbol: Symbol) -> SyntaxResult<()> {
-        if self.symbols.insert(identifier.clone(), symbol).is_some() {
-            // TODO Investigate raising an error; however, many production codebases redeclare `var`.
-        } else {
-            self.symbol_declaration_order.push(identifier);
+    pub fn add_symbol(
+        &mut self,
+        identifier: Identifier,
+        declarator_pattern: NodeId,
+    ) -> SyntaxResult<()> {
+        match self.symbols.entry(identifier.clone()) {
+            Entry::Occupied(_) => {
+                // Do not replace existing entry, as it has associated index in symbol_declaration_order.
+                // TODO Investigate raising an error; however, many production codebases redeclare `var`.
+            }
+            Entry::Vacant(e) => {
+                let ordinal_in_scope = self.symbol_declaration_order.len();
+                e.insert(Symbol {
+                    declarator_pattern,
+                    ordinal_in_scope,
+                });
+                self.symbol_declaration_order.push(identifier.clone());
+            }
         };
         Ok(())
     }
 
-    pub fn add_block_symbol(&mut self, identifier: Identifier, symbol: Symbol) -> SyntaxResult<()> {
+    pub fn add_block_symbol(
+        &mut self,
+        identifier: Identifier,
+        declarator_pattern: NodeId,
+    ) -> SyntaxResult<()> {
         if self.typ != ScopeType::Global {
-            self.add_symbol(identifier, symbol)?;
+            self.add_symbol(identifier, declarator_pattern)?;
         };
         Ok(())
     }
@@ -88,9 +102,9 @@ impl ScopeData {
         &'a self,
         scope_map: &'a ScopeMap,
         identifier: &'a Identifier,
-    ) -> Option<&'a Symbol> {
+    ) -> Option<SymbolId> {
         match self.symbols.get(identifier) {
-            Some(symbol) => Some(symbol),
+            Some(symbol) => Some(SymbolId(self.id, symbol.ordinal_in_scope)),
             None => match self.parent {
                 Some(parent_id) => scope_map[parent_id].find_symbol(scope_map, identifier),
                 None => None,

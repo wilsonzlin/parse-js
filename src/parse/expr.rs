@@ -546,7 +546,7 @@ pub fn parse_expr_arrow_function(
                 name: param_name.clone(),
             },
         );
-        parser[fn_scope].add_block_symbol(param_name.clone(), Symbol::new(pattern))?;
+        parser[fn_scope].add_block_symbol(param_name.clone(), (pattern))?;
         let param = parser.create_node(
             scope,
             param_name.clone(),
@@ -673,7 +673,7 @@ pub fn parse_expr_function(
                     name: t.loc().clone(),
                 },
             );
-            parser[fn_scope].add_symbol(t.loc().clone(), Symbol::new(name_node))?;
+            parser[fn_scope].add_symbol(t.loc().clone(), (name_node))?;
             Some(name_node)
         }
         _ => None,
@@ -710,7 +710,7 @@ pub fn parse_expr_class(
                     name: t.loc().clone(),
                 },
             );
-            parser[scope].add_symbol(t.loc().clone(), Symbol::new(name_node))?;
+            parser[scope].add_symbol(t.loc().clone(), (name_node))?;
             Some(name_node)
         }
         _ => None,

@@ -54,11 +54,11 @@ fn parse_pattern_identifier(
         ParsePatternAction::None => {}
         ParsePatternAction::AddToBlockScope => {
             let scope = &mut parser[scope];
-            scope.add_block_symbol(t.loc().clone(), Symbol::new(node_id))?;
+            scope.add_block_symbol(t.loc().clone(), (node_id))?;
         }
         ParsePatternAction::AddToClosureScope => {
             if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
-                parser[closure_id].add_symbol(t.loc().clone(), Symbol::new(node_id))?;
+                parser[closure_id].add_symbol(t.loc().clone(), (node_id))?;
             };
         }
     };
@@ -133,11 +133,11 @@ pub fn parse_pattern(
                 properties.push(property);
                 match (direct_key_name, target, action) {
                     (Some(name), None, ParsePatternAction::AddToBlockScope) => {
-                        parser[scope].add_block_symbol(name, Symbol::new(property))?;
+                        parser[scope].add_block_symbol(name, (property))?;
                     }
                     (Some(name), None, ParsePatternAction::AddToClosureScope) => {
                         if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
-                            parser[closure_id].add_symbol(name, Symbol::new(property))?;
+                            parser[closure_id].add_symbol(name, (property))?;
                         }
                     }
                     _ => {}
