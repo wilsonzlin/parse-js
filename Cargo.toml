@@ -8,7 +8,7 @@ keywords = ["javascript", "parse", "parser", "js", "ecmascript"]
 license = "Apache-2.0"
 name = "parse-js"
 repository = "https://github.com/wilsonzlin/parse-js"
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies]
 aho-corasick = "0.7"
