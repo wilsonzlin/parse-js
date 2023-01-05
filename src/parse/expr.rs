@@ -594,6 +594,7 @@ pub fn parse_expr_arrow_function(
         scope,
         parser[signature].loc() + parser[body].loc(),
         Syntax::ArrowFunctionExpr {
+            parenthesised: false,
             is_async,
             signature,
             body,
@@ -1362,7 +1363,11 @@ pub fn parse_expr_with_min_prec(
 
     if parenthesised {
         match parser[left].stx_mut() {
-            Syntax::BinaryExpr {
+            Syntax::ArrowFunctionExpr {
+                ref mut parenthesised,
+                ..
+            }
+            | Syntax::BinaryExpr {
                 ref mut parenthesised,
                 ..
             }

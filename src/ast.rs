@@ -304,6 +304,7 @@ pub enum Syntax {
 
     // Expressions.
     ArrowFunctionExpr {
+        parenthesised: bool,
         is_async: bool,
         signature: NodeId,
         body: NodeId,

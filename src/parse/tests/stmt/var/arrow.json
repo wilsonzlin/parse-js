@@ -6,6 +6,7 @@
       {
         "initializer": {
           "$t": "ArrowFunctionExpr",
+          "parenthesised": false,
           "async": false,
           "body": {
             "$t": "BlockStmt",

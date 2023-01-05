@@ -2,6 +2,7 @@
   "$t": "BinaryExpr",
   "left": {
     "$t": "ArrowFunctionExpr",
+    "parenthesised": false,
     "async": false,
     "body": {
       "$t": "BlockStmt",
@@ -27,6 +28,7 @@
   "parenthesised": false,
   "right": {
     "$t": "ArrowFunctionExpr",
+    "parenthesised": false,
     "async": false,
     "body": {
       "$t": "BinaryExpr",
@@ -38,6 +40,7 @@
       "parenthesised": false,
       "right": {
         "$t": "ArrowFunctionExpr",
+        "parenthesised": false,
         "async": false,
         "body": {
           "$t": "LiteralArrayExpr",

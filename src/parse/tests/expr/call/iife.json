@@ -1,0 +1,69 @@
+{
+  "$t": "BinaryExpr",
+  "left": {
+    "$t": "BinaryExpr",
+    "left": {
+      "$t": "CallExpr",
+      "arguments": [],
+      "callee": {
+        "$t": "FunctionExpr",
+        "async": false,
+        "body": {
+          "$t": "BlockStmt",
+          "body": []
+        },
+        "generator": false,
+        "name": null,
+        "parenthesised": true,
+        "signature": {
+          "$t": "FunctionSignature",
+          "parameters": []
+        }
+      },
+      "optional_chaining": false,
+      "parenthesised": false
+    },
+    "operator": "Comma",
+    "parenthesised": false,
+    "right": {
+      "$t": "CallExpr",
+      "arguments": [],
+      "callee": {
+        "$t": "ArrowFunctionExpr",
+        "parenthesised": true,
+        "async": false,
+        "body": {
+          "$t": "BlockStmt",
+          "body": []
+        },
+        "signature": {
+          "$t": "FunctionSignature",
+          "parameters": []
+        }
+      },
+      "optional_chaining": false,
+      "parenthesised": false
+    }
+  },
+  "operator": "Comma",
+  "parenthesised": false,
+  "right": {
+    "$t": "CallExpr",
+    "arguments": [],
+    "callee": {
+      "$t": "ArrowFunctionExpr",
+      "parenthesised": true,
+      "async": true,
+      "body": {
+        "$t": "BlockStmt",
+        "body": []
+      },
+      "signature": {
+        "$t": "FunctionSignature",
+        "parameters": []
+      }
+    },
+    "optional_chaining": false,
+    "parenthesised": false
+  }
+}

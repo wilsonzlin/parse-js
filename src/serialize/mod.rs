@@ -137,11 +137,13 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             })).collect::<Vec<_>>(),
         }),
         Syntax::ArrowFunctionExpr {
+            parenthesised,
             is_async,
             signature,
             body,
         } => json!({
             "$t": "ArrowFunctionExpr",
+            "parenthesised": parenthesised,
             "async": is_async,
             "signature": visit_node(m, *signature),
             "body": visit_node(m, *body),
