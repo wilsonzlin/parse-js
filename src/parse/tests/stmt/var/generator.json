@@ -1,0 +1,30 @@
+{
+  "$t": "FunctionDecl",
+  "async": false,
+  "body": {
+    "$t": "BlockStmt",
+    "body": [
+      {
+        "$t": "ExpressionStmt",
+        "expression": {
+          "$t": "UnaryExpr",
+          "argument": {
+            "$t": "LiteralNumberExpr",
+            "value": 1.0
+          },
+          "operator": "Yield",
+          "parenthesised": false
+        }
+      }
+    ]
+  },
+  "generator": true,
+  "name": {
+    "$t": "FunctionName",
+    "name": "a"
+  },
+  "signature": {
+    "$t": "FunctionSignature",
+    "parameters": []
+  }
+}

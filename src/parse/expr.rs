@@ -685,7 +685,18 @@ pub fn parse_expr_function(
         _ => None,
     };
     let signature = parse_signature_function(fn_scope, parser, syntax)?;
-    let body = parse_stmt_block(fn_scope, parser, syntax)?;
+    let body = parse_stmt_block(
+        fn_scope,
+        parser,
+        &ParsePatternSyntax {
+            yield_allowed: if generator {
+                false
+            } else {
+                syntax.yield_allowed
+            },
+            ..*syntax
+        },
+    )?;
     Ok(parser.create_node(
         scope,
         &start + parser[body].loc(),
