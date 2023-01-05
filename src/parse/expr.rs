@@ -689,11 +689,7 @@ pub fn parse_expr_function(
         fn_scope,
         parser,
         &ParsePatternSyntax {
-            yield_allowed: if generator {
-                false
-            } else {
-                syntax.yield_allowed
-            },
+            yield_allowed: !generator && syntax.yield_allowed,
             ..*syntax
         },
     )?;

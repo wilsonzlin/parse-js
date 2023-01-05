@@ -122,11 +122,7 @@ pub fn parse_decl_function(
         fn_scope,
         parser,
         &ParsePatternSyntax {
-            yield_allowed: if generator {
-                false
-            } else {
-                syntax.yield_allowed
-            },
+            yield_allowed: !generator && syntax.yield_allowed,
             ..*syntax
         },
     )?;

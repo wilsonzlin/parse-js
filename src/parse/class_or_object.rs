@@ -134,7 +134,14 @@ pub fn parse_class_or_object_member(
             is_async,
             generator: is_generator,
             signature,
-            body: parse_stmt_block(scope, parser, syntax)?,
+            body: parse_stmt_block(
+                scope,
+                parser,
+                &ParsePatternSyntax {
+                    yield_allowed: !is_generator && syntax.yield_allowed,
+                    ..*syntax
+                },
+            )?,
         }
     } else if is_getter {
         parser.require(TokenType::ParenthesisOpen)?;
