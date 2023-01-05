@@ -138,8 +138,8 @@ pub fn parse_class_or_object_member(
                 scope,
                 parser,
                 &ParsePatternSyntax {
+                    await_allowed: !is_async && syntax.await_allowed,
                     yield_allowed: !is_generator && syntax.yield_allowed,
-                    ..*syntax
                 },
             )?,
         }

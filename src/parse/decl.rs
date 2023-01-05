@@ -122,8 +122,8 @@ pub fn parse_decl_function(
         fn_scope,
         parser,
         &ParsePatternSyntax {
+            await_allowed: !is_async && syntax.await_allowed,
             yield_allowed: !generator && syntax.yield_allowed,
-            ..*syntax
         },
     )?;
     Ok(parser.create_node(

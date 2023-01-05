@@ -579,15 +579,19 @@ pub fn parse_expr_arrow_function(
         // Illegal under Automatic Semicolon Insertion rules.
         return Err(arrow.error(SyntaxErrorType::LineTerminatorAfterArrowFunctionParameters));
     }
+    let body_syntax = &ParsePatternSyntax {
+        await_allowed: !is_async && syntax.await_allowed,
+        ..*syntax
+    };
     let body = match parser.peek()?.typ() {
-        TokenType::BraceOpen => parse_stmt(fn_scope, parser, syntax)?,
+        TokenType::BraceOpen => parse_stmt(fn_scope, parser, body_syntax)?,
         _ => parse_expr_until_either_with_asi(
             fn_scope,
             parser,
             terminator_a,
             terminator_b,
             &mut Asi::can(),
-            syntax,
+            body_syntax,
         )?,
     };
     Ok(parser.create_node(
@@ -689,8 +693,8 @@ pub fn parse_expr_function(
         fn_scope,
         parser,
         &ParsePatternSyntax {
+            await_allowed: !is_async && syntax.await_allowed,
             yield_allowed: !generator && syntax.yield_allowed,
-            ..*syntax
         },
     )?;
     Ok(parser.create_node(
