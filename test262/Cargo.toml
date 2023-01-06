@@ -1,0 +1,9 @@
+[package]
+name = "parse-js-test262-runner"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.0.32", features = ["derive"] }
+parse-js = { path = "../rust" }
+rayon = "1.6"

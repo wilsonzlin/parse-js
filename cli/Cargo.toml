@@ -4,6 +4,6 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-parse-js = { path = "..", features = ["serialize"] }
+parse-js = { path = "../rust", features = ["serialize"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
