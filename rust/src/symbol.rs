@@ -55,6 +55,10 @@ pub struct ScopeData {
 }
 
 impl ScopeData {
+    pub fn iter_names(&self) -> impl Iterator<Item = &Identifier> {
+      self.symbol_declaration_order.iter()
+    }
+
     pub fn is_module_closure(&self) -> bool {
         self.is_module_closure
     }
@@ -127,7 +131,7 @@ impl ScopeData {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(usize);
 
 impl ScopeId {

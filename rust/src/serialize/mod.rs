@@ -1,23 +1,32 @@
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
 
-use crate::ast::{
+use crate::{ast::{
     ArrayElement, ClassOrObjectMemberKey, ClassOrObjectMemberValue, ExportNames,
     ForInOfStmtHeaderLhs, ForStmtHeader, ForThreeInit, LiteralTemplatePart, NodeId, NodeMap,
     ObjectMemberType, Syntax,
-};
+}, symbol::{ScopeMap, ScopeId}};
 
-fn visit_class_or_object_member_key(m: &NodeMap, key: &ClassOrObjectMemberKey) -> Value {
-    match key {
-        ClassOrObjectMemberKey::Direct(r) => json!(r.as_str().to_string()),
-        ClassOrObjectMemberKey::Computed(e) => visit_node(m, *e),
-    }
+struct Visitor<'s> {
+  node_map: &'s NodeMap,
+  scope_map: &'s ScopeMap,
+  visited_scopes: HashSet<ScopeId>,
 }
 
-fn visit_class_or_object_member_value(m: &NodeMap, value: &ClassOrObjectMemberValue) -> Value {
+impl <'s> Visitor<'s> {
+  fn visit_class_or_object_member_key(&mut self, key: &ClassOrObjectMemberKey) -> Value {
+    match key {
+        ClassOrObjectMemberKey::Direct(r) => json!(r.as_str().to_string()),
+        ClassOrObjectMemberKey::Computed(e) => self.visit_node(*e),
+    }
+  }
+
+  fn visit_class_or_object_member_value(&mut self, value: &ClassOrObjectMemberValue) -> Value {
     match value {
         ClassOrObjectMemberValue::Getter { body } => json!({
             "getter": json!({
-                "body": visit_node(m, *body),
+                "body": self.visit_node(*body),
             }),
         }),
         ClassOrObjectMemberValue::Method {
@@ -29,26 +38,36 @@ fn visit_class_or_object_member_value(m: &NodeMap, value: &ClassOrObjectMemberVa
             "method": json!({
                 "async": is_async,
                 "generator": generator,
-                "signature": visit_node(m, *signature),
-                "body": visit_node(m, *body),
+                "signature": self.visit_node(*signature),
+                "body": self.visit_node(*body),
             }),
         }),
         ClassOrObjectMemberValue::Property { initializer } => json!({
             "property": json!({
-                "initializer": initializer.map(|n| visit_node(m, n)),
+                "initializer": initializer.map(|n| self.visit_node(n)),
             }),
         }),
         ClassOrObjectMemberValue::Setter { parameter, body } => json!({
             "setter": json!({
-                "parameter": visit_node(m, *parameter),
-                "body": visit_node(m, *body),
+                "parameter": self.visit_node(*parameter),
+                "body": self.visit_node(*body),
             }),
         }),
     }
-}
+  }
 
-fn visit_node(m: &NodeMap, n: NodeId) -> Value {
-    match m[n].stx() {
+  fn visit_node(&mut self, n: NodeId) -> Value {
+    // Visit scope before visiting child nodes, as otherwise scope may be associated with misleading nested node.
+    let scope_id = self.node_map[n].scope();
+    let mut vars = Vec::new();
+    if self.visited_scopes.insert(scope_id) {
+      // TODO Use collect_into once stabilised.
+      for ident in self.scope_map[scope_id].iter_names() {
+        vars.push(Value::String(ident.as_str().to_string()));
+      };
+    };
+
+    let mut serialized = match self.node_map[n].stx() {
         Syntax::IdentifierPattern { name } => json!({
             "$t": "IdentifierPattern",
             "name": name.as_str().to_string(),
@@ -56,15 +75,15 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         Syntax::ArrayPattern { elements, rest } => json!({
             "$t": "ArrayPattern",
             "elements": elements.iter().map(|e| e.as_ref().map(|e| json!({
-                "target": visit_node(m, e.target),
-                "default_value": e.default_value.map(|n| visit_node(m, n)),
+                "target": self.visit_node(e.target),
+                "default_value": e.default_value.map(|n| self.visit_node(n)),
             }))).collect::<Vec<_>>(),
-            "rest": rest.map(|n| visit_node(m, n)),
+            "rest": rest.map(|n| self.visit_node(n)),
         }),
         Syntax::ObjectPattern { properties, rest } => json!({
             "$t": "ObjectPattern",
-            "properties": properties.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
-            "rest": rest.map(|n| visit_node(m, n)),
+            "properties": properties.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
+            "rest": rest.map(|n| self.visit_node(n)),
         }),
         Syntax::ClassOrFunctionName { name } => json!({
             "$t": "FunctionName",
@@ -72,7 +91,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::FunctionSignature { parameters } => json!({
             "$t": "FunctionSignature",
-            "parameters": parameters.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "parameters": parameters.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::ClassDecl {
             name,
@@ -80,12 +99,12 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             members,
         } => json!({
             "$t": "ClassDecl",
-            "name": name.map(|n| visit_node(m, n)),
-            "extends": extends.map(|n| visit_node(m, n)),
+            "name": name.map(|n| self.visit_node(n)),
+            "extends": extends.map(|n| self.visit_node(n)),
             "members": members.iter().map(|mem| json!({
                 "static": mem.statik,
-                "key": visit_class_or_object_member_key(m, &mem.key),
-                "value": visit_class_or_object_member_value(m, &mem.value),
+                "key": self.visit_class_or_object_member_key(&mem.key),
+                "value": self.visit_class_or_object_member_value(&mem.value),
             })).collect::<Vec<_>>(),
         }),
         Syntax::ClassExpr {
@@ -96,12 +115,12 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         } => json!({
             "$t": "ClassExpr",
             "parenthesised": parenthesised,
-            "name": name.map(|n| visit_node(m, n)),
-            "extends": extends.map(|n| visit_node(m, n)),
+            "name": name.map(|n| self.visit_node(n)),
+            "extends": extends.map(|n| self.visit_node(n)),
             "members": members.iter().map(|mem| json!({
                 "static": mem.statik,
-                "key": visit_class_or_object_member_key(m, &mem.key),
-                "value": visit_class_or_object_member_value(m, &mem.value),
+                "key": self.visit_class_or_object_member_key(&mem.key),
+                "value": self.visit_class_or_object_member_value(&mem.value),
             })).collect::<Vec<_>>(),
         }),
         Syntax::FunctionDecl {
@@ -114,9 +133,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "FunctionDecl",
             "async": is_async,
             "generator": generator,
-            "name": name.map(|n| visit_node(m, n)),
-            "signature": visit_node(m, *signature),
-            "body": visit_node(m, *body),
+            "name": name.map(|n| self.visit_node(n)),
+            "signature": self.visit_node(*signature),
+            "body": self.visit_node(*body),
         }),
         Syntax::ParamDecl {
             rest,
@@ -125,15 +144,15 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         } => json!({
             "$t": "ParamDecl",
             "rest": rest,
-            "pattern": visit_node(m, *pattern),
-            "default_value": default_value.map(|n| visit_node(m, n)),
+            "pattern": self.visit_node(*pattern),
+            "default_value": default_value.map(|n| self.visit_node(n)),
         }),
         Syntax::VarDecl { mode, declarators } => json!({
             "$t": "VarDecl",
             "mode": mode,
             "declarators": declarators.iter().map(|d| json!({
-                "pattern": visit_node(m, d.pattern),
-                "initializer": d.initializer.map(|n| visit_node(m, n)),
+                "pattern": self.visit_node(d.pattern),
+                "initializer": d.initializer.map(|n| self.visit_node(n)),
             })).collect::<Vec<_>>(),
         }),
         Syntax::ArrowFunctionExpr {
@@ -145,8 +164,8 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "ArrowFunctionExpr",
             "parenthesised": parenthesised,
             "async": is_async,
-            "signature": visit_node(m, *signature),
-            "body": visit_node(m, *body),
+            "signature": self.visit_node(*signature),
+            "body": self.visit_node(*body),
         }),
         Syntax::BinaryExpr {
             parenthesised,
@@ -157,8 +176,8 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "BinaryExpr",
             "parenthesised": parenthesised,
             "operator": operator,
-            "left": visit_node(m, *left),
-            "right": visit_node(m, *right),
+            "left": self.visit_node(*left),
+            "right": self.visit_node(*right),
         }),
         Syntax::CallExpr {
             parenthesised,
@@ -169,8 +188,8 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "CallExpr",
             "optional_chaining": optional_chaining,
             "parenthesised": parenthesised,
-            "callee": visit_node(m, *callee),
-            "arguments": arguments.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "callee": self.visit_node(*callee),
+            "arguments": arguments.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::ConditionalExpr {
             parenthesised,
@@ -180,9 +199,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         } => json!({
             "$t": "ConditionalExpr",
             "parenthesised": parenthesised,
-            "test": visit_node(m, *test),
-            "consequent": visit_node(m, *consequent),
-            "alternate": visit_node(m, *alternate),
+            "test": self.visit_node(*test),
+            "consequent": self.visit_node(*consequent),
+            "alternate": self.visit_node(*alternate),
         }),
         Syntax::ComputedMemberExpr {
             optional_chaining,
@@ -191,8 +210,8 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         } => json!({
             "$t": "ComputedMemberExpr",
             "optional_chaining": optional_chaining,
-            "object": visit_node(m, *object),
-            "member": visit_node(m, *member),
+            "object": self.visit_node(*object),
+            "member": self.visit_node(*member),
         }),
         Syntax::FunctionExpr {
             parenthesised,
@@ -206,9 +225,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "parenthesised": parenthesised,
             "async": is_async,
             "generator": generator,
-            "name": name.as_ref().map(|n| visit_node(m, *n)),
-            "signature": visit_node(m, *signature),
-            "body": visit_node(m, *body),
+            "name": name.as_ref().map(|n| self.visit_node(*n)),
+            "signature": self.visit_node(*signature),
+            "body": self.visit_node(*body),
         }),
         Syntax::IdentifierExpr { name } => json!({
             "$t": "IdentifierExpr",
@@ -216,15 +235,15 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::ImportExpr { module } => json!({
             "$t": "ImportExpr",
-           "module": visit_node(m, *module),
+           "module": self.visit_node(*module),
         }),
         Syntax::ImportMeta {} => json!({
             "$t": "ImportMeta",
         }),
         Syntax::JsxAttribute { name, value } => json!({
             "$t": "JsxAttribute",
-            "name": visit_node(m, *name),
-            "value": value.map(|n| visit_node(m, n)),
+            "name": self.visit_node(*name),
+            "value": value.map(|n| self.visit_node(n)),
         }),
         Syntax::JsxName { namespace, name } => json!({
             "$t": "JsxName",
@@ -238,11 +257,11 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::JsxExpressionContainer { value } => json!({
             "$t": "JsxExpressionContainer",
-            "value": visit_node(m, *value),
+            "value": self.visit_node(*value),
         }),
         Syntax::JsxSpreadAttribute { value } => json!({
             "$t": "JsxSpreadAttribute",
-            "value": visit_node(m, *value),
+            "value": self.visit_node(*value),
         }),
         Syntax::JsxText { value } => json!({
             "$t": "JsxText",
@@ -254,18 +273,18 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             children,
         } => json!({
             "$t": "JsxElement",
-            "name": name.map(|n| visit_node(m, n)),
-            "attributes": attributes.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
-            "children": children.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "name": name.map(|n| self.visit_node(n)),
+            "attributes": attributes.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
+            "children": children.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::LiteralArrayExpr { elements } => json!({
             "$t": "LiteralArrayExpr",
             "elements": elements.iter().map(|e| match e {
                 ArrayElement::Single(e) => json!({
-                    "single": visit_node(m, *e),
+                    "single": self.visit_node(*e),
                 }),
                 ArrayElement::Rest(e) => json!({
-                    "rest": visit_node(m, *e),
+                    "rest": self.visit_node(*e),
                 }),
                 ArrayElement::Empty => Value::Null,
             }).collect::<Vec<_>>(),
@@ -287,7 +306,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::LiteralObjectExpr { members } => json!({
             "$t": "LiteralObjectExpr",
-            "members": members.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "members": members.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::LiteralRegexExpr {} => json!({
             "$t": "LiteralRegexExpr",
@@ -303,7 +322,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
                   "string": string.as_str().to_string(),
               }),
               LiteralTemplatePart::Substitution(sub) => json!({
-                  "substitution": visit_node(m, *sub),
+                  "substitution": self.visit_node(*sub),
               }),
             }).collect::<Vec<_>>(),
         }),
@@ -321,7 +340,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "UnaryExpr",
             "parenthesised": parenthesised,
             "operator": operator,
-            "argument": visit_node(m, *argument),
+            "argument": self.visit_node(*argument),
         }),
         Syntax::UnaryPostfixExpr {
             parenthesised,
@@ -331,11 +350,11 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "UnaryPostfixExpr",
             "parenthesised": parenthesised,
             "operator": operator,
-            "argument": visit_node(m, *argument),
+            "argument": self.visit_node(*argument),
         }),
         Syntax::BlockStmt { body } => json!({
             "$t": "BlockStmt",
-            "body": body.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "body": body.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::BreakStmt { label } => json!({
             "$t": "BreakStmt",
@@ -350,8 +369,8 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::DoWhileStmt { condition, body } => json!({
             "$t": "DoWhileStmt",
-            "condition": visit_node(m, *condition),
-            "body": visit_node(m, *body)
+            "condition": self.visit_node(*condition),
+            "body": self.visit_node(*body)
         }),
         Syntax::EmptyStmt {} => json!({
             "$t": "EmptyStmt",
@@ -361,23 +380,23 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             default,
         } => json!({
             "$t": "ExportDeclStmt",
-            "declaration": visit_node(m, *declaration),
+            "declaration": self.visit_node(*declaration),
             "default": default,
         }),
         Syntax::ExportDefaultExprStmt { expression } => json!({
             "$t": "ExportDefaultStmt",
-            "expression": visit_node(m, *expression),
+            "expression": self.visit_node(*expression),
         }),
         Syntax::ExportListStmt { names, from } => json!({
             "$t": "ExportListStmt",
             "names": match names {
               ExportNames::All(p) => json!({
-                  "all": p.map(|n| visit_node(m, n)),
+                  "all": p.map(|n| self.visit_node(n)),
               }),
               ExportNames::Specific(names) => json!({
                   "specific": names.iter().map(|n| json!({
                       "target": n.target.as_str().to_string(),
-                      "alias": visit_node(m, n.alias),
+                      "alias": self.visit_node(n.alias),
                   })).collect::<Vec<_>>(),
               })
             },
@@ -385,7 +404,7 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
         }),
         Syntax::ExpressionStmt { expression } => json!({
             "$t": "ExpressionStmt",
-            "expression": visit_node(m, *expression),
+            "expression": self.visit_node(*expression),
         }),
         Syntax::IfStmt {
             test,
@@ -393,9 +412,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             alternate,
         } => json!({
             "$t": "IfStmt",
-            "test": visit_node(m, *test),
-            "consequent": visit_node(m, *consequent),
-            "alternate": alternate.map(|n| visit_node(m, n)),
+            "test": self.visit_node(*test),
+            "consequent": self.visit_node(*consequent),
+            "alternate": alternate.map(|n| self.visit_node(n)),
         }),
         Syntax::ImportStmt {
             default,
@@ -410,14 +429,14 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
                         "init": match init {
                             ForThreeInit::None => Value::Null,
                             ForThreeInit::Expression(e) => json!({
-                                "expression": visit_node(m, *e),
+                                "expression": self.visit_node(*e),
                             }),
                             ForThreeInit::Declaration(e) => json!({
-                                "declaration": visit_node(m, *e),
+                                "declaration": self.visit_node(*e),
                             }),
                         },
-                        "condition": condition.map(|n| visit_node(m, n)),
-                        "post": post.map(|n| visit_node(m, n)),
+                        "condition": condition.map(|n| self.visit_node(n)),
+                        "post": post.map(|n| self.visit_node(n)),
                     }),
                 }),
                 ForStmtHeader::InOf { of, lhs, rhs } => json!({
@@ -425,34 +444,34 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
                         "of": of,
                         "lhs": match lhs {
                             ForInOfStmtHeaderLhs::Declaration(decl) => json!({
-                                "declaration": visit_node(m, *decl),
+                                "declaration": self.visit_node(*decl),
                             }),
                             ForInOfStmtHeaderLhs::Pattern(pat) => json!({
-                                "pattern": visit_node(m, *pat),
+                                "pattern": self.visit_node(*pat),
                             }),
                         },
-                        "rhs": visit_node(m, *rhs),
+                        "rhs": self.visit_node(*rhs),
                     }),
                 }),
             },
-            "body": visit_node(m, *body),
+            "body": self.visit_node(*body),
         }),
         Syntax::LabelStmt { name, statement } => json!({
             "$t": "LabelStmt",
             "name": name.as_str().to_string(),
-            "statement": visit_node(m, *statement),
+            "statement": self.visit_node(*statement),
         }),
         Syntax::ReturnStmt { value } => json!({
             "$t": "ReturnStmt",
-            "value": value.map(|n| visit_node(m, n)) }),
+            "value": value.map(|n| self.visit_node(n)) }),
         Syntax::SwitchStmt { test, branches } => json!({
             "$t": "SwitchStmt",
-            "test": visit_node(m, *test),
-            "branches": branches.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "test": self.visit_node(*test),
+            "branches": branches.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::ThrowStmt { value } => json!({
             "$t": "ThrowStmt",
-            "value": visit_node(m, *value),
+            "value": self.visit_node(*value),
         }),
         Syntax::TryStmt {
             wrapped,
@@ -460,43 +479,43 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             finally,
         } => json!({
             "$t": "TryStmt",
-            "wrapped": visit_node(m, *wrapped),
-            "catch": catch.map(|n| visit_node(m, n)),
-            "finally": finally.map(|n| visit_node(m, n)),
+            "wrapped": self.visit_node(*wrapped),
+            "catch": catch.map(|n| self.visit_node(n)),
+            "finally": finally.map(|n| self.visit_node(n)),
         }),
         Syntax::VarStmt { declaration } => json!({
-            "$t": "VarStmt", "declaration": visit_node(m, *declaration) }),
+            "$t": "VarStmt", "declaration": self.visit_node(*declaration) }),
         Syntax::WhileStmt { condition, body } => json!({
             "$t": "WhileStmt",
-            "condition": visit_node(m, *condition),
-            "body": visit_node(m, *body),
+            "condition": self.visit_node(*condition),
+            "body": self.visit_node(*body),
         }),
         Syntax::TopLevel { body } => json!({
             "$t": "TopLevel",
-            "body": body.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>() }),
+            "body": body.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>() }),
         Syntax::CatchBlock { parameter, body } => json!({
             "$t": "CatchBlock",
-            "parameter": parameter.map(|n| visit_node(m, n)),
-            "body": visit_node(m, *body),
+            "parameter": parameter.map(|n| self.visit_node(n)),
+            "body": self.visit_node(*body),
         }),
         Syntax::SwitchBranch { case, body } => json!({
             "$t": "SwitchBranch",
-            "case": case.map(|n| visit_node(m, n)),
-            "body": body.iter().map(|n| visit_node(m, *n)).collect::<Vec<_>>(),
+            "case": case.map(|n| self.visit_node(n)),
+            "body": body.iter().map(|n| self.visit_node(*n)).collect::<Vec<_>>(),
         }),
         Syntax::ObjectMember { typ } => json!({
             "$t": "ObjectMember",
             "typ": match typ {
                 ObjectMemberType::Rest { value } => json!({
-                    "rest": visit_node(m, *value),
+                    "rest": self.visit_node(*value),
                 }),
                 ObjectMemberType::Shorthand { name } => json!({
                     "shorthand": json!(name.as_str().to_string()),
                 }),
                 ObjectMemberType::Valued { key, value } => json!({
                     "valued": json!({
-                        "key": visit_class_or_object_member_key(m, key),
-                        "value": visit_class_or_object_member_value(m, value),
+                        "key": self.visit_class_or_object_member_key(key),
+                        "value": self.visit_class_or_object_member_value(value),
                     }),
                 }),
             },
@@ -507,9 +526,9 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             default_value,
         } => json!({
             "$t": "ObjectPatternProperty",
-            "key": visit_class_or_object_member_key(m, key),
-            "target": target.map(|n| visit_node(m, n)),
-            "default": default_value.map(|n| visit_node(m, n)),
+            "key": self.visit_class_or_object_member_key(key),
+            "target": target.map(|n| self.visit_node(n)),
+            "default": default_value.map(|n| self.visit_node(n)),
         }),
         Syntax::MemberExpr {
             parenthesised,
@@ -520,20 +539,36 @@ fn visit_node(m: &NodeMap, n: NodeId) -> Value {
             "$t": "MemberExpr",
             "parenthesised": parenthesised,
             "optional_chaining": optional_chaining,
-            "left": visit_node(m, *left),
+            "left": self.visit_node(*left),
             "right": right.as_str().to_string(),
         }),
         Syntax::CallArg { spread, value } => json!({
             "$t": "CallArg",
             "spread": spread,
-            "value": visit_node(m, *value),
+            "value": self.visit_node(*value),
         }),
         Syntax::SuperExpr {} => json!({
             "$t": "SuperExpr",
         }),
-    }
+    };
+
+    if !vars.is_empty() {
+      serialized["$vars"] = Value::Array(vars);
+    };
+
+    serialized
+  }
 }
 
-pub fn serialize_ast(node_map: &NodeMap, top_level_node_id: NodeId) -> Value {
-    visit_node(node_map, top_level_node_id)
+pub fn serialize_ast(
+  scope_map: &ScopeMap,
+  node_map: &NodeMap,
+  top_level_node_id: NodeId,
+) -> Value {
+    let mut visitor = Visitor {
+      node_map,
+      scope_map,
+      visited_scopes: HashSet::new(),
+    };
+    visitor.visit_node(top_level_node_id)
 }
