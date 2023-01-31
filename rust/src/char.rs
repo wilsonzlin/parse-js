@@ -3,62 +3,63 @@ use std::ops::RangeInclusive;
 
 #[derive(Clone)]
 pub struct CharFilter {
-    table: [bool; 256],
+  table: [bool; 256],
 }
 
 impl CharFilter {
-    pub fn new() -> CharFilter {
-        CharFilter {
-            table: [false; 256],
-        }
+  pub fn new() -> CharFilter {
+    CharFilter {
+      table: [false; 256],
     }
+  }
 
-    pub fn add_char(&mut self, c: u8) -> () {
-        self.table[c as usize] = true;
-    }
+  pub fn add_char(&mut self, c: u8) -> () {
+    self.table[c as usize] = true;
+  }
 
-    pub fn add_chars(&mut self, chars: RangeInclusive<u8>) -> () {
-        for c in chars {
-            self.table[c as usize] = true;
-        }
+  pub fn add_chars(&mut self, chars: RangeInclusive<u8>) -> () {
+    for c in chars {
+      self.table[c as usize] = true;
     }
+  }
 
-    pub fn add_chars_from_slice(&mut self, chars: &[u8]) -> () {
-        for c in chars {
-            self.table[*c as usize] = true;
-        }
+  pub fn add_chars_from_slice(&mut self, chars: &[u8]) -> () {
+    for c in chars {
+      self.table[*c as usize] = true;
     }
+  }
 
-    pub fn clone(&self) -> CharFilter {
-        CharFilter {
-            table: self.table.clone(),
-        }
+  pub fn clone(&self) -> CharFilter {
+    CharFilter {
+      table: self.table.clone(),
     }
+  }
 
-    pub fn invert(&mut self) -> () {
-        for i in 0..256 {
-            self.table[i] = !self.table[i];
-        }
+  pub fn invert(&mut self) -> () {
+    for i in 0..256 {
+      self.table[i] = !self.table[i];
     }
+  }
 
-    pub fn has(&self, c: u8) -> bool {
-        unsafe { *self.table.get_unchecked(c as usize) }
-    }
+  pub fn has(&self, c: u8) -> bool {
+    unsafe { *self.table.get_unchecked(c as usize) }
+  }
 
-    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
-        self.table
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| **e)
-            .map(|(c, _)| c as u8)
-    }
+  pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+    self
+      .table
+      .iter()
+      .enumerate()
+      .filter(|(_, e)| **e)
+      .map(|(c, _)| c as u8)
+  }
 }
 
 // WARNING: Does not consider Unicode characters allowed by spec.
 pub const ID_START_CHARSTR: &'static [u8] =
-    b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
+  b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 pub const ID_CONTINUE_CHARSTR: &'static [u8] =
-    b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
+  b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 
 lazy_static! {
     pub static ref DIGIT: CharFilter = {

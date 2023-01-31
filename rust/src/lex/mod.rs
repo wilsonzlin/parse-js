@@ -1,223 +1,236 @@
+use crate::char::CharFilter;
+use crate::char::DIGIT;
+use crate::char::DIGIT_BIN;
+use crate::char::DIGIT_HEX;
+use crate::char::DIGIT_OCT;
+use crate::char::ID_CONTINUE;
+use crate::char::ID_CONTINUE_JSX;
+use crate::char::ID_START;
+use crate::char::ID_START_CHARSTR;
+use crate::char::WHITESPACE;
+use crate::error::SyntaxError;
+use crate::error::SyntaxErrorType;
+use crate::error::SyntaxResult;
+use crate::source::Source;
+use crate::source::SourceRange;
+use crate::token::Token;
+use crate::token::TokenType;
+use aho_corasick::AhoCorasick;
+use aho_corasick::AhoCorasickBuilder;
+use aho_corasick::MatchKind;
+use lazy_static::lazy_static;
+use memchr::memchr;
+use memchr::memchr2;
+use memchr::memchr3;
 use std::collections::HashMap;
 use std::ops::Index;
-
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use lazy_static::lazy_static;
-use memchr::{memchr, memchr2, memchr3};
-
-use crate::char::{
-    CharFilter, DIGIT, DIGIT_BIN, DIGIT_HEX, DIGIT_OCT, ID_CONTINUE, ID_CONTINUE_JSX, ID_START,
-    ID_START_CHARSTR, WHITESPACE,
-};
-use crate::error::{SyntaxError, SyntaxErrorType, SyntaxResult};
-use crate::source::{Source, SourceRange};
-use crate::token::{Token, TokenType};
 
 #[cfg(feature = "serialize")]
 mod tests;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum LexMode {
-    JsxTag,
-    JsxTextContent,
-    SlashIsRegex,
-    Standard,
+  JsxTag,
+  JsxTextContent,
+  SlashIsRegex,
+  Standard,
 }
 
 #[derive(Copy, Clone)]
 pub struct LexerCheckpoint {
-    next: usize,
+  next: usize,
 }
 
 #[derive(Copy, Clone)]
 struct Match {
-    len: usize,
+  len: usize,
 }
 
 impl Match {
-    pub fn len(&self) -> usize {
-        self.len
-    }
+  pub fn len(&self) -> usize {
+    self.len
+  }
 
-    pub fn prefix(&self, n: usize) -> Match {
-        debug_assert!(n <= self.len);
-        Match { len: n }
-    }
+  pub fn prefix(&self, n: usize) -> Match {
+    debug_assert!(n <= self.len);
+    Match { len: n }
+  }
 
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
+  pub fn is_empty(&self) -> bool {
+    self.len == 0
+  }
 }
 
 #[derive(Copy, Clone)]
 struct AhoCorasickMatch {
-    id: usize,
-    mat: Match,
+  id: usize,
+  mat: Match,
 }
 
 pub struct Lexer {
-    source: Source,
-    next: usize,
+  source: Source,
+  next: usize,
 }
 
 impl Lexer {
-    pub fn new(code: Vec<u8>) -> Lexer {
-        Lexer {
-            source: Source::new(code),
-            next: 0,
-        }
+  pub fn new(code: Vec<u8>) -> Lexer {
+    Lexer {
+      source: Source::new(code),
+      next: 0,
     }
+  }
 
-    fn end(&self) -> usize {
-        self.source.code().len()
-    }
+  fn end(&self) -> usize {
+    self.source.code().len()
+  }
 
-    fn remaining(&self) -> usize {
-        self.end() - self.next
-    }
+  fn remaining(&self) -> usize {
+    self.end() - self.next
+  }
 
-    pub fn source_range(&self) -> SourceRange {
-        SourceRange {
-            source: self.source.clone(),
-            start: 0,
-            end: self.end(),
-        }
+  pub fn source_range(&self) -> SourceRange {
+    SourceRange {
+      source: self.source.clone(),
+      start: 0,
+      end: self.end(),
     }
+  }
 
-    fn eof_range(&self) -> SourceRange {
-        SourceRange {
-            source: self.source.clone(),
-            start: self.end(),
-            end: self.end(),
-        }
+  fn eof_range(&self) -> SourceRange {
+    SourceRange {
+      source: self.source.clone(),
+      start: self.end(),
+      end: self.end(),
     }
+  }
 
-    fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
-        SyntaxError::new(typ, self.source.clone(), self.next, None)
-    }
+  fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
+    SyntaxError::new(typ, self.source.clone(), self.next, None)
+  }
 
-    fn at_end(&self) -> bool {
-        self.next >= self.end()
-    }
+  fn at_end(&self) -> bool {
+    self.next >= self.end()
+  }
 
-    fn peek(&self, n: usize) -> SyntaxResult<u8> {
-        self.peek_or_eof(n)
-            .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
-    }
+  fn peek(&self, n: usize) -> SyntaxResult<u8> {
+    self
+      .peek_or_eof(n)
+      .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
+  }
 
-    fn peek_or_eof(&self, n: usize) -> Option<u8> {
-        self.source.code().get(self.next + n).map(|&c| c)
-    }
+  fn peek_or_eof(&self, n: usize) -> Option<u8> {
+    self.source.code().get(self.next + n).map(|&c| c)
+  }
 
-    pub fn checkpoint(&self) -> LexerCheckpoint {
-        LexerCheckpoint { next: self.next }
-    }
+  pub fn checkpoint(&self) -> LexerCheckpoint {
+    LexerCheckpoint { next: self.next }
+  }
 
-    pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange {
-        SourceRange {
-            source: self.source.clone(),
-            start: checkpoint.next,
-            end: self.next,
-        }
+  pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange {
+    SourceRange {
+      source: self.source.clone(),
+      start: checkpoint.next,
+      end: self.next,
     }
+  }
 
-    pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) -> () {
-        self.next = checkpoint.next;
-    }
+  pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) -> () {
+    self.next = checkpoint.next;
+  }
 
-    fn n(&self, n: usize) -> SyntaxResult<Match> {
-        if self.next + n > self.end() {
-            return Err(self.error(SyntaxErrorType::UnexpectedEnd));
-        };
-        Ok(Match { len: n })
-    }
+  fn n(&self, n: usize) -> SyntaxResult<Match> {
+    if self.next + n > self.end() {
+      return Err(self.error(SyntaxErrorType::UnexpectedEnd));
+    };
+    Ok(Match { len: n })
+  }
 
-    fn if_char(&self, c: u8) -> Match {
-        Match {
-            len: (!self.at_end() && self.source.code()[self.next] == c) as usize,
-        }
+  fn if_char(&self, c: u8) -> Match {
+    Match {
+      len: (!self.at_end() && self.source.code()[self.next] == c) as usize,
     }
+  }
 
-    fn through_char(&self, c: u8) -> SyntaxResult<Match> {
-        memchr(c, &self.source.code()[self.next..])
-            .map(|pos| Match { len: pos + 1 })
-            .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
-    }
+  fn through_char(&self, c: u8) -> SyntaxResult<Match> {
+    memchr(c, &self.source.code()[self.next..])
+      .map(|pos| Match { len: pos + 1 })
+      .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
+  }
 
-    fn while_not_char(&self, a: u8) -> Match {
-        Match {
-            len: memchr(a, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
-        }
+  fn while_not_char(&self, a: u8) -> Match {
+    Match {
+      len: memchr(a, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
     }
+  }
 
-    fn while_not_2_chars(&self, a: u8, b: u8) -> Match {
-        Match {
-            len: memchr2(a, b, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
-        }
+  fn while_not_2_chars(&self, a: u8, b: u8) -> Match {
+    Match {
+      len: memchr2(a, b, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
     }
+  }
 
-    fn while_not_3_chars(&self, a: u8, b: u8, c: u8) -> Match {
-        Match {
-            len: memchr3(a, b, c, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
-        }
+  fn while_not_3_chars(&self, a: u8, b: u8, c: u8) -> Match {
+    Match {
+      len: memchr3(a, b, c, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
     }
+  }
 
-    fn while_chars(&self, chars: &CharFilter) -> Match {
-        let mut len = 0;
-        while len < self.remaining() && chars.has(self.source.code()[self.next + len]) {
-            len += 1;
-        }
-        Match { len }
+  fn while_chars(&self, chars: &CharFilter) -> Match {
+    let mut len = 0;
+    while len < self.remaining() && chars.has(self.source.code()[self.next + len]) {
+      len += 1;
     }
+    Match { len }
+  }
 
-    fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
-        ac.find(&self.source.code()[self.next..])
-            .map(|m| AhoCorasickMatch {
-                id: m.pattern(),
-                mat: Match { len: m.end() },
-            })
-            .ok_or_else(|| self.error(SyntaxErrorType::ExpectedNotFound))
-    }
+  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
+    ac.find(&self.source.code()[self.next..])
+      .map(|m| AhoCorasickMatch {
+        id: m.pattern(),
+        mat: Match { len: m.end() },
+      })
+      .ok_or_else(|| self.error(SyntaxErrorType::ExpectedNotFound))
+  }
 
-    fn range(&self, m: Match) -> SourceRange {
-        SourceRange {
-            source: self.source.clone(),
-            start: self.next,
-            end: self.next + m.len,
-        }
+  fn range(&self, m: Match) -> SourceRange {
+    SourceRange {
+      source: self.source.clone(),
+      start: self.next,
+      end: self.next + m.len,
     }
+  }
 
-    fn consume(&mut self, m: Match) -> Match {
-        self.next += m.len;
-        m
-    }
+  fn consume(&mut self, m: Match) -> Match {
+    self.next += m.len;
+    m
+  }
 
-    fn consume_next(&mut self) -> SyntaxResult<u8> {
-        let c = self.peek(0)?;
-        self.next += 1;
-        Ok(c)
-    }
+  fn consume_next(&mut self) -> SyntaxResult<u8> {
+    let c = self.peek(0)?;
+    self.next += 1;
+    Ok(c)
+  }
 
-    fn skip_expect(&mut self, n: usize) -> () {
-        debug_assert!(self.next + n <= self.end());
-        self.next += n;
-    }
+  fn skip_expect(&mut self, n: usize) -> () {
+    debug_assert!(self.next + n <= self.end());
+    self.next += n;
+  }
 }
 
 impl Index<SourceRange> for Lexer {
-    type Output = [u8];
+  type Output = [u8];
 
-    fn index(&self, index: SourceRange) -> &Self::Output {
-        &self.source.code()[index.start..index.end]
-    }
+  fn index(&self, index: SourceRange) -> &Self::Output {
+    &self.source.code()[index.start..index.end]
+  }
 }
 
 impl Index<Match> for Lexer {
-    type Output = [u8];
+  type Output = [u8];
 
-    fn index(&self, index: Match) -> &Self::Output {
-        &self.source.code()[self.next - index.len..self.next]
-    }
+  fn index(&self, index: Match) -> &Self::Output {
+    &self.source.code()[self.next - index.len..self.next]
+  }
 }
 
 lazy_static! {
@@ -390,380 +403,372 @@ lazy_static! {
 }
 
 fn lex_multiple_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
-    // Consume `/*`.
-    lexer.skip_expect(2);
-    lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
-    Ok(())
+  // Consume `/*`.
+  lexer.skip_expect(2);
+  lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
+  Ok(())
 }
 
 fn lex_single_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
-    // Consume `//`.
-    lexer.skip_expect(2);
-    // WARNING: Does not consider other line terminators allowed by spec.
-    lexer.consume(lexer.through_char(b'\n')?);
-    Ok(())
+  // Consume `//`.
+  lexer.skip_expect(2);
+  // WARNING: Does not consider other line terminators allowed by spec.
+  lexer.consume(lexer.through_char(b'\n')?);
+  Ok(())
 }
 
 fn lex_identifier(
-    lexer: &mut Lexer,
-    mode: LexMode,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  mode: LexMode,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    // Consume starter.
+  let cp = lexer.checkpoint();
+  // Consume starter.
+  lexer.skip_expect(1);
+  loop {
+    lexer.consume(lexer.while_chars(if mode == LexMode::JsxTag {
+      &ID_CONTINUE_JSX
+    } else {
+      &ID_CONTINUE
+    }));
+    // TODO We assume if it's not ASCII it's part of a UTF-8 byte sequence, and that sequence represents a valid JS identifier continue code point.
+    if lexer.peek_or_eof(0).filter(|c| !c.is_ascii()).is_none() {
+      break;
+    };
     lexer.skip_expect(1);
-    loop {
-        lexer.consume(lexer.while_chars(if mode == LexMode::JsxTag {
-            &ID_CONTINUE_JSX
-        } else {
-            &ID_CONTINUE
-        }));
-        // TODO We assume if it's not ASCII it's part of a UTF-8 byte sequence, and that sequence represents a valid JS identifier continue code point.
-        if lexer.peek_or_eof(0).filter(|c| !c.is_ascii()).is_none() {
-            break;
-        };
-        lexer.skip_expect(1);
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::Identifier,
-        preceded_by_line_terminator,
-    ))
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::Identifier,
+    preceded_by_line_terminator,
+  ))
 }
 
 fn lex_bigint_or_number(
-    lexer: &mut Lexer,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    // TODO
+  let cp = lexer.checkpoint();
+  // TODO
+  lexer.consume(lexer.while_chars(&DIGIT));
+  if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+    return Ok(Token::new(
+      lexer.since_checkpoint(cp),
+      TokenType::LiteralBigInt,
+      preceded_by_line_terminator,
+    ));
+  }
+  lexer.consume(lexer.if_char(b'.'));
+  lexer.consume(lexer.while_chars(&DIGIT));
+  if lexer
+    .peek_or_eof(0)
+    .filter(|&c| c == b'e' || c == b'E')
+    .is_some()
+  {
+    lexer.skip_expect(1);
+    match lexer.peek(0)? {
+      b'+' | b'-' => lexer.skip_expect(1),
+      _ => {}
+    };
     lexer.consume(lexer.while_chars(&DIGIT));
-    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
-        return Ok(Token::new(
-            lexer.since_checkpoint(cp),
-            TokenType::LiteralBigInt,
-            preceded_by_line_terminator,
-        ));
-    }
-    lexer.consume(lexer.if_char(b'.'));
-    lexer.consume(lexer.while_chars(&DIGIT));
-    if lexer
-        .peek_or_eof(0)
-        .filter(|&c| c == b'e' || c == b'E')
-        .is_some()
-    {
-        lexer.skip_expect(1);
-        match lexer.peek(0)? {
-            b'+' | b'-' => lexer.skip_expect(1),
-            _ => {}
-        };
-        lexer.consume(lexer.while_chars(&DIGIT));
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralNumber,
-        preceded_by_line_terminator,
-    ))
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralNumber,
+    preceded_by_line_terminator,
+  ))
 }
 
 fn lex_bigint_or_number_bin(
-    lexer: &mut Lexer,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    lexer.skip_expect(2);
-    lexer.consume(lexer.while_chars(&DIGIT_BIN));
-    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
-        return Ok(Token::new(
-            lexer.since_checkpoint(cp),
-            TokenType::LiteralBigInt,
-            preceded_by_line_terminator,
-        ));
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralNumber,
-        preceded_by_line_terminator,
-    ))
+  let cp = lexer.checkpoint();
+  lexer.skip_expect(2);
+  lexer.consume(lexer.while_chars(&DIGIT_BIN));
+  if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+    return Ok(Token::new(
+      lexer.since_checkpoint(cp),
+      TokenType::LiteralBigInt,
+      preceded_by_line_terminator,
+    ));
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralNumber,
+    preceded_by_line_terminator,
+  ))
 }
 
 fn lex_bigint_or_number_hex(
-    lexer: &mut Lexer,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    lexer.skip_expect(2);
-    lexer.consume(lexer.while_chars(&DIGIT_HEX));
-    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
-        return Ok(Token::new(
-            lexer.since_checkpoint(cp),
-            TokenType::LiteralBigInt,
-            preceded_by_line_terminator,
-        ));
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralNumber,
-        preceded_by_line_terminator,
-    ))
+  let cp = lexer.checkpoint();
+  lexer.skip_expect(2);
+  lexer.consume(lexer.while_chars(&DIGIT_HEX));
+  if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+    return Ok(Token::new(
+      lexer.since_checkpoint(cp),
+      TokenType::LiteralBigInt,
+      preceded_by_line_terminator,
+    ));
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralNumber,
+    preceded_by_line_terminator,
+  ))
 }
 
 fn lex_bigint_or_number_oct(
-    lexer: &mut Lexer,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    lexer.skip_expect(2);
-    lexer.consume(lexer.while_chars(&DIGIT_OCT));
-    if !lexer.consume(lexer.if_char(b'n')).is_empty() {
-        return Ok(Token::new(
-            lexer.since_checkpoint(cp),
-            TokenType::LiteralBigInt,
-            preceded_by_line_terminator,
-        ));
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralNumber,
-        preceded_by_line_terminator,
-    ))
+  let cp = lexer.checkpoint();
+  lexer.skip_expect(2);
+  lexer.consume(lexer.while_chars(&DIGIT_OCT));
+  if !lexer.consume(lexer.if_char(b'n')).is_empty() {
+    return Ok(Token::new(
+      lexer.since_checkpoint(cp),
+      TokenType::LiteralBigInt,
+      preceded_by_line_terminator,
+    ));
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralNumber,
+    preceded_by_line_terminator,
+  ))
 }
 
 fn lex_private_member(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    // Include the `#` in the token.
-    lexer.skip_expect(1);
-    if !ID_START.has(lexer.peek(0)?) {
-        return Err(lexer.error(SyntaxErrorType::ExpectedSyntax("private member")));
+  let cp = lexer.checkpoint();
+  // Include the `#` in the token.
+  lexer.skip_expect(1);
+  if !ID_START.has(lexer.peek(0)?) {
+    return Err(lexer.error(SyntaxErrorType::ExpectedSyntax("private member")));
+  };
+  lexer.skip_expect(1);
+  // TODO This is copied from lex_identifier.
+  loop {
+    lexer.consume(lexer.while_chars(&ID_CONTINUE));
+    // TODO We assume if it's not ASCII it's part of a UTF-8 byte sequence, and that sequence represents a valid JS identifier continue code point.
+    if lexer.peek_or_eof(0).filter(|c| !c.is_ascii()).is_none() {
+      break;
     };
     lexer.skip_expect(1);
-    // TODO This is copied from lex_identifier.
-    loop {
-        lexer.consume(lexer.while_chars(&ID_CONTINUE));
-        // TODO We assume if it's not ASCII it's part of a UTF-8 byte sequence, and that sequence represents a valid JS identifier continue code point.
-        if lexer.peek_or_eof(0).filter(|c| !c.is_ascii()).is_none() {
-            break;
-        };
-        lexer.skip_expect(1);
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::PrivateMember,
-        preceded_by_line_terminator,
-    ))
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::PrivateMember,
+    preceded_by_line_terminator,
+  ))
 }
 
 // TODO Validate regex.
 fn lex_regex(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    // Consume slash.
-    lexer.consume(lexer.n(1)?);
-    let mut in_charset = false;
-    loop {
+  let cp = lexer.checkpoint();
+  // Consume slash.
+  lexer.consume(lexer.n(1)?);
+  let mut in_charset = false;
+  loop {
+    // WARNING: Does not consider other line terminators allowed by spec.
+    match lexer.consume_next()? {
+      b'\\' => {
+        // Cannot escape line terminator.
         // WARNING: Does not consider other line terminators allowed by spec.
-        match lexer.consume_next()? {
-            b'\\' => {
-                // Cannot escape line terminator.
-                // WARNING: Does not consider other line terminators allowed by spec.
-                if lexer.peek(1)? == b'\n' {
-                    return Err(lexer.error(SyntaxErrorType::LineTerminatorInRegex));
-                };
-                lexer.skip_expect(1);
-            }
-            b'/' if !in_charset => {
-                break;
-            }
-            b'[' => {
-                in_charset = true;
-            }
-            b']' if in_charset => {
-                in_charset = false;
-            }
-            b'\n' => {
-                return Err(lexer.error(SyntaxErrorType::LineTerminatorInRegex));
-            }
-            _ => {}
+        if lexer.peek(1)? == b'\n' {
+          return Err(lexer.error(SyntaxErrorType::LineTerminatorInRegex));
         };
-    }
-    lexer.consume(lexer.while_chars(&ID_CONTINUE));
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralRegex,
-        preceded_by_line_terminator,
-    ))
+        lexer.skip_expect(1);
+      }
+      b'/' if !in_charset => {
+        break;
+      }
+      b'[' => {
+        in_charset = true;
+      }
+      b']' if in_charset => {
+        in_charset = false;
+      }
+      b'\n' => {
+        return Err(lexer.error(SyntaxErrorType::LineTerminatorInRegex));
+      }
+      _ => {}
+    };
+  }
+  lexer.consume(lexer.while_chars(&ID_CONTINUE));
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralRegex,
+    preceded_by_line_terminator,
+  ))
 }
 
 // TODO Validate string.
 fn lex_string(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    let quote = lexer.peek(0)?;
-    lexer.skip_expect(1);
-    loop {
-        // WARNING: Does not consider other line terminators allowed by spec.
-        lexer.consume(lexer.while_not_3_chars(b'\\', b'\n', quote));
-        match lexer.peek(0)? {
-            b'\\' => {
-                lexer.consume(lexer.n(2)?);
-            }
-            b'\n' => {
-                return Err(lexer.error(SyntaxErrorType::LineTerminatorInString));
-            }
-            c if c == quote => {
-                lexer.skip_expect(1);
-                break;
-            }
-            _ => unreachable!(),
-        };
-    }
-    Ok(Token::new(
-        lexer.since_checkpoint(cp),
-        TokenType::LiteralString,
-        preceded_by_line_terminator,
-    ))
+  let cp = lexer.checkpoint();
+  let quote = lexer.peek(0)?;
+  lexer.skip_expect(1);
+  loop {
+    // WARNING: Does not consider other line terminators allowed by spec.
+    lexer.consume(lexer.while_not_3_chars(b'\\', b'\n', quote));
+    match lexer.peek(0)? {
+      b'\\' => {
+        lexer.consume(lexer.n(2)?);
+      }
+      b'\n' => {
+        return Err(lexer.error(SyntaxErrorType::LineTerminatorInString));
+      }
+      c if c == quote => {
+        lexer.skip_expect(1);
+        break;
+      }
+      _ => unreachable!(),
+    };
+  }
+  Ok(Token::new(
+    lexer.since_checkpoint(cp),
+    TokenType::LiteralString,
+    preceded_by_line_terminator,
+  ))
 }
 
 pub fn lex_template_string_continue(
-    lexer: &mut Lexer,
-    preceded_by_line_terminator: bool,
+  lexer: &mut Lexer,
+  preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
-    let cp = lexer.checkpoint();
-    let mut ended = false;
-    let loc = loop {
-        lexer.consume(lexer.while_not_3_chars(b'\\', b'`', b'$'));
-        match lexer.peek(0)? {
-            b'\\' => {
-                lexer.consume(lexer.n(2)?);
-            }
-            b'`' => {
-                ended = true;
-                let loc = Some(lexer.since_checkpoint(cp));
-                lexer.skip_expect(1);
-                break loc;
-            }
-            b'$' => {
-                if lexer.peek(1)? == b'{' {
-                    let loc = Some(lexer.since_checkpoint(cp));
-                    lexer.skip_expect(2);
-                    break loc;
-                } else {
-                    lexer.skip_expect(1);
-                }
-            }
-            _ => unreachable!(),
-        };
-    };
-    Ok(Token::new(
-        loc.unwrap(),
-        if ended {
-            TokenType::LiteralTemplatePartStringEnd
+  let cp = lexer.checkpoint();
+  let mut ended = false;
+  let loc = loop {
+    lexer.consume(lexer.while_not_3_chars(b'\\', b'`', b'$'));
+    match lexer.peek(0)? {
+      b'\\' => {
+        lexer.consume(lexer.n(2)?);
+      }
+      b'`' => {
+        ended = true;
+        let loc = Some(lexer.since_checkpoint(cp));
+        lexer.skip_expect(1);
+        break loc;
+      }
+      b'$' => {
+        if lexer.peek(1)? == b'{' {
+          let loc = Some(lexer.since_checkpoint(cp));
+          lexer.skip_expect(2);
+          break loc;
         } else {
-            TokenType::LiteralTemplatePartString
-        },
-        preceded_by_line_terminator,
-    ))
+          lexer.skip_expect(1);
+        }
+      }
+      _ => unreachable!(),
+    };
+  };
+  Ok(Token::new(
+    loc.unwrap(),
+    if ended {
+      TokenType::LiteralTemplatePartStringEnd
+    } else {
+      TokenType::LiteralTemplatePartString
+    },
+    preceded_by_line_terminator,
+  ))
 }
 
 // TODO Validate template.
 fn lex_template(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
-    // Consume backtick.
-    lexer.skip_expect(1);
-    lex_template_string_continue(lexer, preceded_by_line_terminator)
+  // Consume backtick.
+  lexer.skip_expect(1);
+  lex_template_string_continue(lexer, preceded_by_line_terminator)
 }
 
 pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
-    let mut preceded_by_line_terminator = false;
-    loop {
-        if mode == LexMode::JsxTextContent {
-            let cp = lexer.checkpoint();
-            // TODO Technically the spec specificies JSXText cannot contain '>' or '}' either.
-            lexer.consume(lexer.while_not_2_chars(b'{', b'<'));
-            return Ok(Token::new(
-                lexer.since_checkpoint(cp),
-                TokenType::JsxTextContent,
-                false,
-            ));
-        };
+  let mut preceded_by_line_terminator = false;
+  loop {
+    if mode == LexMode::JsxTextContent {
+      let cp = lexer.checkpoint();
+      // TODO Technically the spec specificies JSXText cannot contain '>' or '}' either.
+      lexer.consume(lexer.while_not_2_chars(b'{', b'<'));
+      return Ok(Token::new(
+        lexer.since_checkpoint(cp),
+        TokenType::JsxTextContent,
+        false,
+      ));
+    };
 
-        let ws = lexer.while_chars(&WHITESPACE);
-        lexer.consume(ws);
-        // If we are not in the first loop, we've skipped some comments, so preserve preceded_by_line_terminator set before any previous comment.
-        // WARNING: Does not consider other line terminators allowed by spec.
-        preceded_by_line_terminator =
-            preceded_by_line_terminator || memchr(b'\n', &lexer[ws]).is_some();
+    let ws = lexer.while_chars(&WHITESPACE);
+    lexer.consume(ws);
+    // If we are not in the first loop, we've skipped some comments, so preserve preceded_by_line_terminator set before any previous comment.
+    // WARNING: Does not consider other line terminators allowed by spec.
+    preceded_by_line_terminator =
+      preceded_by_line_terminator || memchr(b'\n', &lexer[ws]).is_some();
 
-        if lexer.at_end() {
-            return Ok(Token::new(
-                lexer.eof_range(),
-                TokenType::EOF,
-                preceded_by_line_terminator,
-            ));
-        };
+    if lexer.at_end() {
+      return Ok(Token::new(
+        lexer.eof_range(),
+        TokenType::EOF,
+        preceded_by_line_terminator,
+      ));
+    };
 
-        // TODO We assume that if it's a UTF-8 non-ASCII sequence it's an identifier, but JS only allows a few Unicode property types as identifiers.
-        let is_utf8_start = if let Some(c) = lexer.peek_or_eof(0) {
-            c >> 5 == 0b110 || c >> 4 == 0b1110 || c >> 3 == 0b11110
-        } else {
-            false
-        };
+    // TODO We assume that if it's a UTF-8 non-ASCII sequence it's an identifier, but JS only allows a few Unicode property types as identifiers.
+    let is_utf8_start = if let Some(c) = lexer.peek_or_eof(0) {
+      c >> 5 == 0b110 || c >> 4 == 0b1110 || c >> 3 == 0b11110
+    } else {
+      false
+    };
 
-        if is_utf8_start {
-            return lex_identifier(lexer, mode, preceded_by_line_terminator);
-        };
+    if is_utf8_start {
+      return lex_identifier(lexer, mode, preceded_by_line_terminator);
+    };
 
-        let AhoCorasickMatch { id, mut mat } = lexer.aho_corasick(&MATCHER)?;
-        match PATTERNS[id].0 {
-            TokenType::CommentMultiple => lex_multiple_comment(lexer)?,
-            TokenType::CommentSingle => {
-                // The lexer consumes the line terminator at the end of the comment, so any following syntax is technically preceded by at least one line terminator.
-                preceded_by_line_terminator = true;
-                lex_single_comment(lexer)?
-            }
-            pat => {
-                return match pat {
-                    TokenType::Identifier => {
-                        lex_identifier(lexer, mode, preceded_by_line_terminator)
-                    }
-                    TokenType::LiteralNumber => {
-                        lex_bigint_or_number(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::LiteralNumberBin => {
-                        lex_bigint_or_number_bin(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::LiteralNumberHex => {
-                        lex_bigint_or_number_hex(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::LiteralNumberOct => {
-                        lex_bigint_or_number_oct(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::LiteralString => lex_string(lexer, preceded_by_line_terminator),
-                    TokenType::LiteralTemplatePartString => {
-                        lex_template(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::PrivateMember => {
-                        lex_private_member(lexer, preceded_by_line_terminator)
-                    }
-                    TokenType::Slash | TokenType::SlashEquals if mode == LexMode::SlashIsRegex => {
-                        lex_regex(lexer, preceded_by_line_terminator)
-                    }
-                    typ => {
-                        if typ == TokenType::Question && mat.len() != 1 {
-                            // We've matched `?.[0-9]`.
-                            mat = mat.prefix(1);
-                        } else if KEYWORDS_MAPPING.contains_key(&typ)
-                            && lexer
-                                .peek_or_eof(mat.len())
-                                .filter(|c| ID_CONTINUE.has(*c))
-                                .is_some()
-                        {
-                            // We've accidentally matched a prefix of an identifier as a keyword.
-                            return lex_identifier(lexer, mode, preceded_by_line_terminator);
-                        };
-                        let loc = lexer.range(mat);
-                        lexer.consume(mat);
-                        Ok(Token::new(loc, typ, preceded_by_line_terminator))
-                    }
-                };
-            }
+    let AhoCorasickMatch { id, mut mat } = lexer.aho_corasick(&MATCHER)?;
+    match PATTERNS[id].0 {
+      TokenType::CommentMultiple => lex_multiple_comment(lexer)?,
+      TokenType::CommentSingle => {
+        // The lexer consumes the line terminator at the end of the comment, so any following syntax is technically preceded by at least one line terminator.
+        preceded_by_line_terminator = true;
+        lex_single_comment(lexer)?
+      }
+      pat => {
+        return match pat {
+          TokenType::Identifier => lex_identifier(lexer, mode, preceded_by_line_terminator),
+          TokenType::LiteralNumber => lex_bigint_or_number(lexer, preceded_by_line_terminator),
+          TokenType::LiteralNumberBin => {
+            lex_bigint_or_number_bin(lexer, preceded_by_line_terminator)
+          }
+          TokenType::LiteralNumberHex => {
+            lex_bigint_or_number_hex(lexer, preceded_by_line_terminator)
+          }
+          TokenType::LiteralNumberOct => {
+            lex_bigint_or_number_oct(lexer, preceded_by_line_terminator)
+          }
+          TokenType::LiteralString => lex_string(lexer, preceded_by_line_terminator),
+          TokenType::LiteralTemplatePartString => lex_template(lexer, preceded_by_line_terminator),
+          TokenType::PrivateMember => lex_private_member(lexer, preceded_by_line_terminator),
+          TokenType::Slash | TokenType::SlashEquals if mode == LexMode::SlashIsRegex => {
+            lex_regex(lexer, preceded_by_line_terminator)
+          }
+          typ => {
+            if typ == TokenType::Question && mat.len() != 1 {
+              // We've matched `?.[0-9]`.
+              mat = mat.prefix(1);
+            } else if KEYWORDS_MAPPING.contains_key(&typ)
+              && lexer
+                .peek_or_eof(mat.len())
+                .filter(|c| ID_CONTINUE.has(*c))
+                .is_some()
+            {
+              // We've accidentally matched a prefix of an identifier as a keyword.
+              return lex_identifier(lexer, mode, preceded_by_line_terminator);
+            };
+            let loc = lexer.range(mat);
+            lexer.consume(mat);
+            Ok(Token::new(loc, typ, preceded_by_line_terminator))
+          }
         };
-    }
+      }
+    };
+  }
 }

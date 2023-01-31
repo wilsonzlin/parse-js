@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
-use lazy_static::lazy_static;
-
-use crate::operator::{Operator, OperatorName, OPERATORS};
+use crate::operator::Operator;
+use crate::operator::OperatorName;
+use crate::operator::OPERATORS;
 use crate::token::TokenType;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 
 lazy_static! {
     pub static ref MULTARY_OPERATOR_MAPPING: HashMap<TokenType, &'static Operator> = {
