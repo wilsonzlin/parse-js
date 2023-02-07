@@ -28,6 +28,7 @@ use crate::parse::operator::UNARY_OPERATOR_MAPPING;
 use crate::parse::parser::Parser;
 use crate::parse::signature::parse_signature_function;
 use crate::parse::stmt::parse_stmt;
+use crate::symbol::ScopeFlag;
 use crate::symbol::ScopeId;
 use crate::symbol::ScopeType;
 use crate::token::TokenType;
@@ -500,7 +501,7 @@ pub fn parse_expr_arrow_function(
   terminator_b: TokenType,
   syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
-  let fn_scope = parser.create_child_scope(scope, ScopeType::Closure);
+  let fn_scope = parser.create_child_scope(scope, ScopeType::ArrowFunction);
 
   let is_async = parser.consume_if(TokenType::KeywordAsync)?.is_match();
 
@@ -625,7 +626,7 @@ pub fn parse_expr_function(
   parser: &mut Parser,
   syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
-  let fn_scope = parser.create_child_scope(scope, ScopeType::Closure);
+  let fn_scope = parser.create_child_scope(scope, ScopeType::NonArrowFunction);
   let is_async = parser.consume_if(TokenType::KeywordAsync)?.is_match();
   let start = parser.require(TokenType::KeywordFunction)?.loc().clone();
   let generator = parser.consume_if(TokenType::Asterisk)?.is_match();
@@ -773,6 +774,21 @@ fn parse_expr_operand(
             parser.restore_checkpoint(cp);
             parse_expr_arrow_function(scope, parser, terminator_a, terminator_b, syntax)?
           } else {
+            if t.loc().as_slice() == b"arguments"
+              && parser[scope]
+                .find_symbol_up_to_nearest_scope_of_type(
+                  parser.scope_map(),
+                  t.loc(),
+                  ScopeType::NonArrowFunction,
+                )
+                .is_none()
+            {
+              if let Some(closure_id) = parser[scope]
+                .find_self_or_ancestor(parser.scope_map(), |t| t == ScopeType::ArrowFunction)
+              {
+                parser[closure_id].set_flag(ScopeFlag::UsesArguments);
+              };
+            };
             parser.create_node(scope, t.loc().clone(), Syntax::IdentifierExpr {
               name: t.loc().clone(),
             })
@@ -791,7 +807,15 @@ fn parse_expr_operand(
           parse_expr_import(scope, parser, syntax)?
         }
         TokenType::KeywordSuper => parser.create_node(scope, t.loc().clone(), Syntax::SuperExpr {}),
-        TokenType::KeywordThis => parser.create_node(scope, t.loc().clone(), Syntax::ThisExpr {}),
+        TokenType::KeywordThis => {
+          let new_node_id = parser.create_node(scope, t.loc().clone(), Syntax::ThisExpr {});
+          if let Some(closure_id) = parser[scope].find_self_or_ancestor(parser.scope_map(), |t| {
+            t == ScopeType::Class || t == ScopeType::NonArrowFunction
+          }) {
+            parser[closure_id].set_flag(ScopeFlag::UsesThis);
+          };
+          new_node_id
+        }
         TokenType::LiteralBigInt => {
           parser.create_node(scope, t.loc().clone(), Syntax::LiteralBigIntExpr {
             // TODO Normalise.

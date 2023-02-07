@@ -60,7 +60,9 @@ fn parse_pattern_identifier(
       scope.add_block_symbol(t.loc().clone(), node_id)?;
     }
     ParsePatternAction::AddToClosureScope => {
-      if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
+      if let Some(closure_id) =
+        parser[scope].find_self_or_ancestor(parser.scope_map(), |t| t.is_closure())
+      {
         parser[closure_id].add_symbol(t.loc().clone(), node_id)?;
       };
     }
@@ -135,7 +137,9 @@ pub fn parse_pattern(
             parser[scope].add_block_symbol(name, property)?;
           }
           (Some(name), None, ParsePatternAction::AddToClosureScope) => {
-            if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
+            if let Some(closure_id) =
+              parser[scope].find_self_or_ancestor(parser.scope_map(), |t| t.is_closure())
+            {
               parser[closure_id].add_symbol(name, property)?;
             }
           }

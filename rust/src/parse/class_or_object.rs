@@ -145,7 +145,7 @@ pub fn parse_class_or_object_member(
       body: parse_stmt_block(scope, parser, syntax)?,
     }
   } else if is_setter {
-    let setter_scope = parser.create_child_scope(scope, ScopeType::Closure);
+    let setter_scope = parser.create_child_scope(scope, ScopeType::NonArrowFunction);
     parser.require(TokenType::ParenthesisOpen)?;
     let parameter = parse_pattern(
       setter_scope,

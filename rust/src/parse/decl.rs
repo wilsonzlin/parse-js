@@ -102,7 +102,7 @@ pub fn parse_decl_function(
   parser: &mut Parser,
   syntax: &ParsePatternSyntax,
 ) -> SyntaxResult<NodeId> {
-  let fn_scope = parser.create_child_scope(scope, ScopeType::Closure);
+  let fn_scope = parser.create_child_scope(scope, ScopeType::NonArrowFunction);
   let is_async = parser.consume_if(TokenType::KeywordAsync)?.is_match();
   let start = parser.require(TokenType::KeywordFunction)?.loc().clone();
   let generator = parser.consume_if(TokenType::Asterisk)?.is_match();
@@ -117,7 +117,9 @@ pub fn parse_decl_function(
       let name_node = parser.create_node(scope, name.clone(), Syntax::ClassOrFunctionName {
         name: name.clone(),
       });
-      if let Some(closure_id) = parser[scope].self_or_ancestor_closure() {
+      if let Some(closure_id) =
+        parser[scope].find_self_or_ancestor(parser.scope_map(), |t| t.is_closure())
+      {
         parser[closure_id].add_symbol(name.clone(), name_node)?;
       };
       Some(name_node)

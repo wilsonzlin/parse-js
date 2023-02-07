@@ -99,6 +99,10 @@ impl Parser {
     }
   }
 
+  pub fn scope_map(&self) -> &ScopeMap {
+    &self.scope_map
+  }
+
   pub fn lexer_mut(&mut self) -> &mut Lexer {
     &mut self.lexer
   }
@@ -116,24 +120,15 @@ impl Parser {
   }
 
   pub fn create_global_scope(&mut self) -> ScopeId {
-    self
-      .scope_map
-      .create_scope(None, None, ScopeType::Global, false)
+    self.scope_map.create_scope(None, ScopeType::Global)
   }
 
   pub fn create_module_scope(&mut self) -> ScopeId {
-    self
-      .scope_map
-      .create_scope(None, None, ScopeType::Closure, true)
+    self.scope_map.create_scope(None, ScopeType::Module)
   }
 
   pub fn create_child_scope(&mut self, parent: ScopeId, typ: ScopeType) -> ScopeId {
-    self.scope_map.create_scope(
-      self.scope_map[parent].self_or_ancestor_closure(),
-      Some(parent),
-      typ,
-      false,
-    )
+    self.scope_map.create_scope(Some(parent), typ)
   }
 
   pub fn take(self) -> (NodeMap, ScopeMap) {

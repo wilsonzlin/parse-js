@@ -34,9 +34,35 @@ pub struct Symbol {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ScopeType {
   Global,
-  // Function, or top-level if module.
-  Closure,
+  Module,
+  // Closure with `this` (property initialisers have access to it) but not `arguments`.
+  Class,
+  // Functions with `this` and `arguments`.
+  NonArrowFunction,
+  // Functions with neither `this` nor `arguments`.
+  // NOTE: Arrow function class properties are not on the prototype and simply have access to the class's `this` like other initialisers; it doesn't have a special `this` binding and inherits it like any other arrow function.
+  ArrowFunction,
   Block,
+}
+
+impl ScopeType {
+  pub fn is_closure(&self) -> bool {
+    match self {
+      ScopeType::Module => true,
+      ScopeType::NonArrowFunction => true,
+      ScopeType::ArrowFunction => true,
+      _ => false,
+    }
+  }
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScopeFlag {
+  // Whether or not this scope has a `this` expression. Only applicable for Class and NonArrowFunction scopes.
+  UsesThis,
+  // Whether or not this scope has an `arguments` variable expression. Only applicable for NonArrowFunction scopes.
+  UsesArguments,
 }
 
 #[derive(Debug)]
@@ -45,13 +71,10 @@ pub struct ScopeData {
   symbols: HashMap<Identifier, Symbol>,
   // For deterministic outputs, and to give each Symbol an ID.
   symbol_declaration_order: Vec<Identifier>,
-  // Nearest ancestor. Does not exist for top-level.
-  // NOTE: Self could be a closure.
-  ancestor_closure: Option<ScopeId>,
   // Does not exist for top-level.
   parent: Option<ScopeId>,
   typ: ScopeType,
-  is_module_closure: bool,
+  flags: u64,
 }
 
 impl ScopeData {
@@ -59,16 +82,26 @@ impl ScopeData {
     self.symbol_declaration_order.iter()
   }
 
-  pub fn is_module_closure(&self) -> bool {
-    self.is_module_closure
+  pub fn find_self_or_ancestor<F: Fn(ScopeType) -> bool>(
+    &self,
+    scope_map: &ScopeMap,
+    pred: F,
+  ) -> Option<ScopeId> {
+    if pred(self.typ) {
+      Some(self.id)
+    } else if let Some(parent_id) = self.parent {
+      scope_map[parent_id].find_self_or_ancestor(scope_map, pred)
+    } else {
+      None
+    }
   }
 
-  pub fn self_or_ancestor_closure(&self) -> Option<ScopeId> {
-    if self.typ == ScopeType::Closure {
-      Some(self.id)
-    } else {
-      self.ancestor_closure
-    }
+  pub fn has_flag(&self, flag: ScopeFlag) -> bool {
+    (self.flags & (1 << (flag as u8))) != 0
+  }
+
+  pub fn set_flag(&mut self, flag: ScopeFlag) {
+    self.flags |= 1 << (flag as u8);
   }
 
   pub fn add_symbol(
@@ -118,6 +151,23 @@ impl ScopeData {
     }
   }
 
+  pub fn find_symbol_up_to_nearest_scope_of_type<'a>(
+    &'a self,
+    scope_map: &'a ScopeMap,
+    identifier: &'a Identifier,
+    scope_type: ScopeType,
+  ) -> Option<SymbolId> {
+    match self.symbols.get(identifier) {
+      Some(symbol) => Some(SymbolId(self.id, symbol.ordinal_in_scope)),
+      None => match (self.typ, self.parent) {
+        (t, _) if t == scope_type => None,
+        (_, Some(parent_id)) => scope_map[parent_id]
+          .find_symbol_up_to_nearest_scope_of_type(scope_map, identifier, scope_type),
+        _ => None,
+      },
+    }
+  }
+
   pub fn symbol_count(&self) -> usize {
     self.symbols.len()
   }
@@ -149,22 +199,15 @@ impl ScopeMap {
     ScopeMap { scopes: Vec::new() }
   }
 
-  pub fn create_scope(
-    &mut self,
-    ancestor_closure: Option<ScopeId>,
-    parent: Option<ScopeId>,
-    typ: ScopeType,
-    is_module_closure: bool,
-  ) -> ScopeId {
+  pub fn create_scope(&mut self, parent: Option<ScopeId>, typ: ScopeType) -> ScopeId {
     let id = ScopeId(self.scopes.len());
     self.scopes.push(ScopeData {
       id,
       symbols: HashMap::new(),
       symbol_declaration_order: Vec::new(),
-      ancestor_closure,
       parent,
       typ,
-      is_module_closure,
+      flags: 0,
     });
     id
   }
