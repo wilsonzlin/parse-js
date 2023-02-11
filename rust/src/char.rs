@@ -1,5 +1,5 @@
+use core::ops::RangeInclusive;
 use lazy_static::lazy_static;
-use std::ops::RangeInclusive;
 
 #[derive(Clone)]
 pub struct CharFilter {

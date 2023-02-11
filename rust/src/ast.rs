@@ -2,390 +2,358 @@ use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::num::JsNumber;
 use crate::operator::OperatorName;
+use crate::session::Session;
+use crate::session::SessionString;
+use crate::session::SessionVec;
 use crate::source::SourceRange;
-use crate::symbol::ScopeId;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
-use std::fmt;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::ops::Index;
-use std::ops::IndexMut;
+use crate::symbol::Scope;
+use std::cell::Ref;
+use std::cell::RefCell;
+use std::cell::RefMut;
 
-pub struct NodeData {
-  loc: SourceRange,
-  stx: Syntax,
+struct NodeData<'a> {
+  loc: SourceRange<'a>,
+  stx: Syntax<'a>,
   // For the purposes of disambiguation, the scope of a function or block is only set on its children and not itself. This is merely an arbitrary decision. For example, the scope created by a function is assigned to its signature nodes (and descendants e.g. default values), but not to the FunctionStmt itself. For a `for` loop, the scope created by it is assigned to its header nodes and descendants, but not to the ForStmt itself. For a block statement, the scope created by it is assigned to statements inside it, but not to the BlockStmt itself.
-  scope: ScopeId,
+  scope: Scope<'a>,
 }
 
-impl NodeData {
-  pub fn new(scope: ScopeId, loc: SourceRange, stx: Syntax) -> NodeData {
-    NodeData {
-      loc,
-      stx,
-      scope: scope.clone(),
-    }
+// We use a newtype with RefCell instead of `&'a mut NodeData<'a>` because even though currently we don't reference a node from multiple places inside an AST, we do share Node references elsewhere (e.g. symbols, scopes). We still want mutability because otherwise we can't do mutations while traversing (important for many same-pass optimisations); even if we recreate nodes instead of updating a field, we still need to update the parent's reference (and without mutability, this would require rebuilding the entire tree). Typing `&'a mut NodeData<'a>` everywhere instead of `Node<'a>` is also too verbose and easy to mistype the lifetimes.
+#[derive(Clone, Copy)]
+pub struct Node<'a>(&'a RefCell<NodeData<'a>>);
+
+// To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
+// - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
+// - Same syntax, location, and scope.
+// - Same syntax and location, but scope can be different.
+// - Same syntax, but location and scope can be different.
+impl<'a> Node<'a> {
+  fn get<'b>(self) -> Ref<'b, NodeData<'a>> {
+    self.0.borrow()
   }
 
-  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
+  fn get_mut<'b>(self) -> RefMut<'b, NodeData<'a>> {
+    self.0.borrow_mut()
+  }
+
+  pub fn new(
+    session: &'a Session,
+    scope: Scope<'a>,
+    loc: SourceRange<'a>,
+    stx: Syntax<'a>,
+  ) -> Node<'a> {
+    Node(
+      session
+        .mem
+        .alloc(RefCell::new(NodeData { loc, stx, scope })),
+    )
+  }
+
+  pub fn error(self, typ: SyntaxErrorType) -> SyntaxError<'a> {
     SyntaxError::from_loc(self.loc(), typ, None)
   }
 
-  pub fn loc(&self) -> &SourceRange {
-    &self.loc
+  pub fn loc(self) -> SourceRange<'a> {
+    self.get().loc
   }
 
-  pub fn stx(&self) -> &Syntax {
-    &self.stx
+  pub fn stx<'b>(self) -> Ref<'b, Syntax<'a>> {
+    Ref::map(self.get(), |node| &node.stx)
   }
 
-  pub fn stx_mut(&mut self) -> &mut Syntax {
-    &mut self.stx
+  pub fn stx_mut<'b>(self) -> RefMut<'b, Syntax<'a>> {
+    RefMut::map(self.get_mut(), |node| &mut node.stx)
   }
 
-  pub fn stx_take(self) -> Syntax {
-    self.stx
-  }
-
-  pub fn scope(&self) -> ScopeId {
-    self.scope
+  pub fn scope(self) -> Scope<'a> {
+    self.get().scope
   }
 }
 
-impl Debug for NodeData {
-  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    f.write_fmt(format_args!("{:?}", self.stx))
-  }
-}
-
-// To prevent ambiguity and confusion, don't derive Eq, as two nodes could be structurally equal even if they are different nodes.
-#[derive(Debug, Clone, Copy)]
-pub struct NodeId(usize);
-
-impl NodeId {
-  pub fn new(id: usize) -> NodeId {
-    NodeId(id)
-  }
-
-  pub fn id(&self) -> usize {
-    self.0
-  }
-}
-
-pub struct NodeMap {
-  nodes: Vec<NodeData>,
-}
-
-impl NodeMap {
-  pub fn new() -> NodeMap {
-    NodeMap { nodes: Vec::new() }
-  }
-
-  pub fn create_node(&mut self, scope: ScopeId, loc: SourceRange, stx: Syntax) -> NodeId {
-    let id = self.nodes.len();
-    self.nodes.push(NodeData::new(scope, loc, stx));
-    NodeId::new(id)
-  }
-
-  pub fn len(&self) -> usize {
-    self.nodes.len()
-  }
-
-  pub fn push(&mut self, n: NodeData) -> () {
-    self.nodes.push(n);
-  }
-}
-
-impl Index<NodeId> for NodeMap {
-  type Output = NodeData;
-
-  fn index(&self, index: NodeId) -> &Self::Output {
-    &self.nodes[index.0]
-  }
-}
-
-impl IndexMut<NodeId> for NodeMap {
-  fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-    &mut self.nodes[index.0]
+#[cfg(feature = "serialize")]
+impl<'a> serde::Serialize for Node<'a> {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    self.stx().serialize(serializer)
   }
 }
 
 // These are for readability only, and do not increase type safety or define different structures.
-type Declaration = NodeId;
-type Expression = NodeId;
-type Pattern = NodeId;
-type Statement = NodeId;
+type Declaration<'a> = Node<'a>;
+type Expression<'a> = Node<'a>;
+type Pattern<'a> = Node<'a>;
+type Statement<'a> = Node<'a>;
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum VarDeclMode {
   Const,
   Let,
   Var,
 }
 
-#[derive(Debug, Clone)]
-pub enum ArrayElement {
-  Single(Expression),
-  Rest(Expression),
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ArrayElement<'a> {
+  Single(Expression<'a>),
+  Rest(Expression<'a>),
   Empty,
 }
 
-#[derive(Clone, Debug)]
-pub enum ClassOrObjectMemberKey {
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ClassOrObjectMemberKey<'a> {
   // Identifier, keyword, string, or number.
-  Direct(SourceRange),
-  Computed(Expression),
+  Direct(SourceRange<'a>),
+  Computed(Expression<'a>),
 }
 
-#[derive(Debug, Clone)]
-pub enum ClassOrObjectMemberValue {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ClassOrObjectMemberValue<'a> {
   Getter {
-    body: Statement,
+    body: Statement<'a>,
   },
   Method {
     is_async: bool,
     generator: bool,
-    signature: NodeId,
-    body: Statement,
+    signature: Node<'a>,
+    body: Statement<'a>,
   },
   Property {
     // Must be Some if object, as shorthands are covered by ObjectMemberType::Shorthand (and are initialised).
-    initializer: Option<Expression>,
+    initializer: Option<Expression<'a>>,
   },
   Setter {
-    body: Statement,
-    parameter: Pattern,
+    body: Statement<'a>,
+    parameter: Pattern<'a>,
   },
 }
 
-#[derive(Debug, Clone)]
-pub struct ClassMember {
-  pub key: ClassOrObjectMemberKey,
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub struct ClassMember<'a> {
+  pub key: ClassOrObjectMemberKey<'a>,
   pub statik: bool,
-  pub value: ClassOrObjectMemberValue,
+  pub value: ClassOrObjectMemberValue<'a>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ObjectMemberType {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ObjectMemberType<'a> {
   Valued {
-    key: ClassOrObjectMemberKey,
-    value: ClassOrObjectMemberValue,
+    key: ClassOrObjectMemberKey<'a>,
+    value: ClassOrObjectMemberValue<'a>,
   },
   Shorthand {
-    name: SourceRange,
+    name: SourceRange<'a>,
   },
   Rest {
-    value: Expression,
+    value: Expression<'a>,
   },
 }
 
-#[derive(Debug, Clone)]
-pub struct ArrayPatternElement {
-  pub target: Pattern,
-  pub default_value: Option<Expression>,
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub struct ArrayPatternElement<'a> {
+  pub target: Pattern<'a>,
+  pub default_value: Option<Expression<'a>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ExportName {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub struct ExportName<'a> {
   // For simplicity, we always set both fields; for shorthands, both nodes are identical.
-  pub target: SourceRange,
+  pub target: SourceRange<'a>,
   // IdentifierPattern.
-  pub alias: Pattern,
+  pub alias: Pattern<'a>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ExportNames {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ExportNames<'a> {
   // `import * as name`
   // `export * from "module"`
   // `export * as name from "module"`
   // IdentifierPattern.
-  All(Option<Pattern>),
+  All(Option<Pattern<'a>>),
   // `import {a as b, c, default as e}`
   // `export {a as default, b as c, d}`
   // `export {default, a as b, c} from "module"`
   // `default` is still a name, so we don't use an enum.
-  Specific(Vec<ExportName>),
+  Specific(SessionVec<'a, ExportName<'a>>),
 }
 
-#[derive(Debug, Clone)]
-pub struct VariableDeclarator {
-  pub pattern: Pattern,
-  pub initializer: Option<Expression>,
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub struct VariableDeclarator<'a> {
+  pub pattern: Pattern<'a>,
+  pub initializer: Option<Expression<'a>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ForThreeInit {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ForThreeInit<'a> {
   None,
-  Expression(Expression),
-  Declaration(Declaration),
+  Expression(Expression<'a>),
+  Declaration(Declaration<'a>),
 }
 
-#[derive(Debug, Clone)]
-pub enum ForInOfStmtHeaderLhs {
-  Declaration(Declaration),
-  Pattern(Pattern),
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ForInOfStmtHeaderLhs<'a> {
+  Declaration(Declaration<'a>),
+  Pattern(Pattern<'a>),
 }
 
-#[derive(Debug, Clone)]
-pub enum ForStmtHeader {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum ForStmtHeader<'a> {
   Three {
-    init: ForThreeInit,
-    condition: Option<Expression>,
-    post: Option<Expression>,
+    init: ForThreeInit<'a>,
+    condition: Option<Expression<'a>>,
+    post: Option<Expression<'a>>,
   },
   InOf {
     of: bool,
-    lhs: ForInOfStmtHeaderLhs,
-    rhs: Expression,
+    lhs: ForInOfStmtHeaderLhs<'a>,
+    rhs: Expression<'a>,
   },
 }
 
-#[derive(Debug, Clone)]
-pub enum LiteralTemplatePart {
-  Substitution(Expression),
-  String(SourceRange),
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub enum LiteralTemplatePart<'a> {
+  Substitution(Expression<'a>),
+  String(SourceRange<'a>),
 }
 
 // We no longer derive Eq for the AST due to use of NodeId, as it's not possible to determine structural equality without the node map. Anything that contains a NodeId/Syntax must also avoid Eq.
 // WARNING: .clone() is derived and available for shallow copies only. As nodes use NodeId refs to other nodes, it's impossible to actually deep clone from the .clone() method. Use it to quickly copy and make a few changes, while keeping most field values the same (including references to other existing nodes).
-#[derive(Debug, Clone)]
-pub enum Syntax {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, strum_macros::Display))]
+#[serde(tag = "$t")]
+pub enum Syntax<'a> {
   // Patterns.
   IdentifierPattern {
-    name: SourceRange,
+    name: SourceRange<'a>,
   },
   // `const fn = (a: any, b: any, ...{ length, ...c }: any[]) => void 0` is allowed.
   ArrayPattern {
     // Unnamed elements can exist.
-    elements: Vec<Option<ArrayPatternElement>>,
-    rest: Option<Pattern>,
+    elements: SessionVec<'a, Option<ArrayPatternElement<'a>>>,
+    rest: Option<Pattern<'a>>,
   },
   // For an object pattern, `...` must be followed by an identifier.
   // `const fn = ({ a: { b = c } = d, ...e }: any) => void 0` is possible.
   ObjectPattern {
     // List of ObjectPatternProperty nodes.
-    properties: Vec<NodeId>,
+    properties: SessionVec<'a, Node<'a>>,
     // This must be IdentifierPattern, anything else is illegal.
-    rest: Option<Pattern>,
+    rest: Option<Pattern<'a>>,
   },
   // Not really a pattern but functions similarly; separated out for easy replacement when minifying.
   ClassOrFunctionName {
-    name: SourceRange,
+    name: SourceRange<'a>,
   },
 
   // Signatures.
   FunctionSignature {
-    parameters: Vec<Declaration>,
+    parameters: SessionVec<'a, Declaration<'a>>,
   },
 
   // Declarations.
   ClassDecl {
-    name: Option<NodeId>, // Name can only be omitted in a default export.
-    extends: Option<Expression>,
-    members: Vec<ClassMember>,
+    name: Option<Node<'a>>, // Name can only be omitted in a default export.
+    extends: Option<Expression<'a>>,
+    members: SessionVec<'a, ClassMember<'a>>,
   },
   FunctionDecl {
     generator: bool,
     is_async: bool,
-    name: Option<NodeId>, // Name can only be omitted in a default export.
-    signature: NodeId,
-    body: Statement,
+    name: Option<Node<'a>>, // Name can only be omitted in a default export.
+    signature: Node<'a>,
+    body: Statement<'a>,
   },
   ParamDecl {
     rest: bool,
-    pattern: Pattern,
-    default_value: Option<Expression>,
+    pattern: Pattern<'a>,
+    default_value: Option<Expression<'a>>,
   },
   VarDecl {
     mode: VarDeclMode,
-    declarators: Vec<VariableDeclarator>,
+    declarators: SessionVec<'a, VariableDeclarator<'a>>,
   },
 
   // Expressions.
   ArrowFunctionExpr {
     parenthesised: bool,
     is_async: bool,
-    signature: NodeId,
-    body: NodeId,
+    signature: Node<'a>,
+    body: Node<'a>,
   },
   BinaryExpr {
     parenthesised: bool,
     operator: OperatorName,
-    left: Expression,
-    right: Expression,
+    left: Expression<'a>,
+    right: Expression<'a>,
   },
   CallExpr {
     optional_chaining: bool,
     parenthesised: bool,
-    callee: Expression,
-    arguments: Vec<NodeId>,
+    callee: Expression<'a>,
+    arguments: SessionVec<'a, Node<'a>>,
   },
   ClassExpr {
     parenthesised: bool,
-    name: Option<NodeId>,
-    extends: Option<Expression>,
-    members: Vec<ClassMember>,
+    name: Option<Node<'a>>,
+    extends: Option<Expression<'a>>,
+    members: SessionVec<'a, ClassMember<'a>>,
   },
   ConditionalExpr {
     parenthesised: bool,
-    test: Expression,
-    consequent: Expression,
-    alternate: Expression,
+    test: Expression<'a>,
+    consequent: Expression<'a>,
+    alternate: Expression<'a>,
   },
   ComputedMemberExpr {
     optional_chaining: bool,
-    object: Expression,
-    member: Expression,
+    object: Expression<'a>,
+    member: Expression<'a>,
   },
   FunctionExpr {
     parenthesised: bool,
     is_async: bool,
     generator: bool,
-    name: Option<NodeId>,
-    signature: NodeId,
-    body: Statement,
+    name: Option<Node<'a>>,
+    signature: Node<'a>,
+    body: Statement<'a>,
   },
   IdentifierExpr {
-    name: SourceRange,
+    name: SourceRange<'a>,
   },
   ImportExpr {
-    module: Expression,
+    module: Expression<'a>,
   },
   ImportMeta {},
   JsxAttribute {
-    name: Expression,          // JsxName
-    value: Option<Expression>, // JsxExpressionContainer or JsxText
+    name: Expression<'a>,          // JsxName
+    value: Option<Expression<'a>>, // JsxExpressionContainer or JsxText
   },
   JsxElement {
-    name: Option<Expression>,    // JsxName or JsxMember; None if fragment
-    attributes: Vec<Expression>, // JsxAttribute or JsxSpreadAttribute; always empty if fragment
-    children: Vec<Expression>,   // JsxElement or JsxExpressionContainer or JsxText
+    name: Option<Expression<'a>>,               // JsxName or JsxMember; None if fragment
+    attributes: SessionVec<'a, Expression<'a>>, // JsxAttribute or JsxSpreadAttribute; always empty if fragment
+    children: SessionVec<'a, Expression<'a>>,   // JsxElement or JsxExpressionContainer or JsxText
   },
   JsxExpressionContainer {
-    value: Expression,
+    value: Expression<'a>,
   },
   JsxMember {
     // This is a separate property to indicate it's required and for easier pattern matching.
-    base: SourceRange,
-    path: Vec<SourceRange>,
+    base: SourceRange<'a>,
+    path: SessionVec<'a, SourceRange<'a>>,
   },
   JsxName {
-    namespace: Option<SourceRange>,
-    name: SourceRange,
+    namespace: Option<SourceRange<'a>>,
+    name: SourceRange<'a>,
   },
   JsxSpreadAttribute {
-    value: Expression,
+    value: Expression<'a>,
   },
   JsxText {
-    value: SourceRange,
+    value: SourceRange<'a>,
   },
   LiteralArrayExpr {
-    elements: Vec<ArrayElement>,
+    elements: SessionVec<'a, ArrayElement<'a>>,
   },
   LiteralBigIntExpr {
-    value: String,
+    value: SessionString<'a>,
   },
   LiteralBooleanExpr {
     value: bool,
@@ -396,135 +364,135 @@ pub enum Syntax {
   },
   LiteralObjectExpr {
     // List of ObjectMember nodes.
-    members: Vec<NodeId>,
+    members: SessionVec<'a, Node<'a>>,
   },
   LiteralRegexExpr {},
   LiteralStringExpr {
-    value: String,
+    value: SessionString<'a>,
   },
   LiteralTemplateExpr {
-    parts: Vec<LiteralTemplatePart>,
+    parts: SessionVec<'a, LiteralTemplatePart<'a>>,
   },
   LiteralUndefined {},
   // Dedicated special type to easily distinguish when analysing and minifying. Also done to avoid using IdentifierExpr as right, which is incorrect (not a variable usage).
   MemberExpr {
     parenthesised: bool,
     optional_chaining: bool,
-    left: Expression,
-    right: SourceRange,
+    left: Expression<'a>,
+    right: SourceRange<'a>,
   },
   SuperExpr {},
   ThisExpr {},
   UnaryExpr {
     parenthesised: bool,
     operator: OperatorName,
-    argument: Expression,
+    argument: Expression<'a>,
   },
   UnaryPostfixExpr {
     parenthesised: bool,
     operator: OperatorName,
-    argument: Expression,
+    argument: Expression<'a>,
   },
 
   // Statements.
   BlockStmt {
-    body: Vec<Statement>,
+    body: SessionVec<'a, Statement<'a>>,
   },
   BreakStmt {
-    label: Option<SourceRange>,
+    label: Option<SourceRange<'a>>,
   },
   ContinueStmt {
-    label: Option<SourceRange>,
+    label: Option<SourceRange<'a>>,
   },
   DebuggerStmt {},
   DoWhileStmt {
-    condition: Expression,
-    body: Statement,
+    condition: Expression<'a>,
+    body: Statement<'a>,
   },
   EmptyStmt {},
   ExportDeclStmt {
-    declaration: Declaration,
+    declaration: Declaration<'a>,
     default: bool,
   },
   ExportDefaultExprStmt {
-    expression: Expression,
+    expression: Expression<'a>,
   },
   ExportListStmt {
-    names: ExportNames,
-    from: Option<String>,
+    names: ExportNames<'a>,
+    from: Option<SessionString<'a>>,
   },
   ExpressionStmt {
-    expression: Expression,
+    expression: Expression<'a>,
   },
   IfStmt {
-    test: Expression,
-    consequent: Statement,
-    alternate: Option<Statement>,
+    test: Expression<'a>,
+    consequent: Statement<'a>,
+    alternate: Option<Statement<'a>>,
   },
   ImportStmt {
     // IdentifierPattern.
-    default: Option<Pattern>,
-    names: Option<ExportNames>,
-    module: String,
+    default: Option<Pattern<'a>>,
+    names: Option<ExportNames<'a>>,
+    module: SessionString<'a>,
   },
   ForStmt {
-    header: ForStmtHeader,
-    body: Statement,
+    header: ForStmtHeader<'a>,
+    body: Statement<'a>,
   },
   LabelStmt {
-    name: SourceRange,
-    statement: Statement,
+    name: SourceRange<'a>,
+    statement: Statement<'a>,
   },
   ReturnStmt {
-    value: Option<Expression>,
+    value: Option<Expression<'a>>,
   },
   SwitchStmt {
-    test: Expression,
-    branches: Vec<NodeId>,
+    test: Expression<'a>,
+    branches: SessionVec<'a, Node<'a>>,
   },
   ThrowStmt {
-    value: Expression,
+    value: Expression<'a>,
   },
   TryStmt {
-    wrapped: Statement,
+    wrapped: Statement<'a>,
     // One of these must be present.
-    catch: Option<NodeId>,
-    finally: Option<Statement>,
+    catch: Option<Node<'a>>,
+    finally: Option<Statement<'a>>,
   },
   VarStmt {
-    declaration: Declaration,
+    declaration: Declaration<'a>,
   },
   WhileStmt {
-    condition: Expression,
-    body: Statement,
+    condition: Expression<'a>,
+    body: Statement<'a>,
   },
 
   // Others.
   TopLevel {
-    body: Vec<Statement>,
+    body: SessionVec<'a, Statement<'a>>,
   },
   CallArg {
     spread: bool,
-    value: Expression,
+    value: Expression<'a>,
   },
   CatchBlock {
-    parameter: Option<Pattern>,
-    body: Statement,
+    parameter: Option<Pattern<'a>>,
+    body: Statement<'a>,
   },
   // This is a node instead of an enum so that we can replace it when minifying e.g. expanding shorthand to `key: value`.
   ObjectMember {
-    typ: ObjectMemberType,
+    typ: ObjectMemberType<'a>,
   },
   ObjectPatternProperty {
-    key: ClassOrObjectMemberKey,
+    key: ClassOrObjectMemberKey<'a>,
     // Omitted if shorthand i.e. key is Direct and target is IdentifierPattern of same name.
     // TODO Ideally for simplicity this should be duplicated from `key` if shorthand, with a `shorthand` boolean field to indicate so.
-    target: Option<Pattern>,
-    default_value: Option<Expression>,
+    target: Option<Pattern<'a>>,
+    default_value: Option<Expression<'a>>,
   },
   SwitchBranch {
     // If None, it's `default`.
-    case: Option<Expression>,
-    body: Vec<Statement>,
+    case: Option<Expression<'a>>,
+    body: SessionVec<'a, Statement<'a>>,
   },
 }

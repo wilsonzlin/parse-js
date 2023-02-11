@@ -1,12 +1,14 @@
 use super::pattern::ParsePatternSyntax;
-use crate::ast::NodeId;
+use super::ParseCtx;
+use super::Parser;
+use crate::ast::Node;
 use crate::ast::Syntax;
 use crate::error::SyntaxResult;
-use crate::parse::parser::Parser;
-use crate::parse::stmt::parse_stmt;
-use crate::symbol::ScopeId;
+use crate::session::Session;
+use crate::symbol::Scope;
+use crate::symbol::ScopeType;
 use crate::token::TokenType;
-use std::str::FromStr;
+use core::str::FromStr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TopLevelMode {
@@ -26,34 +28,28 @@ impl FromStr for TopLevelMode {
   }
 }
 
-pub struct ParseTopLevelResult {
-  pub top_level_node_id: NodeId,
-  pub top_level_scope_id: ScopeId,
-}
-
-pub fn parse_top_level(
-  parser: &mut Parser,
-  top_level_mode: TopLevelMode,
-) -> SyntaxResult<ParseTopLevelResult> {
-  let top_level_scope_id = match top_level_mode {
-    TopLevelMode::Global => parser.create_global_scope(),
-    TopLevelMode::Module => parser.create_module_scope(),
-  };
-  let mut body: Vec<NodeId> = Vec::new();
-  let syntax = ParsePatternSyntax {
-    await_allowed: true,
-    yield_allowed: true,
-  };
-  while !parser.consume_if(TokenType::EOF)?.is_match() {
-    body.push(parse_stmt(top_level_scope_id, parser, &syntax)?);
+impl<'a> Parser<'a> {
+  pub fn parse_top_level(
+    &mut self,
+    session: &'a Session,
+    top_level_mode: TopLevelMode,
+  ) -> SyntaxResult<'a, Node<'a>> {
+    let ctx = ParseCtx {
+      scope: Scope::new(session, None, match top_level_mode {
+        TopLevelMode::Global => ScopeType::Global,
+        TopLevelMode::Module => ScopeType::Module,
+      }),
+      session,
+      syntax: ParsePatternSyntax {
+        await_allowed: true,
+        yield_allowed: true,
+      },
+    };
+    let mut body = ctx.session.new_vec();
+    while !self.consume_if(TokenType::EOF)?.is_match() {
+      body.push(self.parse_stmt(ctx)?);
+    }
+    let top_level_node = ctx.create_node(self.source_range(), Syntax::TopLevel { body });
+    Ok(top_level_node)
   }
-  let top_level_node_id = parser.create_node(
-    top_level_scope_id,
-    parser.source_range(),
-    Syntax::TopLevel { body },
-  );
-  Ok(ParseTopLevelResult {
-    top_level_node_id,
-    top_level_scope_id,
-  })
 }

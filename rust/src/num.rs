@@ -1,6 +1,6 @@
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::mem;
+use core::hash::Hash;
+use core::hash::Hasher;
+use core::mem;
 
 // This provides Eq for f64.
 #[derive(Clone, Debug)]
@@ -22,5 +22,12 @@ impl Hash for JsNumber {
     if !self.0.is_nan() {
       unsafe { mem::transmute::<f64, u64>(self.0) }.hash(state);
     };
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for JsNumber {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_f64(self.0)
   }
 }

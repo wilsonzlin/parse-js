@@ -1,41 +1,50 @@
-use std::cmp::max;
-use std::cmp::min;
-use std::cmp::Eq;
-use std::fmt;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::hash::Hash;
-use std::hash::Hasher;
-use std::ops::Add;
-use std::ops::AddAssign;
-use std::rc::Rc;
+use core::cmp::max;
+use core::cmp::min;
+use core::cmp::Eq;
+use core::fmt;
+use core::fmt::Debug;
+use core::fmt::Formatter;
+use core::hash::Hash;
+use core::hash::Hasher;
+use core::ops::Add;
+use core::ops::AddAssign;
 
 /// A string backed by a source. Treated as a string, so contents rather than position is considered
 /// the value. For example, two SourceRange values are equal if their contents equal, even if they
 /// are from different files or positions in the same file.
-#[derive(Clone)]
-pub struct SourceRange {
-  pub source: Source,
+// It's debatable whether to make this Copy. It's a bit large, but it's also very frequently used. Having to use `&` (esp. with operators) and wrestling with reference lifetimes (esp. with methods) everywhere without necessity probably makes using this by Copy more worthwhile on the whole. The compiler also most likely can "see through" copying that is simply using or changing one field and perform relevant optimisations. SourceRange is essentially like a pointer/reference/slice anyway, and those are always treated like primitive Copy values.
+#[derive(Copy, Clone)]
+pub struct SourceRange<'a> {
+  pub source: &'a [u8],
+  // This replaces the previous Source::Anonymous functionality. Instead of having SourceRange values point to different Source backings, including anonymous ones that own their own Vec<u8> for edits to the input code, and then replacing the original SourceRange, we now use an optional overlay over the original SourceRange. This allows preserving the original location and context that the edit is supposed to replace, useful for debugging and error message/context formatting. To insert, use `start == end`; to delete, use `Some(b"")`.
+  // The edit value should be immutable inside the arena. The idea here is to create a Vec, build the edit, and then copy it into the arena (possibly again if the Vec is already in the arena), so we can use a reference instead of an owned Vec. This allows for cheap copying and sharing and no possibility of mutation.
+  // WARNING: Adding two SourceRange (Add, AddAssign, add_option, etc.) values will drop all edits in the resulting SourceRange due to ambiguity.
+  pub edit: Option<&'a [u8]>,
   pub start: usize,
   pub end: usize,
 }
 
-impl SourceRange {
-  pub fn add_option(&self, rhs: Option<&SourceRange>) -> SourceRange {
+#[cfg(feature = "serialize")]
+impl<'a> serde::Serialize for SourceRange<'a> {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'a> SourceRange<'a> {
+  pub fn add_option(&self, rhs: Option<SourceRange<'a>>) -> SourceRange<'a> {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: min(self.start, rhs.map(|l| l.start).unwrap_or(0)),
       end: max(self.end, rhs.map(|l| l.end).unwrap_or(0)),
     }
   }
 
-  pub fn anonymous<T: Into<Vec<u8>>>(code: T) -> SourceRange {
-    let code = code.into();
-    let end = code.len();
+  pub fn with_edit(&self, edit: &'a [u8]) -> SourceRange<'a> {
     SourceRange {
-      source: Source::new(code),
-      start: 0,
-      end,
+      edit: Some(edit),
+      ..*self
     }
   }
 
@@ -44,58 +53,62 @@ impl SourceRange {
   }
 
   pub fn is_eof(&self) -> bool {
-    self.start >= self.source.code().len()
+    self.start >= self.source.len()
   }
 
   pub fn as_slice(&self) -> &[u8] {
-    &self.source.code()[self.start..self.end]
+    match self.edit {
+      Some(edit) => edit,
+      None => &self.source[self.start..self.end],
+    }
   }
 
   pub fn as_str(&self) -> &str {
-    unsafe { std::str::from_utf8_unchecked(self.as_slice()) }
+    unsafe { core::str::from_utf8_unchecked(self.as_slice()) }
   }
 
   pub fn len(&self) -> usize {
     self.end - self.start
   }
 
-  pub fn extend(&mut self, other: &SourceRange) {
+  pub fn extend(&mut self, other: SourceRange) {
     self.start = min(self.start, other.start);
     self.end = max(self.end, other.end);
   }
 }
 
-impl Add for &SourceRange {
-  type Output = SourceRange;
+impl<'a> Add for SourceRange<'a> {
+  type Output = SourceRange<'a>;
 
   fn add(self, rhs: Self) -> Self::Output {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: min(self.start, rhs.start),
       end: max(self.end, rhs.end),
     }
   }
 }
 
-impl AddAssign for SourceRange {
+impl<'a> AddAssign for SourceRange<'a> {
   fn add_assign(&mut self, rhs: Self) {
-    self.extend(&rhs);
+    self.extend(rhs);
   }
 }
 
-impl Debug for SourceRange {
+impl<'a> Debug for SourceRange<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     if self.is_eof() {
       Ok(())
     } else {
-      f.write_str(&format!("`{}`[{}:{}]", self.as_str(), self.start, self.end))
+      write!(f, "`{}`[{}:{}]", self.as_str(), self.start, self.end)
     }
   }
 }
 
-impl Eq for SourceRange {}
+impl<'a> Eq for SourceRange<'a> {}
 
-impl Hash for SourceRange {
+impl<'a> Hash for SourceRange<'a> {
   fn hash<H: Hasher>(&self, state: &mut H) {
     if !self.is_eof() {
       self.as_slice().hash(state);
@@ -103,7 +116,7 @@ impl Hash for SourceRange {
   }
 }
 
-impl PartialEq for SourceRange {
+impl<'a> PartialEq for SourceRange<'a> {
   fn eq(&self, other: &Self) -> bool {
     if self.is_eof() {
       other.is_eof()
@@ -113,25 +126,8 @@ impl PartialEq for SourceRange {
   }
 }
 
-impl PartialEq<str> for SourceRange {
-  fn eq(&self, other: &str) -> bool {
-    self.as_str() == other
-  }
-}
-
-struct SourceData {
-  code: Vec<u8>,
-}
-
-#[derive(Clone)]
-pub struct Source(Rc<SourceData>);
-
-impl Source {
-  pub fn new(code: Vec<u8>) -> Source {
-    Source(Rc::new(SourceData { code }))
-  }
-
-  pub fn code(&self) -> &[u8] {
-    &self.0.code
+impl<'a> PartialEq<&str> for SourceRange<'a> {
+  fn eq(&self, other: &&str) -> bool {
+    &self.as_str() == other
   }
 }

@@ -155,16 +155,16 @@ lazy_static! {
 }
 
 #[derive(Clone, Debug)]
-pub struct Token {
-  loc: SourceRange,
+pub struct Token<'a> {
+  loc: SourceRange<'a>,
   // Whether one or more whitespace characters appear immediately before this token, and at least
   // one of those whitespace characters is a line terminator.
   preceded_by_line_terminator: bool,
   typ: TokenType,
 }
 
-impl Token {
-  pub fn new(loc: SourceRange, typ: TokenType, preceded_by_line_terminator: bool) -> Token {
+impl<'a> Token<'a> {
+  pub fn new(loc: SourceRange<'a>, typ: TokenType, preceded_by_line_terminator: bool) -> Token<'a> {
     Token {
       loc,
       typ,
@@ -176,16 +176,16 @@ impl Token {
     self.typ
   }
 
-  pub fn loc(&self) -> &SourceRange {
-    &self.loc
-  }
-
-  pub fn loc_take(self) -> SourceRange {
+  pub fn loc(&self) -> SourceRange<'a> {
     self.loc
   }
 
-  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
-    SyntaxError::from_loc(&self.loc, typ, Some(self.typ.clone()))
+  pub fn loc_take(self) -> SourceRange<'a> {
+    self.loc
+  }
+
+  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
+    SyntaxError::from_loc(self.loc, typ, Some(self.typ.clone()))
   }
 
   pub fn preceded_by_line_terminator(&self) -> bool {

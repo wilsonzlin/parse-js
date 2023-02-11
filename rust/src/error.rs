@@ -1,12 +1,11 @@
-use crate::source::Source;
 use crate::source::SourceRange;
 use crate::token::TokenType;
-use std::cmp::max;
-use std::cmp::min;
-use std::fmt;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::str::from_utf8_unchecked;
+use core::cmp::max;
+use core::cmp::min;
+use core::fmt;
+use core::fmt::Debug;
+use core::fmt::Formatter;
+use core::str::from_utf8_unchecked;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SyntaxErrorType {
@@ -29,20 +28,20 @@ pub enum SyntaxErrorType {
 }
 
 #[derive(Clone)]
-pub struct SyntaxError {
-  source: Source,
+pub struct SyntaxError<'a> {
+  source: &'a [u8],
   position: usize,
   typ: SyntaxErrorType,
   actual_token: Option<TokenType>,
 }
 
-impl SyntaxError {
+impl<'a> SyntaxError<'a> {
   pub fn new(
     typ: SyntaxErrorType,
-    source: Source,
+    source: &'a [u8],
     position: usize,
     actual_token: Option<TokenType>,
-  ) -> SyntaxError {
+  ) -> SyntaxError<'a> {
     SyntaxError {
       typ,
       source,
@@ -52,12 +51,12 @@ impl SyntaxError {
   }
 
   pub fn from_loc(
-    loc: &SourceRange,
+    loc: SourceRange<'a>,
     typ: SyntaxErrorType,
     actual_token: Option<TokenType>,
-  ) -> SyntaxError {
+  ) -> SyntaxError<'a> {
     SyntaxError {
-      source: loc.source.clone(),
+      source: loc.source,
       typ,
       position: loc.start,
       actual_token,
@@ -69,7 +68,7 @@ impl SyntaxError {
   }
 }
 
-impl Debug for SyntaxError {
+impl<'a> Debug for SyntaxError<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     f.write_fmt(format_args!(
       "{:?} [position={} token={:?}] around ```{}```",
@@ -78,23 +77,20 @@ impl Debug for SyntaxError {
       self.actual_token,
       unsafe {
         from_utf8_unchecked(
-          &self.source.code()[max(0, self.position as isize - 40) as usize
-            ..min(
-              self.source.code().len() as isize,
-              self.position as isize + 40,
-            ) as usize],
+          &self.source[max(0, self.position as isize - 40) as usize
+            ..min(self.source.len() as isize, self.position as isize + 40) as usize],
         )
       }
     ))
   }
 }
 
-impl PartialEq for SyntaxError {
+impl<'a> PartialEq for SyntaxError<'a> {
   fn eq(&self, other: &Self) -> bool {
     self.typ == other.typ
   }
 }
 
-impl Eq for SyntaxError {}
+impl<'a> Eq for SyntaxError<'a> {}
 
-pub type SyntaxResult<T> = Result<T, SyntaxError>;
+pub type SyntaxResult<'a, T> = Result<T, SyntaxError<'a>>;

@@ -11,19 +11,18 @@ use crate::char::WHITESPACE;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
-use crate::source::Source;
 use crate::source::SourceRange;
 use crate::token::Token;
 use crate::token::TokenType;
 use aho_corasick::AhoCorasick;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::MatchKind;
+use core::ops::Index;
 use lazy_static::lazy_static;
 use memchr::memchr;
 use memchr::memchr2;
 use memchr::memchr3;
 use std::collections::HashMap;
-use std::ops::Index;
 
 #[cfg(feature = "serialize")]
 mod tests;
@@ -67,68 +66,71 @@ struct AhoCorasickMatch {
   mat: Match,
 }
 
-pub struct Lexer {
-  source: Source,
+pub struct Lexer<'a> {
+  source: &'a [u8],
   next: usize,
 }
 
-impl Lexer {
-  pub fn new(code: Vec<u8>) -> Lexer {
+impl<'a> Lexer<'a> {
+  pub fn new(code: &'a [u8]) -> Lexer<'a> {
     Lexer {
-      source: Source::new(code),
+      source: code,
       next: 0,
     }
   }
 
   fn end(&self) -> usize {
-    self.source.code().len()
+    self.source.len()
   }
 
   fn remaining(&self) -> usize {
     self.end() - self.next
   }
 
-  pub fn source_range(&self) -> SourceRange {
+  pub fn source_range(&self) -> SourceRange<'a> {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: 0,
       end: self.end(),
     }
   }
 
-  fn eof_range(&self) -> SourceRange {
+  fn eof_range(&self) -> SourceRange<'a> {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: self.end(),
       end: self.end(),
     }
   }
 
-  fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
-    SyntaxError::new(typ, self.source.clone(), self.next, None)
+  fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
+    SyntaxError::new(typ, self.source, self.next, None)
   }
 
   fn at_end(&self) -> bool {
     self.next >= self.end()
   }
 
-  fn peek(&self, n: usize) -> SyntaxResult<u8> {
+  fn peek(&self, n: usize) -> SyntaxResult<'a, u8> {
     self
       .peek_or_eof(n)
       .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
   }
 
   fn peek_or_eof(&self, n: usize) -> Option<u8> {
-    self.source.code().get(self.next + n).map(|&c| c)
+    self.source.get(self.next + n).map(|&c| c)
   }
 
   pub fn checkpoint(&self) -> LexerCheckpoint {
     LexerCheckpoint { next: self.next }
   }
 
-  pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange {
+  pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange<'a> {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: checkpoint.next,
       end: self.next,
     }
@@ -138,7 +140,7 @@ impl Lexer {
     self.next = checkpoint.next;
   }
 
-  fn n(&self, n: usize) -> SyntaxResult<Match> {
+  fn n(&self, n: usize) -> SyntaxResult<'a, Match> {
     if self.next + n > self.end() {
       return Err(self.error(SyntaxErrorType::UnexpectedEnd));
     };
@@ -147,44 +149,44 @@ impl Lexer {
 
   fn if_char(&self, c: u8) -> Match {
     Match {
-      len: (!self.at_end() && self.source.code()[self.next] == c) as usize,
+      len: (!self.at_end() && self.source[self.next] == c) as usize,
     }
   }
 
-  fn through_char(&self, c: u8) -> SyntaxResult<Match> {
-    memchr(c, &self.source.code()[self.next..])
+  fn through_char(&self, c: u8) -> SyntaxResult<'a, Match> {
+    memchr(c, &self.source[self.next..])
       .map(|pos| Match { len: pos + 1 })
       .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
   }
 
   fn while_not_char(&self, a: u8) -> Match {
     Match {
-      len: memchr(a, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
+      len: memchr(a, &self.source[self.next..]).unwrap_or(self.remaining()),
     }
   }
 
   fn while_not_2_chars(&self, a: u8, b: u8) -> Match {
     Match {
-      len: memchr2(a, b, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
+      len: memchr2(a, b, &self.source[self.next..]).unwrap_or(self.remaining()),
     }
   }
 
   fn while_not_3_chars(&self, a: u8, b: u8, c: u8) -> Match {
     Match {
-      len: memchr3(a, b, c, &self.source.code()[self.next..]).unwrap_or(self.remaining()),
+      len: memchr3(a, b, c, &self.source[self.next..]).unwrap_or(self.remaining()),
     }
   }
 
   fn while_chars(&self, chars: &CharFilter) -> Match {
     let mut len = 0;
-    while len < self.remaining() && chars.has(self.source.code()[self.next + len]) {
+    while len < self.remaining() && chars.has(self.source[self.next + len]) {
       len += 1;
     }
     Match { len }
   }
 
-  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
-    ac.find(&self.source.code()[self.next..])
+  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<'a, AhoCorasickMatch> {
+    ac.find(&self.source[self.next..])
       .map(|m| AhoCorasickMatch {
         id: m.pattern(),
         mat: Match { len: m.end() },
@@ -192,9 +194,10 @@ impl Lexer {
       .ok_or_else(|| self.error(SyntaxErrorType::ExpectedNotFound))
   }
 
-  fn range(&self, m: Match) -> SourceRange {
+  fn range(&self, m: Match) -> SourceRange<'a> {
     SourceRange {
-      source: self.source.clone(),
+      source: self.source,
+      edit: None,
       start: self.next,
       end: self.next + m.len,
     }
@@ -205,7 +208,7 @@ impl Lexer {
     m
   }
 
-  fn consume_next(&mut self) -> SyntaxResult<u8> {
+  fn consume_next(&mut self) -> SyntaxResult<'a, u8> {
     let c = self.peek(0)?;
     self.next += 1;
     Ok(c)
@@ -217,19 +220,19 @@ impl Lexer {
   }
 }
 
-impl Index<SourceRange> for Lexer {
+impl<'a> Index<SourceRange<'a>> for Lexer<'a> {
   type Output = [u8];
 
-  fn index(&self, index: SourceRange) -> &Self::Output {
-    &self.source.code()[index.start..index.end]
+  fn index(&self, index: SourceRange<'a>) -> &Self::Output {
+    &self.source[index.start..index.end]
   }
 }
 
-impl Index<Match> for Lexer {
+impl<'a> Index<Match> for Lexer<'a> {
   type Output = [u8];
 
   fn index(&self, index: Match) -> &Self::Output {
-    &self.source.code()[self.next - index.len..self.next]
+    &self.source[self.next - index.len..self.next]
   }
 }
 
@@ -402,14 +405,14 @@ lazy_static! {
     static ref COMMENT_END: AhoCorasick = AhoCorasick::new(&[b"*/"]);
 }
 
-fn lex_multiple_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
+fn lex_multiple_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<'a, ()> {
   // Consume `/*`.
   lexer.skip_expect(2);
   lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
   Ok(())
 }
 
-fn lex_single_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
+fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<'a, ()> {
   // Consume `//`.
   lexer.skip_expect(2);
   // WARNING: Does not consider other line terminators allowed by spec.
@@ -417,11 +420,11 @@ fn lex_single_comment(lexer: &mut Lexer) -> SyntaxResult<()> {
   Ok(())
 }
 
-fn lex_identifier(
-  lexer: &mut Lexer,
+fn lex_identifier<'a>(
+  lexer: &mut Lexer<'a>,
   mode: LexMode,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   // Consume starter.
   lexer.skip_expect(1);
@@ -444,10 +447,10 @@ fn lex_identifier(
   ))
 }
 
-fn lex_bigint_or_number(
-  lexer: &mut Lexer,
+fn lex_bigint_or_number<'a>(
+  lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   // TODO
   lexer.consume(lexer.while_chars(&DIGIT));
@@ -479,10 +482,10 @@ fn lex_bigint_or_number(
   ))
 }
 
-fn lex_bigint_or_number_bin(
-  lexer: &mut Lexer,
+fn lex_bigint_or_number_bin<'a>(
+  lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_BIN));
@@ -500,10 +503,10 @@ fn lex_bigint_or_number_bin(
   ))
 }
 
-fn lex_bigint_or_number_hex(
-  lexer: &mut Lexer,
+fn lex_bigint_or_number_hex<'a>(
+  lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_HEX));
@@ -521,10 +524,10 @@ fn lex_bigint_or_number_hex(
   ))
 }
 
-fn lex_bigint_or_number_oct(
-  lexer: &mut Lexer,
+fn lex_bigint_or_number_oct<'a>(
+  lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_OCT));
@@ -542,7 +545,10 @@ fn lex_bigint_or_number_oct(
   ))
 }
 
-fn lex_private_member(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_private_member<'a>(
+  lexer: &mut Lexer<'a>,
+  preceded_by_line_terminator: bool,
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   // Include the `#` in the token.
   lexer.skip_expect(1);
@@ -567,7 +573,10 @@ fn lex_private_member(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> S
 }
 
 // TODO Validate regex.
-fn lex_regex(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_regex<'a>(
+  lexer: &mut Lexer<'a>,
+  preceded_by_line_terminator: bool,
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   // Consume slash.
   lexer.consume(lexer.n(1)?);
@@ -607,7 +616,10 @@ fn lex_regex(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResu
 }
 
 // TODO Validate string.
-fn lex_string(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_string<'a>(
+  lexer: &mut Lexer<'a>,
+  preceded_by_line_terminator: bool,
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   let quote = lexer.peek(0)?;
   lexer.skip_expect(1);
@@ -635,10 +647,10 @@ fn lex_string(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxRes
   ))
 }
 
-pub fn lex_template_string_continue(
-  lexer: &mut Lexer,
+pub fn lex_template_string_continue<'a>(
+  lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+) -> SyntaxResult<'a, Token<'a>> {
   let cp = lexer.checkpoint();
   let mut ended = false;
   let loc = loop {
@@ -677,13 +689,16 @@ pub fn lex_template_string_continue(
 }
 
 // TODO Validate template.
-fn lex_template(lexer: &mut Lexer, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_template<'a>(
+  lexer: &mut Lexer<'a>,
+  preceded_by_line_terminator: bool,
+) -> SyntaxResult<'a, Token<'a>> {
   // Consume backtick.
   lexer.skip_expect(1);
   lex_template_string_continue(lexer, preceded_by_line_terminator)
 }
 
-pub fn lex_next(lexer: &mut Lexer, mode: LexMode) -> SyntaxResult<Token> {
+pub fn lex_next<'a>(lexer: &mut Lexer<'a>, mode: LexMode) -> SyntaxResult<'a, Token<'a>> {
   let mut preceded_by_line_terminator = false;
   loop {
     if mode == LexMode::JsxTextContent {

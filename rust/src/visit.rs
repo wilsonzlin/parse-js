@@ -6,8 +6,7 @@ use crate::ast::ForInOfStmtHeaderLhs;
 use crate::ast::ForStmtHeader;
 use crate::ast::ForThreeInit;
 use crate::ast::LiteralTemplatePart;
-use crate::ast::NodeId;
-use crate::ast::NodeMap;
+use crate::ast::Node;
 use crate::ast::ObjectMemberType;
 use crate::ast::Syntax;
 
@@ -21,66 +20,55 @@ impl JourneyControls {
   }
 }
 
-// Note that the NodeMap must be provided as a separate immutable reference parameter, as accessing it from &mut self will cause Rust to appropriately detect it as borrowing as mutable (visiting the child with &mut self) while borrowed as immutable (calling the visitor on each property of the parent node).
-pub trait Visitor {
-  fn on_syntax(&mut self, parent_node: NodeId, node: NodeId, ctl: &mut JourneyControls) -> ();
+pub trait Visitor<'a> {
+  fn on_syntax(&mut self, node: Node<'a>, ctl: &mut JourneyControls) -> ();
 
-  fn visit_class_or_object_key(
-    &mut self,
-    node_map: &NodeMap,
-    parent: NodeId,
-    key: &ClassOrObjectMemberKey,
-  ) -> () {
+  fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey<'a>) -> () {
     match key {
       ClassOrObjectMemberKey::Direct(_) => {}
-      ClassOrObjectMemberKey::Computed(key) => self.visit(node_map, parent, *key),
+      ClassOrObjectMemberKey::Computed(key) => self.visit(*key),
     };
   }
 
-  fn visit_class_or_object_value(
-    &mut self,
-    node_map: &NodeMap,
-    parent: NodeId,
-    value: &ClassOrObjectMemberValue,
-  ) -> () {
+  fn visit_class_or_object_value(&mut self, value: &mut ClassOrObjectMemberValue<'a>) -> () {
     match value {
-      ClassOrObjectMemberValue::Getter { body } => self.visit(node_map, parent, *body),
+      ClassOrObjectMemberValue::Getter { body } => self.visit(*body),
       ClassOrObjectMemberValue::Method {
         signature, body, ..
       } => {
-        self.visit(node_map, parent, *signature);
-        self.visit(node_map, parent, *body);
+        self.visit(*signature);
+        self.visit(*body);
       }
       ClassOrObjectMemberValue::Property { initializer } => {
         if let Some(initializer) = initializer {
-          self.visit(node_map, parent, *initializer);
+          self.visit(*initializer);
         };
       }
       ClassOrObjectMemberValue::Setter { body, parameter } => {
-        self.visit(node_map, parent, *parameter);
-        self.visit(node_map, parent, *body);
+        self.visit(*parameter);
+        self.visit(*body);
       }
     }
   }
 
-  fn visit_top_level(&mut self, node_map: &NodeMap, top_level_node_id: NodeId) -> () {
-    match node_map[top_level_node_id].stx() {
+  fn visit_top_level(&mut self, top_level_node: Node<'a>) -> () {
+    match &*top_level_node.stx() {
       Syntax::TopLevel { body } => {
         for stmt in body {
-          self.visit(node_map, top_level_node_id, *stmt);
+          self.visit(*stmt);
         }
       }
       _ => panic!("not top level"),
     };
   }
 
-  fn visit(&mut self, node_map: &NodeMap, parent: NodeId, n: NodeId) -> () {
+  fn visit(&mut self, n: Node<'a>) -> () {
     let mut ctl = JourneyControls { skip: false };
-    self.on_syntax(parent, n, &mut ctl);
+    self.on_syntax(n, &mut ctl);
     if ctl.skip {
       return;
     };
-    match node_map[n].stx() {
+    match &mut *n.stx_mut() {
       Syntax::FunctionExpr {
         name,
         signature,
@@ -88,10 +76,10 @@ pub trait Visitor {
         ..
       } => {
         if let Some(name) = name {
-          self.visit(node_map, n, *name);
+          self.visit(*name);
         };
-        self.visit(node_map, n, *signature);
-        self.visit(node_map, n, *body);
+        self.visit(*signature);
+        self.visit(*body);
       }
       Syntax::IdentifierPattern { .. }
       | Syntax::IdentifierExpr { .. }
@@ -99,42 +87,42 @@ pub trait Visitor {
       Syntax::ArrayPattern { elements, rest } => {
         for elem in elements {
           if let Some(elem) = elem {
-            self.visit(node_map, n, elem.target);
+            self.visit(elem.target);
           };
         }
         if let Some(rest) = rest {
-          self.visit(node_map, n, *rest);
+          self.visit(*rest);
         };
       }
       Syntax::ArrowFunctionExpr {
         signature, body, ..
       } => {
-        self.visit(node_map, n, *signature);
-        self.visit(node_map, n, *body);
+        self.visit(*signature);
+        self.visit(*body);
       }
       Syntax::BinaryExpr { left, right, .. } => {
-        self.visit(node_map, n, *left);
-        self.visit(node_map, n, *right);
+        self.visit(*left);
+        self.visit(*right);
       }
       Syntax::BlockStmt { body } => {
         for stmt in body {
-          self.visit(node_map, n, *stmt);
+          self.visit(*stmt);
         }
       }
       Syntax::BreakStmt { .. } => {}
       Syntax::CallExpr {
         callee, arguments, ..
       } => {
-        self.visit(node_map, n, *callee);
+        self.visit(*callee);
         for arg in arguments {
-          self.visit(node_map, n, *arg);
+          self.visit(*arg);
         }
       }
       Syntax::CatchBlock { parameter, body } => {
         if let Some(param) = parameter {
-          self.visit(node_map, n, *param);
+          self.visit(*param);
         }
-        self.visit(node_map, n, *body);
+        self.visit(*body);
       }
       Syntax::ClassDecl {
         name,
@@ -142,14 +130,14 @@ pub trait Visitor {
         members,
       } => {
         if let Some(name) = name {
-          self.visit(node_map, n, *name);
+          self.visit(*name);
         }
         if let Some(extends) = extends {
-          self.visit(node_map, n, *extends);
+          self.visit(*extends);
         };
         for member in members {
-          self.visit_class_or_object_key(node_map, n, &member.key);
-          self.visit_class_or_object_value(node_map, n, &member.value);
+          self.visit_class_or_object_key(&mut member.key);
+          self.visit_class_or_object_value(&mut member.value);
         }
       }
       Syntax::ClassExpr {
@@ -159,19 +147,19 @@ pub trait Visitor {
         ..
       } => {
         if let Some(name) = name {
-          self.visit(node_map, n, *name);
+          self.visit(*name);
         }
         if let Some(extends) = extends {
-          self.visit(node_map, n, *extends);
+          self.visit(*extends);
         };
         for member in members {
-          self.visit_class_or_object_key(node_map, n, &member.key);
-          self.visit_class_or_object_value(node_map, n, &member.value);
+          self.visit_class_or_object_key(&mut member.key);
+          self.visit_class_or_object_value(&mut member.value);
         }
       }
       Syntax::ComputedMemberExpr { object, member, .. } => {
-        self.visit(node_map, n, *object);
-        self.visit(node_map, n, *member);
+        self.visit(*object);
+        self.visit(*member);
       }
       Syntax::ConditionalExpr {
         test,
@@ -179,35 +167,35 @@ pub trait Visitor {
         alternate,
         ..
       } => {
-        self.visit(node_map, n, *test);
-        self.visit(node_map, n, *consequent);
-        self.visit(node_map, n, *alternate);
+        self.visit(*test);
+        self.visit(*consequent);
+        self.visit(*alternate);
       }
       Syntax::ContinueStmt { .. } => {}
       Syntax::DebuggerStmt {} => {}
       Syntax::DoWhileStmt { condition, body } => {
-        self.visit(node_map, n, *body);
-        self.visit(node_map, n, *condition);
+        self.visit(*body);
+        self.visit(*condition);
       }
       Syntax::EmptyStmt {} => {}
       Syntax::ExportDeclStmt { declaration, .. } => {
-        self.visit(node_map, n, *declaration);
+        self.visit(*declaration);
       }
-      Syntax::ExportDefaultExprStmt { expression } => self.visit(node_map, n, *expression),
+      Syntax::ExportDefaultExprStmt { expression } => self.visit(*expression),
       Syntax::ExportListStmt { names, .. } => match names {
         ExportNames::All(alias) => {
           if let Some(alias) = alias {
-            self.visit(node_map, n, *alias);
+            self.visit(*alias);
           }
         }
         ExportNames::Specific(imports) => {
           for imp in imports {
-            self.visit(node_map, n, imp.alias);
+            self.visit(imp.alias);
           }
         }
       },
       Syntax::ExpressionStmt { expression } => {
-        self.visit(node_map, n, *expression);
+        self.visit(*expression);
       }
       Syntax::ForStmt { header, body } => {
         match header {
@@ -218,25 +206,25 @@ pub trait Visitor {
           } => {
             match init {
               ForThreeInit::None => {}
-              ForThreeInit::Expression(expr) => self.visit(node_map, n, *expr),
-              ForThreeInit::Declaration(decl) => self.visit(node_map, n, *decl),
+              ForThreeInit::Expression(expr) => self.visit(*expr),
+              ForThreeInit::Declaration(decl) => self.visit(*decl),
             };
             if let Some(condition) = condition {
-              self.visit(node_map, n, *condition);
+              self.visit(*condition);
             }
             if let Some(post) = post {
-              self.visit(node_map, n, *post);
+              self.visit(*post);
             }
           }
           ForStmtHeader::InOf { lhs, rhs, .. } => {
             match lhs {
-              ForInOfStmtHeaderLhs::Declaration(decl) => self.visit(node_map, n, *decl),
-              ForInOfStmtHeaderLhs::Pattern(pat) => self.visit(node_map, n, *pat),
+              ForInOfStmtHeaderLhs::Declaration(decl) => self.visit(*decl),
+              ForInOfStmtHeaderLhs::Pattern(pat) => self.visit(*pat),
             }
-            self.visit(node_map, n, *rhs);
+            self.visit(*rhs);
           }
         };
-        self.visit(node_map, n, *body);
+        self.visit(*body);
       }
       Syntax::FunctionDecl {
         name,
@@ -245,14 +233,14 @@ pub trait Visitor {
         ..
       } => {
         if let Some(name) = name {
-          self.visit(node_map, n, *name);
+          self.visit(*name);
         }
-        self.visit(node_map, n, *signature);
-        self.visit(node_map, n, *body);
+        self.visit(*signature);
+        self.visit(*body);
       }
       Syntax::FunctionSignature { parameters } => {
         for param in parameters {
-          self.visit(node_map, n, *param);
+          self.visit(*param);
         }
       }
       Syntax::IfStmt {
@@ -260,37 +248,37 @@ pub trait Visitor {
         consequent,
         alternate,
       } => {
-        self.visit(node_map, n, *test);
-        self.visit(node_map, n, *consequent);
+        self.visit(*test);
+        self.visit(*consequent);
         if let Some(alternate) = alternate {
-          self.visit(node_map, n, *alternate);
+          self.visit(*alternate);
         };
       }
-      Syntax::ImportExpr { module } => self.visit(node_map, n, *module),
+      Syntax::ImportExpr { module } => self.visit(*module),
       Syntax::ImportMeta {} => {}
       Syntax::ImportStmt { default, names, .. } => {
         if let Some(default) = default {
-          self.visit(node_map, n, *default);
+          self.visit(*default);
         };
         for name in names {
           match name {
             ExportNames::All(alias) => {
               if let Some(alias) = alias {
-                self.visit(node_map, n, *alias);
+                self.visit(*alias);
               }
             }
             ExportNames::Specific(names) => {
               for name in names {
-                self.visit(node_map, n, name.alias);
+                self.visit(name.alias);
               }
             }
           }
         }
       }
       Syntax::JsxAttribute { name, value } => {
-        self.visit(node_map, n, *name);
+        self.visit(*name);
         if let Some(value) = value {
-          self.visit(node_map, n, *value);
+          self.visit(*value);
         };
       }
       Syntax::JsxElement {
@@ -299,29 +287,29 @@ pub trait Visitor {
         name,
       } => {
         if let Some(name) = name {
-          self.visit(node_map, n, *name);
+          self.visit(*name);
         }
         for attr in attributes {
-          self.visit(node_map, n, *attr);
+          self.visit(*attr);
         }
         for child in children {
-          self.visit(node_map, n, *child);
+          self.visit(*child);
         }
       }
       Syntax::JsxExpressionContainer { value } => {
-        self.visit(node_map, n, *value);
+        self.visit(*value);
       }
       Syntax::JsxMember { .. } => {}
       Syntax::JsxName { .. } => {}
       Syntax::JsxSpreadAttribute { value } => {
-        self.visit(node_map, n, *value);
+        self.visit(*value);
       }
       Syntax::JsxText { .. } => {}
       Syntax::LiteralArrayExpr { elements } => {
         for elem in elements {
           match elem {
-            ArrayElement::Single(elem) => self.visit(node_map, n, *elem),
-            ArrayElement::Rest(elem) => self.visit(node_map, n, *elem),
+            ArrayElement::Single(elem) => self.visit(*elem),
+            ArrayElement::Rest(elem) => self.visit(*elem),
             ArrayElement::Empty => {}
           }
         }
@@ -332,7 +320,7 @@ pub trait Visitor {
       Syntax::LiteralNumberExpr { .. } => {}
       Syntax::LiteralObjectExpr { members } => {
         for member in members {
-          self.visit(node_map, n, *member);
+          self.visit(*member);
         }
       }
       Syntax::LiteralRegexExpr {} => {}
@@ -340,7 +328,7 @@ pub trait Visitor {
       Syntax::LiteralTemplateExpr { parts } => {
         for part in parts {
           match part {
-            LiteralTemplatePart::Substitution(expr) => self.visit(node_map, n, *expr),
+            LiteralTemplatePart::Substitution(expr) => self.visit(*expr),
             LiteralTemplatePart::String(_) => {}
           }
         }
@@ -348,10 +336,10 @@ pub trait Visitor {
       Syntax::LiteralUndefined {} => {}
       Syntax::ObjectPattern { properties, rest } => {
         for prop in properties {
-          self.visit(node_map, n, *prop);
+          self.visit(*prop);
         }
         if let Some(rest) = rest {
-          self.visit(node_map, n, *rest);
+          self.visit(*rest);
         }
       }
       Syntax::ObjectPatternProperty {
@@ -361,13 +349,13 @@ pub trait Visitor {
       } => {
         match key {
           ClassOrObjectMemberKey::Direct(..) => {}
-          ClassOrObjectMemberKey::Computed(key) => self.visit(node_map, n, *key),
+          ClassOrObjectMemberKey::Computed(key) => self.visit(*key),
         };
         if let Some(target) = target {
-          self.visit(node_map, n, *target);
+          self.visit(*target);
         }
         if let Some(value) = default_value {
-          self.visit(node_map, n, *value);
+          self.visit(*value);
         }
       }
       Syntax::ParamDecl {
@@ -375,33 +363,33 @@ pub trait Visitor {
         default_value,
         ..
       } => {
-        self.visit(node_map, n, *pattern);
+        self.visit(*pattern);
         if let Some(value) = default_value {
-          self.visit(node_map, n, *value);
+          self.visit(*value);
         }
       }
       Syntax::ReturnStmt { value } => {
         if let Some(value) = value {
-          self.visit(node_map, n, *value);
+          self.visit(*value);
         }
       }
       Syntax::SwitchBranch { case, body } => {
         if let Some(value) = case {
-          self.visit(node_map, n, *value);
+          self.visit(*value);
         }
         for stmt in body {
-          self.visit(node_map, n, *stmt);
+          self.visit(*stmt);
         }
       }
       Syntax::SwitchStmt { test, branches } => {
-        self.visit(node_map, n, *test);
+        self.visit(*test);
         for branch in branches {
-          self.visit(node_map, n, *branch);
+          self.visit(*branch);
         }
       }
       Syntax::ThisExpr {} => {}
       Syntax::ThrowStmt { value } => {
-        self.visit(node_map, n, *value);
+        self.visit(*value);
       }
       Syntax::TopLevel { .. } => unreachable!(),
       Syntax::TryStmt {
@@ -409,55 +397,55 @@ pub trait Visitor {
         catch,
         finally,
       } => {
-        self.visit(node_map, n, *wrapped);
+        self.visit(*wrapped);
         if let Some(catch) = catch {
-          self.visit(node_map, n, *catch);
+          self.visit(*catch);
         }
         if let Some(finally) = finally {
-          self.visit(node_map, n, *finally);
+          self.visit(*finally);
         }
       }
       Syntax::UnaryExpr { argument, .. } => {
-        self.visit(node_map, n, *argument);
+        self.visit(*argument);
       }
       Syntax::UnaryPostfixExpr { argument, .. } => {
-        self.visit(node_map, n, *argument);
+        self.visit(*argument);
       }
       Syntax::VarDecl { declarators, .. } => {
         for decl in declarators {
-          self.visit(node_map, n, decl.pattern);
+          self.visit(decl.pattern);
           if let Some(init) = decl.initializer {
-            self.visit(node_map, n, init);
+            self.visit(init);
           }
         }
       }
       Syntax::VarStmt { declaration } => {
-        self.visit(node_map, n, *declaration);
+        self.visit(*declaration);
       }
       Syntax::WhileStmt { condition, body } => {
-        self.visit(node_map, n, *condition);
-        self.visit(node_map, n, *body);
+        self.visit(*condition);
+        self.visit(*body);
       }
       Syntax::ObjectMember { typ } => {
         match typ {
           ObjectMemberType::Valued { key, value } => {
-            self.visit_class_or_object_key(node_map, n, key);
-            self.visit_class_or_object_value(node_map, n, value);
+            self.visit_class_or_object_key(key);
+            self.visit_class_or_object_value(value);
           }
           ObjectMemberType::Shorthand { .. } => {}
           ObjectMemberType::Rest { value } => {
-            self.visit(node_map, n, *value);
+            self.visit(*value);
           }
         };
       }
       Syntax::MemberExpr { left, .. } => {
-        self.visit(node_map, n, *left);
+        self.visit(*left);
       }
       Syntax::LabelStmt { statement, .. } => {
-        self.visit(node_map, n, *statement);
+        self.visit(*statement);
       }
       Syntax::CallArg { value, .. } => {
-        self.visit(node_map, n, *value);
+        self.visit(*value);
       }
       Syntax::SuperExpr {} => {}
     };
