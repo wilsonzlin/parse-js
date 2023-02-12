@@ -6,6 +6,8 @@ use core::fmt;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::str::from_utf8_unchecked;
+use std::error::Error;
+use std::fmt::Display;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum SyntaxErrorType {
@@ -70,20 +72,26 @@ impl<'a> SyntaxError<'a> {
 
 impl<'a> Debug for SyntaxError<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    f.write_fmt(format_args!(
-      "{:?} [position={} token={:?}] around ```{}```",
-      self.typ,
-      self.position,
-      self.actual_token,
-      unsafe {
-        from_utf8_unchecked(
-          &self.source[max(0, self.position as isize - 40) as usize
-            ..min(self.source.len() as isize, self.position as isize + 40) as usize],
-        )
-      }
-    ))
+    write!(f, "{} around ```{}```", self, unsafe {
+      from_utf8_unchecked(
+        &self.source[max(0, self.position as isize - 40) as usize
+          ..min(self.source.len() as isize, self.position as isize + 40) as usize],
+      )
+    })
   }
 }
+
+impl<'a> Display for SyntaxError<'a> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    write!(
+      f,
+      "{:?} [position={} token={:?}]",
+      self.typ, self.position, self.actual_token,
+    )
+  }
+}
+
+impl<'a> Error for SyntaxError<'a> {}
 
 impl<'a> PartialEq for SyntaxError<'a> {
   fn eq(&self, other: &Self) -> bool {
