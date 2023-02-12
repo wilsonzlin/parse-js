@@ -1,6 +1,6 @@
 {
   "$t": "FunctionDecl",
-  "async": false,
+  "is_async": false,
   "body": {
     "$t": "BlockStmt",
     "body": [
@@ -20,7 +20,7 @@
   },
   "generator": true,
   "name": {
-    "$t": "FunctionName",
+    "$t": "ClassOrFunctionName",
     "name": "a"
   },
   "signature": {

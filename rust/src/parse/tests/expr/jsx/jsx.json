@@ -82,10 +82,10 @@
                     {
                       "$t": "ObjectMember",
                       "typ": {
-                        "valued": {
-                          "key": "a",
+                        "Valued": {
+                          "key": { "Direct": "a" },
                           "value": {
-                            "property": {
+                            "Property": {
                               "initializer": {
                                 "$t": "IdentifierExpr",
                                 "name": "b"
@@ -98,7 +98,7 @@
                     {
                       "$t": "ObjectMember",
                       "typ": {
-                        "shorthand": "c"
+                        "Shorthand": { "name": "c" }
                       }
                     }
                   ]

@@ -10,27 +10,27 @@
             {
               "$t": "ObjectMember",
               "typ": {
-                "valued": {
-                  "key": "get",
+                "Valued": {
+                  "key": { "Direct": "get" },
                   "value": {
-                    "property": {
+                    "Property": {
                       "initializer": {
                         "$t": "LiteralArrayExpr",
                         "elements": [
                           {
-                            "single": {
+                            "Single": {
                               "$t": "IdentifierExpr",
                               "name": "set"
                             }
                           },
                           {
-                            "single": {
+                            "Single": {
                               "$t": "IdentifierExpr",
                               "name": "get"
                             }
                           },
                           {
-                            "single": {
+                            "Single": {
                               "$t": "IdentifierExpr",
                               "name": "await"
                             }
@@ -63,19 +63,19 @@
             {
               "$t": "ObjectMember",
               "typ": {
-                "shorthand": "await"
+                "Shorthand": { "name": "await" }
               }
             },
             {
               "$t": "ObjectMember",
               "typ": {
-                "shorthand": "of"
+                "Shorthand": { "name": "of" }
               }
             },
             {
               "$t": "ObjectMember",
               "typ": {
-                "shorthand": "let"
+                "Shorthand": { "name": "let" }
               }
             }
           ]
@@ -85,20 +85,20 @@
           "properties": [
             {
               "$t": "ObjectPatternProperty",
-              "default": null,
-              "key": "get",
+              "default_value": null,
+              "key": { "Direct": "get" },
               "target": null
             },
             {
               "$t": "ObjectPatternProperty",
-              "default": null,
-              "key": "set",
+              "default_value": null,
+              "key": { "Direct": "set" },
               "target": null
             },
             {
               "$t": "ObjectPatternProperty",
-              "default": null,
-              "key": "yield",
+              "default_value": null,
+              "key": { "Direct": "yield" },
               "target": {
                 "$t": "ArrayPattern",
                 "elements": [

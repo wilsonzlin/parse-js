@@ -37,7 +37,7 @@
         "initializer": {
           "$t": "ArrowFunctionExpr",
           "parenthesised": false,
-          "async": false,
+          "is_async": false,
           "body": {
             "$t": "BlockStmt",
             "body": [
@@ -116,7 +116,7 @@
                         "value": {
                           "$t": "ArrowFunctionExpr",
                           "parenthesised": false,
-                          "async": false,
+                          "is_async": false,
                           "body": {
                             "$t": "BlockStmt",
                             "body": [
@@ -129,7 +129,7 @@
                                       "initializer": {
                                         "$t": "ArrowFunctionExpr",
                                         "parenthesised": false,
-                                        "async": false,
+                                        "is_async": false,
                                         "body": {
                                           "$t": "CallExpr",
                                           "arguments": [
@@ -209,7 +209,7 @@
                                   "right": {
                                     "$t": "ArrowFunctionExpr",
                                     "parenthesised": false,
-                                    "async": false,
+                                    "is_async": false,
                                     "body": {
                                       "$t": "CallExpr",
                                       "arguments": [

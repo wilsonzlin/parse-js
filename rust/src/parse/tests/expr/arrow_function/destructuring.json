@@ -3,7 +3,7 @@
   "left": {
     "$t": "ArrowFunctionExpr",
     "parenthesised": false,
-    "async": false,
+    "is_async": false,
     "body": {
       "$t": "BlockStmt",
       "body": []
@@ -29,7 +29,7 @@
   "right": {
     "$t": "ArrowFunctionExpr",
     "parenthesised": false,
-    "async": false,
+    "is_async": false,
     "body": {
       "$t": "BinaryExpr",
       "left": {
@@ -41,7 +41,7 @@
       "right": {
         "$t": "ArrowFunctionExpr",
         "parenthesised": false,
-        "async": false,
+        "is_async": false,
         "body": {
           "$t": "LiteralArrayExpr",
           "elements": []
@@ -57,14 +57,14 @@
                 "properties": [
                   {
                     "$t": "ObjectPatternProperty",
-                    "default": null,
-                    "key": "a",
+                    "default_value": null,
+                    "key": { "Direct": "a" },
                     "target": null
                   },
                   {
                     "$t": "ObjectPatternProperty",
-                    "default": null,
-                    "key": "b",
+                    "default_value": null,
+                    "key": { "Direct": "b" },
                     "target": null
                   }
                 ],
@@ -87,8 +87,8 @@
             "properties": [
               {
                 "$t": "ObjectPatternProperty",
-                "default": null,
-                "key": "a",
+                "default_value": null,
+                "key": { "Direct": "a" },
                 "target": null
               }
             ],

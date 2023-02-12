@@ -7,7 +7,7 @@
         "initializer": {
           "$t": "ArrowFunctionExpr",
           "parenthesised": false,
-          "async": false,
+          "is_async": false,
           "body": {
             "$t": "BlockStmt",
             "body": []
