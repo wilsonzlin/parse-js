@@ -6,7 +6,7 @@ const { readFileSync, writeFileSync } = require("fs");
 const { spawnSync } = require("child_process");
 
 const currentVersion = /^version = "(\d+)\.(\d+)\.(\d+)"\s*$/m
-  .exec(readFileSync("Cargo.toml", "utf8"))
+  .exec(readFileSync("rust/Cargo.toml", "utf8"))
   .slice(1)
   .map((n) => Number.parseInt(n, 10));
 
