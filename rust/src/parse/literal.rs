@@ -72,7 +72,7 @@ impl<'a> Parser<'a> {
       ClassOrObjectMemberKey::Computed(expr)
     } else {
       let name = self.next()?;
-      if !is_valid_pattern_identifier(name.typ(), ctx.syntax) {
+      if !is_valid_pattern_identifier(name.typ(), ctx.rules) {
         return Err(name.error(SyntaxErrorType::ExpectedNotFound));
       };
       ClassOrObjectMemberKey::Direct(name.loc().clone())

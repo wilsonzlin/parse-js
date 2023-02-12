@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
       TokenType::KeywordTry => self.parse_stmt_try(ctx),
       TokenType::KeywordWhile => self.parse_stmt_while(ctx),
       TokenType::Semicolon => self.parse_stmt_empty(ctx),
-      t if is_valid_pattern_identifier(t, ctx.syntax) => {
+      t if is_valid_pattern_identifier(t, ctx.rules) => {
         let checkpoint = self.checkpoint();
         let label_name = self.next()?.loc_take();
         if self.consume_if(TokenType::Colon)?.is_match() {
@@ -129,7 +129,7 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<'a, BreakOrContinue<'a>> {
     let mut loc = self.require(t)?.loc_take();
     let next = self.peek()?;
-    let label = if is_valid_pattern_identifier(next.typ(), ctx.syntax)
+    let label = if is_valid_pattern_identifier(next.typ(), ctx.rules)
       && !next.preceded_by_line_terminator()
     {
       // Label.

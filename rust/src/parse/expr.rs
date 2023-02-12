@@ -2,7 +2,7 @@ use super::class_or_object::ParseClassBodyResult;
 use super::class_or_object::ParseClassOrObjectMemberResult;
 use super::literal::normalise_literal_bigint;
 use super::pattern::is_valid_pattern_identifier;
-use super::pattern::ParsePatternSyntax;
+use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
 use crate::ast::ArrayElement;
@@ -553,9 +553,9 @@ impl<'a> Parser<'a> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
 
     let (signature, arrow) = if !is_async
-      && is_valid_pattern_identifier(self.peek()?.typ(), ParsePatternSyntax {
+      && is_valid_pattern_identifier(self.peek()?.typ(), ParsePatternRules {
         await_allowed: false,
-        yield_allowed: ctx.syntax.yield_allowed,
+        yield_allowed: ctx.rules.yield_allowed,
       }) {
       // Single-unparenthesised-parameter arrow function.
       // Parse arrow first for fast fail (and in case we are merely trying to parse as arrow function), before we mutate state by creating nodes and adding symbols.
@@ -588,9 +588,9 @@ impl<'a> Parser<'a> {
       // Illegal under Automatic Semicolon Insertion rules.
       return Err(arrow.error(SyntaxErrorType::LineTerminatorAfterArrowFunctionParameters));
     }
-    let fn_body_ctx = fn_ctx.with_syntax(ParsePatternSyntax {
-      await_allowed: !is_async && ctx.syntax.await_allowed,
-      ..ctx.syntax
+    let fn_body_ctx = fn_ctx.with_rules(ParsePatternRules {
+      await_allowed: !is_async && ctx.rules.await_allowed,
+      ..ctx.rules
     });
     let body = match self.peek()?.typ() {
       TokenType::BraceOpen => self.parse_stmt(fn_body_ctx)?,
@@ -668,7 +668,7 @@ impl<'a> Parser<'a> {
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
     // WARNING: Unlike function declarations, function expressions are not declared within their current closure or block. However, their names cannot be assigned to within the function (it has no effect) and they can be "redeclared" e.g. `(function a() { let a = 1; })()`.
     let name = match self.peek()? {
-      t if is_valid_pattern_identifier(t.typ(), ctx.syntax) => {
+      t if is_valid_pattern_identifier(t.typ(), ctx.rules) => {
         self.consume_peeked();
         let name_node = fn_ctx.create_node(t.loc().clone(), Syntax::ClassOrFunctionName {
           name: t.loc().clone(),
@@ -679,9 +679,9 @@ impl<'a> Parser<'a> {
       _ => None,
     };
     let signature = self.parse_signature_function(fn_ctx)?;
-    let fn_body_ctx = fn_ctx.with_syntax(ParsePatternSyntax {
-      await_allowed: !is_async && ctx.syntax.await_allowed,
-      yield_allowed: !generator && ctx.syntax.yield_allowed,
+    let fn_body_ctx = fn_ctx.with_rules(ParsePatternRules {
+      await_allowed: !is_async && ctx.rules.await_allowed,
+      yield_allowed: !generator && ctx.rules.yield_allowed,
     });
     let body = self.parse_stmt_block(fn_body_ctx)?;
     Ok(ctx.create_node(start + body.loc(), Syntax::FunctionExpr {
@@ -697,7 +697,7 @@ impl<'a> Parser<'a> {
   pub fn parse_expr_class(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let start = self.require(TokenType::KeywordClass)?.loc().clone();
     let name = match self.peek()? {
-      t if is_valid_pattern_identifier(t.typ(), ctx.syntax) => {
+      t if is_valid_pattern_identifier(t.typ(), ctx.rules) => {
         self.consume_peeked();
         let name_node = ctx.create_node(t.loc().clone(), Syntax::ClassOrFunctionName {
           name: t.loc().clone(),
@@ -735,8 +735,8 @@ impl<'a> Parser<'a> {
         if (
           // TODO Is this correct? Should it be possible to use as operator or keyword depending on whether there is an operand following?
           (operator.name != OperatorName::Await && operator.name != OperatorName::Yield)
-            || (operator.name == OperatorName::Await && !ctx.syntax.await_allowed)
-            || (operator.name == OperatorName::Yield && !ctx.syntax.yield_allowed)
+            || (operator.name == OperatorName::Await && !ctx.rules.await_allowed)
+            || (operator.name == OperatorName::Yield && !ctx.rules.yield_allowed)
         ) =>
       {
         let operator = if operator.name == OperatorName::Yield
@@ -795,7 +795,7 @@ impl<'a> Parser<'a> {
               }
             }
           }
-          typ if is_valid_pattern_identifier(typ, ctx.syntax) => {
+          typ if is_valid_pattern_identifier(typ, ctx.rules) => {
             if self.peek()?.typ() == TokenType::EqualsChevronRight {
               // Single-unparenthesised-parameter arrow function.
               // NOTE: `await` is not allowed as an arrow function parameter, but we'll check this in parse_expr_arrow_function.

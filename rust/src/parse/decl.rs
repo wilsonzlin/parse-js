@@ -2,7 +2,7 @@ use super::class_or_object::ParseClassBodyResult;
 use super::expr::Asi;
 use super::pattern::is_valid_pattern_identifier;
 use super::pattern::ParsePatternAction;
-use super::pattern::ParsePatternSyntax;
+use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
 use crate::ast::Node;
@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
     // For example, `function a() { let a = 1; }` is legal.
     // The name can only be omitted in default exports.
     let name = match self
-      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.syntax))?
+      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
       .match_loc_take()
     {
       Some(name) => {
@@ -108,9 +108,9 @@ impl<'a> Parser<'a> {
       _ => None,
     };
     let signature = self.parse_signature_function(ctx.with_scope(fn_scope))?;
-    let body = self.parse_stmt_block(ctx.with_scope(fn_scope).with_syntax(ParsePatternSyntax {
-      await_allowed: !is_async && ctx.syntax.await_allowed,
-      yield_allowed: !generator && ctx.syntax.yield_allowed,
+    let body = self.parse_stmt_block(ctx.with_scope(fn_scope).with_rules(ParsePatternRules {
+      await_allowed: !is_async && ctx.rules.await_allowed,
+      yield_allowed: !generator && ctx.rules.yield_allowed,
     }))?;
     Ok(ctx.create_node(start + body.loc(), Syntax::FunctionDecl {
       is_async,
@@ -125,7 +125,7 @@ impl<'a> Parser<'a> {
     let start = self.require(TokenType::KeywordClass)?.loc().clone();
     // Names can be omitted only in default exports.
     let name = match self
-      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.syntax))?
+      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
       .match_loc_take()
     {
       Some(name) => {

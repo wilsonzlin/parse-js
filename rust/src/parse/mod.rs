@@ -1,4 +1,4 @@
-use self::pattern::ParsePatternSyntax;
+use self::pattern::ParsePatternRules;
 use crate::ast::Node;
 use crate::ast::Syntax;
 use crate::error::SyntaxError;
@@ -33,7 +33,7 @@ pub mod toplevel;
 pub struct ParseCtx<'a> {
   pub session: &'a Session,
   pub scope: Scope<'a>,
-  pub syntax: ParsePatternSyntax, // For simplicity, this is a copy, not a non-mutable reference, to avoid having a separate lifetime for it. The value is only two booleans, so a reference is probably slower, and it's supposed to be immutable (i.e. changes come from altered copying, not mutating the original single instance), so there shouldn't be any difference between a reference and a copy.
+  pub rules: ParsePatternRules, // For simplicity, this is a copy, not a non-mutable reference, to avoid having a separate lifetime for it. The value is only two booleans, so a reference is probably slower, and it's supposed to be immutable (i.e. changes come from altered copying, not mutating the original single instance), so there shouldn't be any difference between a reference and a copy.
 }
 
 impl<'a> ParseCtx<'a> {
@@ -41,8 +41,8 @@ impl<'a> ParseCtx<'a> {
     ParseCtx { scope, ..*self }
   }
 
-  pub fn with_syntax(&self, syntax: ParsePatternSyntax) -> ParseCtx<'a> {
-    ParseCtx { syntax, ..*self }
+  pub fn with_rules(&self, rules: ParsePatternRules) -> ParseCtx<'a> {
+    ParseCtx { rules, ..*self }
   }
 
   pub fn create_child_scope(&self, typ: ScopeType) -> Scope<'a> {

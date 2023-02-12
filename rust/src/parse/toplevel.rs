@@ -1,4 +1,4 @@
-use super::pattern::ParsePatternSyntax;
+use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
 use crate::ast::Node;
@@ -40,7 +40,7 @@ impl<'a> Parser<'a> {
         TopLevelMode::Module => ScopeType::Module,
       }),
       session,
-      syntax: ParsePatternSyntax {
+      rules: ParsePatternRules {
         await_allowed: true,
         yield_allowed: true,
       },

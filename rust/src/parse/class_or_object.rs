@@ -1,7 +1,7 @@
 use super::expr::Asi;
 use super::pattern::is_valid_pattern_identifier;
 use super::pattern::ParsePatternAction;
-use super::pattern::ParsePatternSyntax;
+use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
 use crate::ast::ClassMember;
@@ -95,7 +95,7 @@ impl<'a> Parser<'a> {
       } else if let Some(loc) = self.consume_if(TokenType::PrivateMember)?.match_loc_take() {
         loc
       } else if let Some(loc) = self
-        .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.syntax))?
+        .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
         .match_loc_take()
       {
         loc
@@ -116,9 +116,9 @@ impl<'a> Parser<'a> {
         is_async,
         generator: is_generator,
         signature,
-        body: self.parse_stmt_block(ctx.with_syntax(ParsePatternSyntax {
-          await_allowed: !is_async && ctx.syntax.await_allowed,
-          yield_allowed: !is_generator && ctx.syntax.yield_allowed,
+        body: self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
+          await_allowed: !is_async && ctx.rules.await_allowed,
+          yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?,
       }
     } else if is_getter {

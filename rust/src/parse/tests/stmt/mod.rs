@@ -1,5 +1,5 @@
 use crate::lex::Lexer;
-use crate::parse::pattern::ParsePatternSyntax;
+use crate::parse::pattern::ParsePatternRules;
 use crate::parse::ParseCtx;
 use crate::parse::Parser;
 use crate::session::Session;
@@ -15,7 +15,7 @@ fn parse_stmt_and_serialize(input: Vec<u8>) -> Value {
   let ctx = ParseCtx {
     scope,
     session: &session,
-    syntax: ParsePatternSyntax {
+    rules: ParsePatternRules {
       await_allowed: true,
       yield_allowed: true,
     },

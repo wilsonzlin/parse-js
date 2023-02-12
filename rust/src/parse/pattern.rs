@@ -18,22 +18,22 @@ pub enum ParsePatternAction {
 }
 
 #[derive(Clone, Copy)]
-pub struct ParsePatternSyntax {
+pub struct ParsePatternRules {
   // `await` is not allowed as an arrow function parameter or a parameter/variable inside an async function.
   pub await_allowed: bool,
   // `yield` is not allowed as a parameter/variable inside a generator function.
   pub yield_allowed: bool,
 }
 
-impl ParsePatternSyntax {
-  pub fn with_await_allowed(&self, await_allowed: bool) -> ParsePatternSyntax {
+impl ParsePatternRules {
+  pub fn with_await_allowed(&self, await_allowed: bool) -> ParsePatternRules {
     Self {
       await_allowed,
       ..*self
     }
   }
 
-  pub fn with_yield_allowed(&self, yield_allowed: bool) -> ParsePatternSyntax {
+  pub fn with_yield_allowed(&self, yield_allowed: bool) -> ParsePatternRules {
     Self {
       yield_allowed,
       ..*self
@@ -41,11 +41,11 @@ impl ParsePatternSyntax {
   }
 }
 
-pub fn is_valid_pattern_identifier(typ: TokenType, syntax: ParsePatternSyntax) -> bool {
+pub fn is_valid_pattern_identifier(typ: TokenType, rules: ParsePatternRules) -> bool {
   match typ {
     TokenType::Identifier => true,
-    TokenType::KeywordAwait => syntax.await_allowed,
-    TokenType::KeywordYield => syntax.yield_allowed,
+    TokenType::KeywordAwait => rules.await_allowed,
+    TokenType::KeywordYield => rules.yield_allowed,
     t => UNRESERVED_KEYWORDS.contains(&t),
   }
 }
@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
     ctx: ParseCtx<'a>,
     action: ParsePatternAction,
   ) -> SyntaxResult<'a, Node<'a>> {
-    if !is_valid_pattern_identifier(self.peek()?.typ(), ctx.syntax) {
+    if !is_valid_pattern_identifier(self.peek()?.typ(), ctx.rules) {
       return Err(
         self
           .peek()?
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
     let checkpoint = self.checkpoint();
     let t = self.next()?;
     Ok(match t.typ() {
-      t if is_valid_pattern_identifier(t, ctx.syntax) => {
+      t if is_valid_pattern_identifier(t, ctx.rules) => {
         self.restore_checkpoint(checkpoint);
         self.parse_pattern_identifier(ctx, action)?
       }
