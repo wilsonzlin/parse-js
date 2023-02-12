@@ -7,15 +7,21 @@ use crate::session::SessionString;
 use crate::session::SessionVec;
 use crate::source::SourceRange;
 use crate::symbol::Scope;
+use core::fmt::Debug;
+use std::cell::BorrowError;
+use std::cell::BorrowMutError;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
+use std::fmt;
+use std::fmt::Formatter;
 
-struct NodeData<'a> {
-  loc: SourceRange<'a>,
-  stx: Syntax<'a>,
+// Unlike other inner types (e.g. `ScopeData`), we expose this struct and all fields so that library users/consumers have maximum flexibility for visiting and mutating.
+pub struct NodeData<'a> {
+  pub loc: SourceRange<'a>,
+  pub stx: Syntax<'a>,
   // For the purposes of disambiguation, the scope of a function or block is only set on its children and not itself. This is merely an arbitrary decision. For example, the scope created by a function is assigned to its signature nodes (and descendants e.g. default values), but not to the FunctionStmt itself. For a `for` loop, the scope created by it is assigned to its header nodes and descendants, but not to the ForStmt itself. For a block statement, the scope created by it is assigned to statements inside it, but not to the BlockStmt itself.
-  scope: Scope<'a>,
+  pub scope: Scope<'a>,
 }
 
 // We use a newtype with RefCell instead of `&'a mut NodeData<'a>` because even though currently we don't reference a node from multiple places inside an AST, we do share Node references elsewhere (e.g. symbols, scopes). We still want mutability because otherwise we can't do mutations while traversing (important for many same-pass optimisations); even if we recreate nodes instead of updating a field, we still need to update the parent's reference (and without mutability, this would require rebuilding the entire tree). Typing `&'a mut NodeData<'a>` everywhere instead of `Node<'a>` is also too verbose and easy to mistype the lifetimes.
@@ -28,11 +34,21 @@ pub struct Node<'a>(&'a RefCell<NodeData<'a>>);
 // - Same syntax and location, but scope can be different.
 // - Same syntax, but location and scope can be different.
 impl<'a> Node<'a> {
-  fn get<'b>(self) -> Ref<'b, NodeData<'a>> {
+  // Useful for debugging.
+  pub fn try_get<'b>(self) -> Result<Ref<'b, NodeData<'a>>, BorrowError> {
+    self.0.try_borrow()
+  }
+
+  // Useful for debugging.
+  pub fn try_get_mut<'b>(self) -> Result<RefMut<'b, NodeData<'a>>, BorrowMutError> {
+    self.0.try_borrow_mut()
+  }
+
+  pub fn get<'b>(self) -> Ref<'b, NodeData<'a>> {
     self.0.borrow()
   }
 
-  fn get_mut<'b>(self) -> RefMut<'b, NodeData<'a>> {
+  pub fn get_mut<'b>(self) -> RefMut<'b, NodeData<'a>> {
     self.0.borrow_mut()
   }
 
@@ -49,24 +65,35 @@ impl<'a> Node<'a> {
     )
   }
 
+  /// Create an error at this node's location. This borrows the Node and will panic if there's an existing mutable borrow.
   pub fn error(self, typ: SyntaxErrorType) -> SyntaxError<'a> {
     SyntaxError::from_loc(self.loc(), typ, None)
   }
 
+  /// Get the location. This borrows the Node and will panic if there's an existing mutable borrow.
   pub fn loc(self) -> SourceRange<'a> {
     self.get().loc
   }
 
+  /// Get a non-mutable reference to the syntax. This non-mutably borrows the entire Node for the entire lifetime of the returned reference.
   pub fn stx<'b>(self) -> Ref<'b, Syntax<'a>> {
     Ref::map(self.get(), |node| &node.stx)
   }
 
+  /// Get a mutable reference to the syntax. This mutably borrows the entire Node for the entire lifetime of the returned reference.
   pub fn stx_mut<'b>(self) -> RefMut<'b, Syntax<'a>> {
     RefMut::map(self.get_mut(), |node| &mut node.stx)
   }
 
+  /// Get the scope. This borrows the Node and will panic if there's an existing mutable borrow.
   pub fn scope(self) -> Scope<'a> {
     self.get().scope
+  }
+}
+
+impl<'a> Debug for Node<'a> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    self.get().stx.fmt(f)
   }
 }
 
@@ -83,7 +110,7 @@ type Expression<'a> = Node<'a>;
 type Pattern<'a> = Node<'a>;
 type Statement<'a> = Node<'a>;
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum VarDeclMode {
   Const,
@@ -91,6 +118,7 @@ pub enum VarDeclMode {
   Var,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ArrayElement<'a> {
   Single(Expression<'a>),
@@ -98,7 +126,7 @@ pub enum ArrayElement<'a> {
   Empty,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ClassOrObjectMemberKey<'a> {
   // Identifier, keyword, string, or number.
@@ -106,6 +134,7 @@ pub enum ClassOrObjectMemberKey<'a> {
   Computed(Expression<'a>),
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ClassOrObjectMemberValue<'a> {
   Getter {
@@ -127,6 +156,7 @@ pub enum ClassOrObjectMemberValue<'a> {
   },
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct ClassMember<'a> {
   pub key: ClassOrObjectMemberKey<'a>,
@@ -134,6 +164,7 @@ pub struct ClassMember<'a> {
   pub value: ClassOrObjectMemberValue<'a>,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ObjectMemberType<'a> {
   Valued {
@@ -148,12 +179,14 @@ pub enum ObjectMemberType<'a> {
   },
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct ArrayPatternElement<'a> {
   pub target: Pattern<'a>,
   pub default_value: Option<Expression<'a>>,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct ExportName<'a> {
   // For simplicity, we always set both fields; for shorthands, both nodes are identical.
@@ -162,6 +195,7 @@ pub struct ExportName<'a> {
   pub alias: Pattern<'a>,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ExportNames<'a> {
   // `import * as name`
@@ -176,12 +210,14 @@ pub enum ExportNames<'a> {
   Specific(SessionVec<'a, ExportName<'a>>),
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct VariableDeclarator<'a> {
   pub pattern: Pattern<'a>,
   pub initializer: Option<Expression<'a>>,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ForThreeInit<'a> {
   None,
@@ -189,12 +225,14 @@ pub enum ForThreeInit<'a> {
   Declaration(Declaration<'a>),
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ForInOfStmtHeaderLhs<'a> {
   Declaration(Declaration<'a>),
   Pattern(Pattern<'a>),
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ForStmtHeader<'a> {
   Three {
@@ -209,16 +247,16 @@ pub enum ForStmtHeader<'a> {
   },
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum LiteralTemplatePart<'a> {
   Substitution(Expression<'a>),
   String(SourceRange<'a>),
 }
 
-// We no longer derive Eq for the AST due to use of NodeId, as it's not possible to determine structural equality without the node map. Anything that contains a NodeId/Syntax must also avoid Eq.
-// WARNING: .clone() is derived and available for shallow copies only. As nodes use NodeId refs to other nodes, it's impossible to actually deep clone from the .clone() method. Use it to quickly copy and make a few changes, while keeping most field values the same (including references to other existing nodes).
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, strum_macros::Display))]
-#[serde(tag = "$t")]
+#[cfg_attr(feature = "serialize", serde(tag = "$t"))]
 pub enum Syntax<'a> {
   // Patterns.
   IdentifierPattern {
@@ -327,7 +365,7 @@ pub enum Syntax<'a> {
     value: Option<Expression<'a>>, // JsxExpressionContainer or JsxText
   },
   JsxElement {
-    name: Option<Expression<'a>>,               // JsxName or JsxMember; None if fragment
+    name: Option<Expression<'a>>, // JsxName or JsxMember; None if fragment
     attributes: SessionVec<'a, Expression<'a>>, // JsxAttribute or JsxSpreadAttribute; always empty if fragment
     children: SessionVec<'a, Expression<'a>>,   // JsxElement or JsxExpressionContainer or JsxText
   },

@@ -64,10 +64,18 @@ pub trait Visitor<'a> {
 
   fn visit(&mut self, n: Node<'a>) -> () {
     let mut ctl = JourneyControls { skip: false };
-    self.on_syntax(n, &mut ctl);
-    if ctl.skip {
-      return;
-    };
+    let mut cur_stx_type = core::mem::discriminant(&*n.stx());
+    loop {
+      self.on_syntax(n, &mut ctl);
+      if ctl.skip {
+        return;
+      };
+      let new_stx_type = core::mem::discriminant(&*n.stx());
+      if cur_stx_type == new_stx_type {
+        break;
+      };
+      cur_stx_type = new_stx_type;
+    }
     match &mut *n.stx_mut() {
       Syntax::FunctionExpr {
         name,

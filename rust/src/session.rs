@@ -1,4 +1,5 @@
 use bumpalo::Bump;
+use core::fmt::Debug;
 use core::hash::Hash;
 use core::ops::Deref;
 use core::ops::DerefMut;
@@ -6,6 +7,8 @@ use hashbrown::hash_map::DefaultHashBuilder;
 use hashbrown::BumpWrapper;
 #[cfg(feature = "serialize")]
 use serde::ser::SerializeSeq;
+use std::fmt;
+use std::fmt::Formatter;
 
 // Some of these are newtypes so that we can implement Serialize.
 
@@ -15,6 +18,12 @@ pub type SessionHashSet<'a, T> = hashbrown::HashSet<T, DefaultHashBuilder, BumpW
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct SessionVec<'a, T>(bumpalo::collections::Vec<'a, T>);
+
+impl<'a, T: Debug> Debug for SessionVec<'a, T> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    self.0.fmt(f)
+  }
+}
 
 impl<'a, T> Deref for SessionVec<'a, T> {
   type Target = bumpalo::collections::Vec<'a, T>;
@@ -69,6 +78,12 @@ impl<'a, T: serde::Serialize> serde::Serialize for SessionVec<'a, T> {
 }
 
 pub struct SessionString<'a>(bumpalo::collections::String<'a>);
+
+impl<'a> Debug for SessionString<'a> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    self.0.fmt(f)
+  }
+}
 
 impl<'a> Deref for SessionString<'a> {
   type Target = bumpalo::collections::String<'a>;

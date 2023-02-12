@@ -8,12 +8,12 @@ use hashbrown::hash_map::Entry;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
-use std::slice::Iter;
+use std::hash::Hash;
 
 pub type Identifier<'a> = SourceRange<'a>;
 
 // To attach additional custom state to a Symbol, use a HashMap. We prefer this instead of adding an extra generic state field on Symbol, as that would require propagating the generic type everywhere.
-// Cloning means to cheaply clone the reference to this unique symbol, not create a duplicate symbol.
+// Cloning means to cheaply clone the reference to this unique symbol, not create a duplicate symbol. This is useful for sharing a reference to a symbol, including uses in data structures like HashMap.
 #[derive(Clone)]
 pub struct Symbol<'a> {
   scope: Scope<'a>,
@@ -21,6 +21,22 @@ pub struct Symbol<'a> {
   ordinal_in_scope: usize,
   // This should refer to an ObjectPatternProperty if shorthand property, FunctionName if function name, or IdentifierPattern otherwise.
   declarator_pattern: Node<'a>,
+}
+
+// Equality means referring to the same unique symbol. Useful for HashMap.
+impl<'a> PartialEq for Symbol<'a> {
+  fn eq(&self, other: &Self) -> bool {
+    core::ptr::eq(self.scope.0, other.scope.0) && self.ordinal_in_scope == other.ordinal_in_scope
+  }
+}
+
+impl<'a> Eq for Symbol<'a> {}
+
+impl<'a> Hash for Symbol<'a> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    core::ptr::hash(self.scope.0, state);
+    self.ordinal_in_scope.hash(state);
+  }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -63,22 +79,10 @@ struct ScopeData<'a> {
   symbol_declaration_order: SessionVec<'a, Identifier<'a>>,
   // Does not exist for top-level.
   parent: Option<Scope<'a>>,
+  // Not used by the parser, but useful for some library consumers, as there's currently no other way to iterate all scopes.
+  children: SessionVec<'a, Scope<'a>>,
   typ: ScopeType,
   flags: u64,
-}
-
-pub struct ScopeSymbolNames<'a, 'b> {
-  r: Ref<'b, ScopeData<'a>>,
-}
-
-// https://stackoverflow.com/a/33542412/6249022
-impl<'a, 'b, 'c: 'b> IntoIterator for &'c ScopeSymbolNames<'a, 'b> {
-  type IntoIter = Iter<'b, Identifier<'a>>;
-  type Item = &'b Identifier<'a>;
-
-  fn into_iter(self) -> Self::IntoIter {
-    self.r.symbol_declaration_order.iter()
-  }
 }
 
 // Since Rust only supports newtypes with impls using structs, we cannot have our newtype as a reference, so we must use it like it's a reference despite being a struct i.e. cheaply copyable, take `self` instead of `&self`, use `Scope<'a>` instead of `&'a Scope<'a>`.
@@ -95,13 +99,22 @@ impl<'a> Scope<'a> {
   }
 
   pub fn new(session: &'a Session, parent: Option<Scope<'a>>, typ: ScopeType) -> Scope<'a> {
-    Scope(session.mem.alloc(RefCell::new(ScopeData {
+    let scope = Scope(session.mem.alloc(RefCell::new(ScopeData {
       symbols: session.new_hashmap(),
       symbol_declaration_order: session.new_vec(),
       parent,
+      children: session.new_vec(),
       typ,
       flags: 0,
-    })))
+    })));
+    if let Some(parent) = parent {
+      parent.get_mut().children.push(scope);
+    };
+    scope
+  }
+
+  pub fn parent(self) -> Option<Scope<'a>> {
+    self.get().parent
   }
 
   pub fn create_child_scope(self, session: &'a Session, typ: ScopeType) -> Scope<'a> {
@@ -163,6 +176,10 @@ impl<'a> Scope<'a> {
     Ok(())
   }
 
+  pub fn get_symbol(self, identifier: Identifier<'a>) -> Option<Symbol<'a>> {
+    self.get().symbols.get(&identifier).cloned()
+  }
+
   pub fn find_symbol(self, identifier: Identifier<'a>) -> Option<Symbol<'a>> {
     match self.get().symbols.get(&identifier) {
       Some(symbol) => Some(symbol.clone()),
@@ -200,7 +217,12 @@ impl<'a> Scope<'a> {
     self.get().symbols.len()
   }
 
-  pub fn symbol_names<'b>(self) -> ScopeSymbolNames<'a, 'b> {
-    ScopeSymbolNames { r: self.get() }
+  // Returning an iterator within a Ref is difficult (see // https://stackoverflow.com/a/33542412/6249022), so we just return the Vec (immutable) instead.
+  pub fn symbol_names<'b>(self) -> Ref<'b, SessionVec<'a, SourceRange<'a>>> {
+    Ref::map(self.get(), |scope| &scope.symbol_declaration_order)
+  }
+
+  pub fn children<'b>(self) -> Ref<'b, SessionVec<'a, Scope<'a>>> {
+    Ref::map(self.get(), |scope| &scope.children)
   }
 }
