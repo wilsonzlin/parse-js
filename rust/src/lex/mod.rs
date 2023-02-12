@@ -315,7 +315,7 @@ lazy_static! {
         map.insert(TokenType::KeywordConstructor, b"constructor");
         map.insert(TokenType::KeywordContinue, b"continue");
         map.insert(TokenType::KeywordDebugger, b"debugger");
-        map.insert(TokenType::KeywordDefault, b"default_value");
+        map.insert(TokenType::KeywordDefault, b"default");
         map.insert(TokenType::KeywordDelete, b"delete");
         map.insert(TokenType::KeywordDo, b"do");
         map.insert(TokenType::KeywordElse, b"else");
