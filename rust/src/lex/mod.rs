@@ -142,6 +142,14 @@ impl<'a> Lexer<'a> {
     }
   }
 
+  fn through_char_or_end(&self, c: u8) -> Match {
+    memchr(c, &self.source[self.next..])
+      .map(|pos| Match { len: pos + 1 })
+      .unwrap_or_else(|| Match {
+        len: self.remaining(),
+      })
+  }
+
   fn through_char(&self, c: u8) -> SyntaxResult<'a, Match> {
     memchr(c, &self.source[self.next..])
       .map(|pos| Match { len: pos + 1 })
@@ -400,7 +408,7 @@ fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<'a, ()> {
   // Consume `//`.
   lexer.skip_expect(2);
   // WARNING: Does not consider other line terminators allowed by spec.
-  lexer.consume(lexer.through_char(b'\n')?);
+  lexer.consume(lexer.through_char_or_end(b'\n'));
   Ok(())
 }
 
