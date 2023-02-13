@@ -26,10 +26,14 @@ pub struct NodeData<'a> {
 impl<'a> NodeData<'a> {
   /// Move this node into a new node (also allocated on the arena and returned as a mutable reference). This node will be left in an invalid state and must not be used any further.
   pub fn take(&mut self, session: &'a Session) -> &'a mut NodeData<'a> {
+    self.replace(session, Syntax::_TakenNode {})
+  }
+
+  pub fn replace(&mut self, session: &'a Session, stx: Syntax<'a>) -> &'a mut NodeData<'a> {
     let dummy = NodeData {
       loc: self.loc,
       scope: self.scope,
-      stx: Syntax::_TakenNode {},
+      stx,
     };
     let taken = core::mem::replace(self, dummy);
     session.get_allocator().alloc(taken)

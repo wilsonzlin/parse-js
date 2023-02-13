@@ -111,12 +111,14 @@ impl<'a> Parser<'a> {
     };
     // Check is_generator/is_async first so that we don't have to check that they're false in every other branch.
     let value = if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
-      let signature = self.parse_signature_function(ctx)?;
+      let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
+      let fn_ctx = ctx.with_scope(fn_scope);
+      let signature = self.parse_signature_function(fn_ctx)?;
       ClassOrObjectMemberValue::Method {
         is_async,
         generator: is_generator,
         signature,
-        body: self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
+        body: self.parse_stmt_block_with_existing_scope(fn_ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?,

@@ -20,9 +20,11 @@ impl JourneyControls {
   }
 }
 
+// Don't use `Node<'a>` as that requires reference to live for entire `'a`.
 pub trait Visitor<'a> {
-  // Don't use `Node<'a>` as that requires reference to live for entire `'a`.
-  fn on_syntax(&mut self, node: &mut NodeData<'a>, ctl: &mut JourneyControls) -> ();
+  fn on_syntax_down(&mut self, node: &mut NodeData<'a>, ctl: &mut JourneyControls) -> () {}
+
+  fn on_syntax_up(&mut self, node: &mut NodeData<'a>) -> () {}
 
   fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey<'a>) -> () {
     match key {
@@ -52,22 +54,11 @@ pub trait Visitor<'a> {
     }
   }
 
-  fn visit_top_level(&mut self, top_level_node: &mut NodeData<'a>) -> () {
-    match &mut top_level_node.stx {
-      Syntax::TopLevel { body } => {
-        for stmt in body {
-          self.visit(stmt);
-        }
-      }
-      _ => panic!("not top level"),
-    };
-  }
-
   fn visit(&mut self, n: &mut NodeData<'a>) -> () {
-    let mut ctl = JourneyControls { skip: false };
     let mut cur_stx_type = core::mem::discriminant(&n.stx);
     loop {
-      self.on_syntax(n, &mut ctl);
+      let mut ctl = JourneyControls { skip: false };
+      self.on_syntax_down(n, &mut ctl);
       if ctl.skip {
         return;
       };
@@ -77,7 +68,13 @@ pub trait Visitor<'a> {
       };
       cur_stx_type = new_stx_type;
     }
+
     match &mut n.stx {
+      Syntax::TopLevel { body } => {
+        for stmt in body {
+          self.visit(stmt);
+        }
+      }
       Syntax::FunctionExpr {
         name,
         signature,
@@ -400,7 +397,6 @@ pub trait Visitor<'a> {
       Syntax::ThrowStmt { value } => {
         self.visit(*value);
       }
-      Syntax::TopLevel { .. } => unreachable!(),
       Syntax::TryStmt {
         wrapped,
         catch,
@@ -459,5 +455,14 @@ pub trait Visitor<'a> {
       Syntax::SuperExpr {} => {}
       Syntax::_TakenNode {} => unreachable!(),
     };
+
+    loop {
+      self.on_syntax_up(n);
+      let new_stx_type = core::mem::discriminant(&n.stx);
+      if cur_stx_type == new_stx_type {
+        break;
+      };
+      cur_stx_type = new_stx_type;
+    }
   }
 }

@@ -104,17 +104,24 @@ impl<'a> Parser<'a> {
     Ok(ctx.create_node(loc, Syntax::EmptyStmt {}))
   }
 
-  pub fn parse_stmt_block(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  // The scope can be provided when parsing function bodies, as their scope starts at the signature and a new one isn't introduced upon braces.
+  pub fn parse_stmt_block_with_existing_scope(
+    &mut self,
+    ctx: ParseCtx<'a>,
+  ) -> SyntaxResult<'a, Node<'a>> {
     let start = self.require(TokenType::BraceOpen)?;
-    let block_scope = ctx.create_child_scope(ScopeType::Block);
-    let block_ctx = ctx.with_scope(block_scope);
     let mut body = ctx.session.new_vec();
     loop {
       if let Some(end_loc) = self.consume_if(TokenType::BraceClose)?.match_loc() {
         return Ok(ctx.create_node(start.loc + end_loc, Syntax::BlockStmt { body }));
       };
-      body.push(self.parse_stmt(block_ctx)?);
+      body.push(self.parse_stmt(ctx)?);
     }
+  }
+
+  pub fn parse_stmt_block(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+    let block_scope = ctx.create_child_scope(ScopeType::Block);
+    self.parse_stmt_block_with_existing_scope(ctx.with_scope(block_scope))
   }
 
   pub fn parse_stmt_var(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {

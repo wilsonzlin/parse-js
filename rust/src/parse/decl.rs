@@ -97,21 +97,21 @@ impl<'a> Parser<'a> {
       .match_loc_take()
     {
       Some(name) => {
-        let name_node = ctx.create_node(name.clone(), Syntax::ClassOrFunctionName {
-          name: name.clone(),
-        });
+        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName { name });
         if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-          closure.add_symbol(name.clone())?;
+          closure.add_symbol(name)?;
         };
         Some(name_node)
       }
       _ => None,
     };
     let signature = self.parse_signature_function(ctx.with_scope(fn_scope))?;
-    let body = self.parse_stmt_block(ctx.with_scope(fn_scope).with_rules(ParsePatternRules {
-      await_allowed: !is_async && ctx.rules.await_allowed,
-      yield_allowed: !generator && ctx.rules.yield_allowed,
-    }))?;
+    let body = self.parse_stmt_block_with_existing_scope(ctx.with_scope(fn_scope).with_rules(
+      ParsePatternRules {
+        await_allowed: !is_async && ctx.rules.await_allowed,
+        yield_allowed: !generator && ctx.rules.yield_allowed,
+      },
+    ))?;
     Ok(ctx.create_node(start + body.loc, Syntax::FunctionDecl {
       is_async,
       generator,

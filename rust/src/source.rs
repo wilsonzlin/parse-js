@@ -11,6 +11,7 @@ use core::hash::Hash;
 use core::hash::Hasher;
 use core::ops::Add;
 use core::ops::AddAssign;
+use std::fmt::Display;
 use std::marker::PhantomData;
 
 /// A string backed by a source. Treated as a string, so contents rather than position is considered the value (and this is used for equality). However, it's illegal to add two SourceRange values from different sources.
@@ -124,6 +125,12 @@ impl<'a> Debug for SourceRange<'a> {
   #[inline(always)]
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     write!(f, "`{}`[{}:{}]", self.as_str(), self.start, self.end)
+  }
+}
+
+impl<'a> Display for SourceRange<'a> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    f.write_str(self.as_str())
   }
 }
 

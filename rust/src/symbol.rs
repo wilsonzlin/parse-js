@@ -59,6 +59,13 @@ impl ScopeType {
       _ => false,
     }
   }
+
+  pub fn is_closure_or_global(&self) -> bool {
+    match self {
+      ScopeType::Global => true,
+      t => t.is_closure(),
+    }
+  }
 }
 
 #[repr(u8)]
@@ -112,6 +119,10 @@ impl<'a> Scope<'a> {
 
   pub fn parent(self) -> Option<Scope<'a>> {
     self.get().parent
+  }
+
+  pub fn typ(self) -> ScopeType {
+    self.get().typ
   }
 
   pub fn create_child_scope(self, session: &'a Session, typ: ScopeType) -> Scope<'a> {
