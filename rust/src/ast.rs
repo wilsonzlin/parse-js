@@ -262,14 +262,34 @@ pub enum Syntax<'a> {
 
   // Declarations.
   ClassDecl {
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
     export: bool,
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
     export_default: bool,
     name: Option<Node<'a>>, // Name can only be omitted in a default export, although a default export class can still have a name.
     extends: Option<Expression<'a>>,
     members: SessionVec<'a, ClassMember<'a>>,
   },
   FunctionDecl {
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
     export: bool,
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
     export_default: bool,
     generator: bool,
     is_async: bool,
@@ -283,6 +303,11 @@ pub enum Syntax<'a> {
     default_value: Option<Expression<'a>>,
   },
   VarDecl {
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
     export: bool,
     mode: VarDeclMode,
     declarators: SessionVec<'a, VariableDeclarator<'a>>,
