@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
     match self.peek()?.typ {
       TokenType::BraceOpen => self.parse_stmt_block(ctx),
       TokenType::KeywordBreak => self.parse_stmt_break(ctx),
-      TokenType::KeywordClass => self.parse_decl_class(ctx),
+      TokenType::KeywordClass => self.parse_decl_class(ctx, false, false),
       TokenType::KeywordConst | TokenType::KeywordLet | TokenType::KeywordVar => {
         self.parse_stmt_var(ctx)
       }
@@ -70,7 +70,9 @@ impl<'a> Parser<'a> {
       TokenType::KeywordDo => self.parse_stmt_do_while(ctx),
       TokenType::KeywordExport => self.parse_stmt_export(ctx),
       TokenType::KeywordFor => self.parse_stmt_for(ctx),
-      TokenType::KeywordAsync | TokenType::KeywordFunction => self.parse_decl_function(ctx),
+      TokenType::KeywordAsync | TokenType::KeywordFunction => {
+        self.parse_decl_function(ctx, false, false)
+      }
       TokenType::KeywordIf => self.parse_stmt_if(ctx),
       TokenType::KeywordImport => self.parse_stmt_import_or_expr_import(ctx),
       TokenType::KeywordReturn => self.parse_stmt_return(ctx),
@@ -125,7 +127,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse_stmt_var(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let declaration = self.parse_decl_var(ctx, VarDeclParseMode::Asi)?;
+    let declaration = self.parse_decl_var(ctx, VarDeclParseMode::Asi, false)?;
     Ok(ctx.create_node(declaration.loc, Syntax::VarStmt { declaration }))
   }
 
@@ -221,13 +223,10 @@ impl<'a> Parser<'a> {
       }
       TokenType::KeywordDefault => match self.peek()?.typ {
         // `class` and `function` are treated as statements that are hoisted, not expressions; however, they can be unnamed, which gives them the name `default`.
-        TokenType::KeywordAsync | TokenType::KeywordClass | TokenType::KeywordFunction => {
-          let declaration = self.parse_stmt(ctx)?;
-          ctx.create_node(start.loc + declaration.loc, Syntax::ExportDeclStmt {
-            declaration,
-            default: true,
-          })
+        TokenType::KeywordAsync | TokenType::KeywordFunction => {
+          self.parse_decl_function(ctx, true, true)?
         }
+        TokenType::KeywordClass => self.parse_decl_class(ctx, true, true)?,
         _ => {
           let expression = self.parse_expr(ctx, TokenType::Semicolon)?;
           ctx.create_node(start.loc + expression.loc, Syntax::ExportDefaultExprStmt {
@@ -235,18 +234,20 @@ impl<'a> Parser<'a> {
           })
         }
       },
-      TokenType::KeywordVar
-      | TokenType::KeywordLet
-      | TokenType::KeywordConst
-      | TokenType::KeywordFunction
-      | TokenType::KeywordClass => {
+      TokenType::KeywordVar | TokenType::KeywordLet | TokenType::KeywordConst => {
         // Reconsume declaration keyword.
         self.restore_checkpoint(cp);
-        let declaration = self.parse_stmt(ctx)?;
-        ctx.create_node(start.loc + declaration.loc, Syntax::ExportDeclStmt {
-          declaration,
-          default: false,
-        })
+        self.parse_decl_var(ctx, VarDeclParseMode::Asi, true)?
+      }
+      TokenType::KeywordFunction => {
+        // Reconsume declaration keyword.
+        self.restore_checkpoint(cp);
+        self.parse_decl_function(ctx, true, false)?
+      }
+      TokenType::KeywordClass => {
+        // Reconsume declaration keyword.
+        self.restore_checkpoint(cp);
+        self.parse_decl_class(ctx, true, false)?
       }
       _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("exportable"))),
     })
@@ -276,7 +277,7 @@ impl<'a> Parser<'a> {
     }
     let lhs_raw = match self.peek()?.typ {
       TokenType::KeywordVar | TokenType::KeywordLet | TokenType::KeywordConst => {
-        LhsRaw::Declaration(self.parse_decl_var(for_ctx, VarDeclParseMode::Leftmost)?)
+        LhsRaw::Declaration(self.parse_decl_var(for_ctx, VarDeclParseMode::Leftmost, false)?)
       }
       TokenType::Semicolon => LhsRaw::Empty,
       _ => {

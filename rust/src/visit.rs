@@ -134,6 +134,7 @@ pub trait Visitor<'a> {
         name,
         extends,
         members,
+        ..
       } => {
         if let Some(name) = name {
           self.visit(*name);
@@ -184,9 +185,6 @@ pub trait Visitor<'a> {
         self.visit(*condition);
       }
       Syntax::EmptyStmt {} => {}
-      Syntax::ExportDeclStmt { declaration, .. } => {
-        self.visit(*declaration);
-      }
       Syntax::ExportDefaultExprStmt { expression } => self.visit(*expression),
       Syntax::ExportListStmt { names, .. } => match names {
         ExportNames::All(alias) => {

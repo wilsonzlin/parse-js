@@ -27,6 +27,7 @@ impl<'a> Parser<'a> {
     &mut self,
     ctx: ParseCtx<'a>,
     parse_mode: VarDeclParseMode,
+    export: bool,
   ) -> SyntaxResult<'a, Node<'a>> {
     let t = self.next()?;
     let mode = match t.typ {
@@ -81,10 +82,19 @@ impl<'a> Parser<'a> {
         }
       }
     }
-    Ok(ctx.create_node(loc, Syntax::VarDecl { mode, declarators }))
+    Ok(ctx.create_node(loc, Syntax::VarDecl {
+      export,
+      mode,
+      declarators,
+    }))
   }
 
-  pub fn parse_decl_function(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_decl_function(
+    &mut self,
+    ctx: ParseCtx<'a>,
+    export: bool,
+    export_default: bool,
+  ) -> SyntaxResult<'a, Node<'a>> {
     let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
     let start = self.require(TokenType::KeywordFunction)?.loc;
@@ -103,7 +113,12 @@ impl<'a> Parser<'a> {
         };
         Some(name_node)
       }
-      _ => None,
+      _ => {
+        if !export_default {
+          return Err(start.error(SyntaxErrorType::ExpectedSyntax("function name"), None));
+        };
+        None
+      }
     };
     let signature = self.parse_signature_function(ctx.with_scope(fn_scope))?;
     let body = self.parse_stmt_block_with_existing_scope(ctx.with_scope(fn_scope).with_rules(
@@ -113,6 +128,8 @@ impl<'a> Parser<'a> {
       },
     ))?;
     Ok(ctx.create_node(start + body.loc, Syntax::FunctionDecl {
+      export,
+      export_default,
       is_async,
       generator,
       name,
@@ -121,7 +138,12 @@ impl<'a> Parser<'a> {
     }))
   }
 
-  pub fn parse_decl_class(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_decl_class(
+    &mut self,
+    ctx: ParseCtx<'a>,
+    export: bool,
+    export_default: bool,
+  ) -> SyntaxResult<'a, Node<'a>> {
     let start = self.require(TokenType::KeywordClass)?.loc;
     // Names can be omitted only in default exports.
     let name = match self
@@ -135,7 +157,12 @@ impl<'a> Parser<'a> {
         ctx.scope.add_block_symbol(name.clone())?;
         Some(name_node)
       }
-      None => None,
+      None => {
+        if !export_default {
+          return Err(start.error(SyntaxErrorType::ExpectedSyntax("class name"), None));
+        };
+        None
+      }
     };
     // Unlike functions, classes are scoped to their block.
     let extends = if self.consume_if(TokenType::KeywordExtends)?.is_match() {
@@ -145,6 +172,8 @@ impl<'a> Parser<'a> {
     };
     let ParseClassBodyResult { end, members } = self.parse_class_body(ctx)?;
     Ok(ctx.create_node(start + end, Syntax::ClassDecl {
+      export,
+      export_default,
       name,
       extends,
       members,

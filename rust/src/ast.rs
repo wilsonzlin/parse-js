@@ -262,14 +262,18 @@ pub enum Syntax<'a> {
 
   // Declarations.
   ClassDecl {
-    name: Option<Node<'a>>, // Name can only be omitted in a default export.
+    export: bool,
+    export_default: bool,
+    name: Option<Node<'a>>, // Name can only be omitted in a default export, although a default export class can still have a name.
     extends: Option<Expression<'a>>,
     members: SessionVec<'a, ClassMember<'a>>,
   },
   FunctionDecl {
+    export: bool,
+    export_default: bool,
     generator: bool,
     is_async: bool,
-    name: Option<Node<'a>>, // Name can only be omitted in a default export.
+    name: Option<Node<'a>>, // Name can only be omitted in a default export, although a default export function can still have a name.
     signature: Node<'a>,
     body: Statement<'a>,
   },
@@ -279,6 +283,7 @@ pub enum Syntax<'a> {
     default_value: Option<Expression<'a>>,
   },
   VarDecl {
+    export: bool,
     mode: VarDeclMode,
     declarators: SessionVec<'a, VariableDeclarator<'a>>,
   },
@@ -422,10 +427,6 @@ pub enum Syntax<'a> {
     body: Statement<'a>,
   },
   EmptyStmt {},
-  ExportDeclStmt {
-    declaration: Declaration<'a>,
-    default: bool,
-  },
   ExportDefaultExprStmt {
     expression: Expression<'a>,
   },
