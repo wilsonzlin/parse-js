@@ -9,18 +9,18 @@ fn check(code: &str, expecteds: &[TokenType], expected_err: Option<SyntaxErrorTy
   let mut lexer = Lexer::new(code.as_bytes());
   for expected in expecteds {
     match lex_next(&mut lexer, LexMode::Standard) {
-      Err(e) => panic!("Failed to parse code with error {:?}: {}", e.typ(), code),
-      Ok(t) => assert_eq!(t.typ(), *expected),
+      Err(e) => panic!("Failed to parse code with error {:?}: {}", e.typ, code),
+      Ok(t) => assert_eq!(t.typ, *expected),
     };
   }
   match lex_next(&mut lexer, LexMode::Standard) {
     Err(e) => match expected_err {
-      Some(expected) => assert_eq!(e.typ(), expected),
-      None => panic!("Failed to parse code with error {:?}: {}", e.typ(), code),
+      Some(expected) => assert_eq!(e.typ, expected),
+      None => panic!("Failed to parse code with error {:?}: {}", e.typ, code),
     },
     Ok(t) => match expected_err {
       Some(_) => panic!("Code parsed successfully: {}", code),
-      None => assert_eq!(EOF, t.typ()),
+      None => assert_eq!(EOF, t.typ),
     },
   };
 }

@@ -29,20 +29,20 @@ impl<'a> Parser<'a> {
     parse_mode: VarDeclParseMode,
   ) -> SyntaxResult<'a, Node<'a>> {
     let t = self.next()?;
-    let mode = match t.typ() {
+    let mode = match t.typ {
       TokenType::KeywordLet => VarDeclMode::Let,
       TokenType::KeywordConst => VarDeclMode::Const,
       TokenType::KeywordVar => VarDeclMode::Var,
       _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("variable declaration"))),
     };
     let mut declarators = ctx.session.new_vec();
-    let mut loc = t.loc().clone();
+    let mut loc = t.loc;
     loop {
       let pattern = self.parse_pattern(ctx, match mode {
         VarDeclMode::Var => ParsePatternAction::AddToClosureScope,
         _ => ParsePatternAction::AddToBlockScope,
       })?;
-      loc.extend(pattern.loc());
+      loc.extend(pattern.loc);
       let mut asi = match parse_mode {
         VarDeclParseMode::Asi => Asi::can(),
         VarDeclParseMode::Leftmost => Asi::no(),
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
           TokenType::Comma,
           &mut asi,
         )?;
-        loc.extend(expr.loc());
+        loc.extend(expr.loc);
         Some(expr)
       } else {
         None
@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
             break;
           }
           let t = self.peek()?;
-          if t.preceded_by_line_terminator() && t.typ() != TokenType::Comma {
+          if t.preceded_by_line_terminator && t.typ != TokenType::Comma {
             break;
           };
           self.require(TokenType::Comma)?;
@@ -87,13 +87,13 @@ impl<'a> Parser<'a> {
   pub fn parse_decl_function(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
-    let start = self.require(TokenType::KeywordFunction)?.loc().clone();
+    let start = self.require(TokenType::KeywordFunction)?.loc;
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
     // WARNING: The name belongs in the containing scope, not the function's scope.
     // For example, `function a() { let a = 1; }` is legal.
     // The name can only be omitted in default exports.
     let name = match self
-      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
+      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
       .match_loc_take()
     {
       Some(name) => {
@@ -101,7 +101,7 @@ impl<'a> Parser<'a> {
           name: name.clone(),
         });
         if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-          closure.add_symbol(name.clone(), name_node)?;
+          closure.add_symbol(name.clone())?;
         };
         Some(name_node)
       }
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     }))?;
-    Ok(ctx.create_node(start + body.loc(), Syntax::FunctionDecl {
+    Ok(ctx.create_node(start + body.loc, Syntax::FunctionDecl {
       is_async,
       generator,
       name,
@@ -122,17 +122,17 @@ impl<'a> Parser<'a> {
   }
 
   pub fn parse_decl_class(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let start = self.require(TokenType::KeywordClass)?.loc().clone();
+    let start = self.require(TokenType::KeywordClass)?.loc;
     // Names can be omitted only in default exports.
     let name = match self
-      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
+      .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
       .match_loc_take()
     {
       Some(name) => {
         let name_node = ctx.create_node(name.clone(), Syntax::ClassOrFunctionName {
           name: name.clone(),
         });
-        ctx.scope.add_block_symbol(name.clone(), name_node)?;
+        ctx.scope.add_block_symbol(name.clone())?;
         Some(name_node)
       }
       None => None,

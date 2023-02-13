@@ -1,4 +1,5 @@
 use self::pattern::ParsePatternRules;
+use crate::ast::new_node;
 use crate::ast::Node;
 use crate::ast::Syntax;
 use crate::error::SyntaxError;
@@ -51,7 +52,7 @@ impl<'a> ParseCtx<'a> {
 
   /// This node will be created in the current scope.
   pub fn create_node(&self, loc: SourceRange<'a>, stx: Syntax<'a>) -> Node<'a> {
-    Node::new(self.session, self.scope, loc, stx)
+    new_node(self.session, self.scope, loc, stx)
   }
 }
 
@@ -215,11 +216,11 @@ impl<'a> Parser<'a> {
     typ: TokenType,
     mode: LexMode,
   ) -> SyntaxResult<'a, MaybeToken<'a>> {
-    let (matched, t) = self.forward(mode, |t| t.typ() == typ)?;
+    let (matched, t) = self.forward(mode, |t| t.typ == typ)?;
     Ok(MaybeToken {
       typ,
       matched,
-      range: t.loc_take(),
+      range: t.loc,
     })
   }
 
@@ -233,9 +234,9 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<'a, MaybeToken<'a>> {
     let (matched, t) = self.forward(LexMode::Standard, pred)?;
     Ok(MaybeToken {
-      typ: t.typ(),
+      typ: t.typ,
       matched,
-      range: t.loc_take(),
+      range: t.loc,
     })
   }
 
@@ -245,7 +246,7 @@ impl<'a> Parser<'a> {
     mode: LexMode,
   ) -> SyntaxResult<'a, Token<'a>> {
     let t = self.next_with_mode(mode)?;
-    if t.typ() != typ {
+    if t.typ != typ {
       Err(t.error(SyntaxErrorType::RequiredTokenNotFound(typ)))
     } else {
       Ok(t)
@@ -258,7 +259,7 @@ impl<'a> Parser<'a> {
     expected: &'static str,
   ) -> SyntaxResult<'a, Token<'a>> {
     let t = self.next_with_mode(LexMode::Standard)?;
-    if !pred(t.typ()) {
+    if !pred(t.typ) {
       Err(t.error(SyntaxErrorType::ExpectedSyntax(expected)))
     } else {
       Ok(t)

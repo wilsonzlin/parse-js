@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
     ctx: ParseCtx<'a>,
     action: ParsePatternAction,
   ) -> SyntaxResult<'a, Node<'a>> {
-    if !is_valid_pattern_identifier(self.peek()?.typ(), ctx.rules) {
+    if !is_valid_pattern_identifier(self.peek()?.typ, ctx.rules) {
       return Err(
         self
           .peek()?
@@ -64,17 +64,15 @@ impl<'a> Parser<'a> {
       );
     }
     let t = self.next()?;
-    let node = ctx.create_node(t.loc().clone(), Syntax::IdentifierPattern {
-      name: t.loc().clone(),
-    });
+    let node = ctx.create_node(t.loc, Syntax::IdentifierPattern { name: t.loc });
     match action {
       ParsePatternAction::None => {}
       ParsePatternAction::AddToBlockScope => {
-        ctx.scope.add_block_symbol(t.loc().clone(), node)?;
+        ctx.scope.add_block_symbol(t.loc)?;
       }
       ParsePatternAction::AddToClosureScope => {
         if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-          closure.add_symbol(t.loc().clone(), node)?;
+          closure.add_symbol(t.loc)?;
         };
       }
     };
@@ -88,7 +86,7 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<'a, Node<'a>> {
     let checkpoint = self.checkpoint();
     let t = self.next()?;
-    Ok(match t.typ() {
+    Ok(match t.typ {
       t if is_valid_pattern_identifier(t, ctx.rules) => {
         self.restore_checkpoint(checkpoint);
         self.parse_pattern_identifier(ctx, action)?
@@ -97,10 +95,10 @@ impl<'a> Parser<'a> {
         let mut properties = ctx.session.new_vec();
         let mut rest = None;
         loop {
-          if self.peek()?.typ() == TokenType::BraceClose {
+          if self.peek()?.typ == TokenType::BraceClose {
             break;
           };
-          let mut loc = self.peek()?.loc_take();
+          let mut loc = self.peek()?.loc;
           // Check inside loop to ensure that it must come first or after a comma.
           if self.consume_if(TokenType::DotDotDot)?.is_match() {
             rest = Some(self.parse_pattern_identifier(ctx, action)?);
@@ -123,26 +121,27 @@ impl<'a> Parser<'a> {
           } else {
             None
           };
-          if let Some(n) = default_value.or(target) {
-            loc.extend(n.loc());
+          if let Some(n) = default_value.as_ref().or(target.as_ref()) {
+            loc.extend(n.loc);
           };
           let direct_key_name = match &key {
             ClassOrObjectMemberKey::Direct(name) => Some(name.clone()),
             _ => None,
           };
+          let target_exists = target.is_some();
           let property = ctx.create_node(loc, Syntax::ObjectPatternProperty {
             key,
             target,
             default_value,
           });
           properties.push(property);
-          match (direct_key_name, target, action) {
-            (Some(name), None, ParsePatternAction::AddToBlockScope) => {
-              ctx.scope.add_block_symbol(name, property)?;
+          match (direct_key_name, target_exists, action) {
+            (Some(name), false, ParsePatternAction::AddToBlockScope) => {
+              ctx.scope.add_block_symbol(name)?;
             }
-            (Some(name), None, ParsePatternAction::AddToClosureScope) => {
+            (Some(name), false, ParsePatternAction::AddToClosureScope) => {
               if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-                closure.add_symbol(name, property)?;
+                closure.add_symbol(name)?;
               }
             }
             _ => {}
@@ -153,7 +152,7 @@ impl<'a> Parser<'a> {
           };
         }
         let close = self.require(TokenType::BraceClose)?;
-        ctx.create_node(t.loc() + close.loc(), Syntax::ObjectPattern {
+        ctx.create_node(t.loc + close.loc, Syntax::ObjectPattern {
           properties,
           rest,
         })
@@ -192,10 +191,7 @@ impl<'a> Parser<'a> {
           };
         }
         let close = self.require(TokenType::BracketClose)?;
-        ctx.create_node(t.loc() + close.loc(), Syntax::ArrayPattern {
-          elements,
-          rest,
-        })
+        ctx.create_node(t.loc + close.loc, Syntax::ArrayPattern { elements, rest })
       }
       _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("pattern"))),
     })

@@ -31,10 +31,10 @@ pub enum SyntaxErrorType {
 
 #[derive(Clone)]
 pub struct SyntaxError<'a> {
-  source: &'a [u8],
-  position: usize,
-  typ: SyntaxErrorType,
-  actual_token: Option<TokenType>,
+  pub source: &'a [u8],
+  pub position: usize,
+  pub typ: SyntaxErrorType,
+  pub actual_token: Option<TokenType>,
 }
 
 impl<'a> SyntaxError<'a> {
@@ -63,10 +63,6 @@ impl<'a> SyntaxError<'a> {
       position: loc.start,
       actual_token,
     }
-  }
-
-  pub fn typ(&self) -> SyntaxErrorType {
-    self.typ
   }
 }
 

@@ -8,15 +8,14 @@ use crate::session::SessionVec;
 use crate::source::SourceRange;
 use crate::symbol::Scope;
 use core::fmt::Debug;
-use std::cell::BorrowError;
-use std::cell::BorrowMutError;
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::cell::RefMut;
 use std::fmt;
 use std::fmt::Formatter;
 
-// Unlike other inner types (e.g. `ScopeData`), we expose this struct and all fields so that library users/consumers have maximum flexibility for visiting and mutating.
+// To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
+// - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
+// - Same syntax, location, and scope.
+// - Same syntax and location, but scope can be different.
+// - Same syntax, but location and scope can be different.
 pub struct NodeData<'a> {
   pub loc: SourceRange<'a>,
   pub stx: Syntax<'a>,
@@ -24,84 +23,46 @@ pub struct NodeData<'a> {
   pub scope: Scope<'a>,
 }
 
-// We use a newtype with RefCell instead of `&'a mut NodeData<'a>` because even though currently we don't reference a node from multiple places inside an AST, we do share Node references elsewhere (e.g. symbols, scopes). We still want mutability because otherwise we can't do mutations while traversing (important for many same-pass optimisations); even if we recreate nodes instead of updating a field, we still need to update the parent's reference (and without mutability, this would require rebuilding the entire tree). Typing `&'a mut NodeData<'a>` everywhere instead of `Node<'a>` is also too verbose and easy to mistype the lifetimes.
-#[derive(Clone, Copy)]
-pub struct Node<'a>(&'a RefCell<NodeData<'a>>);
-
-// To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
-// - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
-// - Same syntax, location, and scope.
-// - Same syntax and location, but scope can be different.
-// - Same syntax, but location and scope can be different.
-impl<'a> Node<'a> {
-  // Useful for debugging.
-  pub fn try_get<'b>(self) -> Result<Ref<'b, NodeData<'a>>, BorrowError> {
-    self.0.try_borrow()
+impl<'a> NodeData<'a> {
+  /// Move this node into a new node (also allocated on the arena and returned as a mutable reference). This node will be left in an invalid state and must not be used any further.
+  pub fn take(&mut self, session: &'a Session) -> &'a mut NodeData<'a> {
+    let dummy = NodeData {
+      loc: self.loc,
+      scope: self.scope,
+      stx: Syntax::_TakenNode {},
+    };
+    let taken = core::mem::replace(self, dummy);
+    session.get_allocator().alloc(taken)
   }
 
-  // Useful for debugging.
-  pub fn try_get_mut<'b>(self) -> Result<RefMut<'b, NodeData<'a>>, BorrowMutError> {
-    self.0.try_borrow_mut()
-  }
-
-  pub fn get<'b>(self) -> Ref<'b, NodeData<'a>> {
-    self.0.borrow()
-  }
-
-  pub fn get_mut<'b>(self) -> RefMut<'b, NodeData<'a>> {
-    self.0.borrow_mut()
-  }
-
-  pub fn new(
-    session: &'a Session,
-    scope: Scope<'a>,
-    loc: SourceRange<'a>,
-    stx: Syntax<'a>,
-  ) -> Node<'a> {
-    Node(
-      session
-        .mem
-        .alloc(RefCell::new(NodeData { loc, stx, scope })),
-    )
-  }
-
-  /// Create an error at this node's location. This borrows the Node and will panic if there's an existing mutable borrow.
-  pub fn error(self, typ: SyntaxErrorType) -> SyntaxError<'a> {
-    SyntaxError::from_loc(self.loc(), typ, None)
-  }
-
-  /// Get the location. This borrows the Node and will panic if there's an existing mutable borrow.
-  pub fn loc(self) -> SourceRange<'a> {
-    self.get().loc
-  }
-
-  /// Get a non-mutable reference to the syntax. This non-mutably borrows the entire Node for the entire lifetime of the returned reference.
-  pub fn stx<'b>(self) -> Ref<'b, Syntax<'a>> {
-    Ref::map(self.get(), |node| &node.stx)
-  }
-
-  /// Get a mutable reference to the syntax. This mutably borrows the entire Node for the entire lifetime of the returned reference.
-  pub fn stx_mut<'b>(self) -> RefMut<'b, Syntax<'a>> {
-    RefMut::map(self.get_mut(), |node| &mut node.stx)
-  }
-
-  /// Get the scope. This borrows the Node and will panic if there's an existing mutable borrow.
-  pub fn scope(self) -> Scope<'a> {
-    self.get().scope
+  /// Create an error at this node's location.
+  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
+    self.loc.error(typ, None)
   }
 }
 
 impl<'a> Debug for Node<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    self.get().stx.fmt(f)
+    self.stx.fmt(f)
   }
 }
 
 #[cfg(feature = "serialize")]
-impl<'a> serde::Serialize for Node<'a> {
+impl<'a> serde::Serialize for NodeData<'a> {
   fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    self.stx().serialize(serializer)
+    self.stx.serialize(serializer)
   }
+}
+
+pub type Node<'a> = &'a mut NodeData<'a>;
+
+pub fn new_node<'a>(
+  session: &'a Session,
+  scope: Scope<'a>,
+  loc: SourceRange<'a>,
+  stx: Syntax<'a>,
+) -> Node<'a> {
+  session.mem.alloc(NodeData { loc, stx, scope })
 }
 
 // These are for readability only, and do not increase type safety or define different structures.
@@ -126,12 +87,26 @@ pub enum ArrayElement<'a> {
   Empty,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ClassOrObjectMemberKey<'a> {
   // Identifier, keyword, string, or number.
   Direct(SourceRange<'a>),
   Computed(Expression<'a>),
+}
+
+impl<'a> ClassOrObjectMemberKey<'a> {
+  pub fn take(&mut self) -> ClassOrObjectMemberKey<'a> {
+    core::mem::replace(
+      self,
+      ClassOrObjectMemberKey::Direct(SourceRange {
+        edit: None,
+        end: 0,
+        source: b"",
+        start: 0,
+      }),
+    )
+  }
 }
 
 #[derive(Debug)]
@@ -533,4 +508,6 @@ pub enum Syntax<'a> {
     case: Option<Expression<'a>>,
     body: SessionVec<'a, Statement<'a>>,
   },
+  // This should never be seen. Always assert that it's unreachable.
+  _TakenNode {},
 }

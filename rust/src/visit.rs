@@ -6,7 +6,7 @@ use crate::ast::ForInOfStmtHeaderLhs;
 use crate::ast::ForStmtHeader;
 use crate::ast::ForThreeInit;
 use crate::ast::LiteralTemplatePart;
-use crate::ast::Node;
+use crate::ast::NodeData;
 use crate::ast::ObjectMemberType;
 use crate::ast::Syntax;
 
@@ -21,7 +21,8 @@ impl JourneyControls {
 }
 
 pub trait Visitor<'a> {
-  fn on_syntax(&mut self, node: Node<'a>, ctl: &mut JourneyControls) -> ();
+  // Don't use `Node<'a>` as that requires reference to live for entire `'a`.
+  fn on_syntax(&mut self, node: &mut NodeData<'a>, ctl: &mut JourneyControls) -> ();
 
   fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey<'a>) -> () {
     match key {
@@ -51,32 +52,32 @@ pub trait Visitor<'a> {
     }
   }
 
-  fn visit_top_level(&mut self, top_level_node: Node<'a>) -> () {
-    match &*top_level_node.stx() {
+  fn visit_top_level(&mut self, top_level_node: &mut NodeData<'a>) -> () {
+    match &mut top_level_node.stx {
       Syntax::TopLevel { body } => {
         for stmt in body {
-          self.visit(*stmt);
+          self.visit(stmt);
         }
       }
       _ => panic!("not top level"),
     };
   }
 
-  fn visit(&mut self, n: Node<'a>) -> () {
+  fn visit(&mut self, n: &mut NodeData<'a>) -> () {
     let mut ctl = JourneyControls { skip: false };
-    let mut cur_stx_type = core::mem::discriminant(&*n.stx());
+    let mut cur_stx_type = core::mem::discriminant(&n.stx);
     loop {
       self.on_syntax(n, &mut ctl);
       if ctl.skip {
         return;
       };
-      let new_stx_type = core::mem::discriminant(&*n.stx());
+      let new_stx_type = core::mem::discriminant(&n.stx);
       if cur_stx_type == new_stx_type {
         break;
       };
       cur_stx_type = new_stx_type;
     }
-    match &mut *n.stx_mut() {
+    match &mut n.stx {
       Syntax::FunctionExpr {
         name,
         signature,
@@ -422,7 +423,7 @@ pub trait Visitor<'a> {
       Syntax::VarDecl { declarators, .. } => {
         for decl in declarators {
           self.visit(decl.pattern);
-          if let Some(init) = decl.initializer {
+          if let Some(init) = &mut decl.initializer {
             self.visit(init);
           }
         }
@@ -456,6 +457,7 @@ pub trait Visitor<'a> {
         self.visit(*value);
       }
       Syntax::SuperExpr {} => {}
+      Syntax::_TakenNode {} => unreachable!(),
     };
   }
 }

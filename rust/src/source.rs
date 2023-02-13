@@ -1,3 +1,6 @@
+use crate::error::SyntaxError;
+use crate::error::SyntaxErrorType;
+use crate::token::TokenType;
 use core::cmp::max;
 use core::cmp::min;
 use core::cmp::Eq;
@@ -19,13 +22,6 @@ pub struct SourceRange<'a> {
   pub edit: Option<&'a [u8]>,
   pub start: usize,
   pub end: usize,
-}
-
-#[cfg(feature = "serialize")]
-impl<'a> serde::Serialize for SourceRange<'a> {
-  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(self.as_str())
-  }
 }
 
 impl<'a> SourceRange<'a> {
@@ -61,6 +57,10 @@ impl<'a> SourceRange<'a> {
       start: self.source.len(),
       end: self.source.len(),
     }
+  }
+
+  pub fn error(self, typ: SyntaxErrorType, actual_token: Option<TokenType>) -> SyntaxError<'a> {
+    SyntaxError::from_loc(self, typ, actual_token)
   }
 
   #[inline(always)]
@@ -177,5 +177,12 @@ impl<'a> PartialEq<&str> for SourceRange<'a> {
   #[inline(always)]
   fn eq(&self, other: &&str) -> bool {
     &self.as_str() == other
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<'a> serde::Serialize for SourceRange<'a> {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
   }
 }

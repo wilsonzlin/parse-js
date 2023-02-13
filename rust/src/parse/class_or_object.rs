@@ -31,7 +31,7 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<'a, ParseClassBodyResult<'a>> {
     self.require(TokenType::BraceOpen)?;
     let mut members = ctx.session.new_vec();
-    while self.peek()?.typ() != TokenType::BraceClose {
+    while self.peek()?.typ != TokenType::BraceClose {
       // `static` must always come first if present.
       let statik = self.consume_if(TokenType::KeywordStatic)?.is_match();
       let ParseClassOrObjectMemberResult { key, value } = self.parse_class_or_object_member(
@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
       self.consume_if(TokenType::Semicolon)?;
       members.push(ClassMember { key, statik, value });
     }
-    let end = self.require(TokenType::BraceClose)?.loc_take();
+    let end = self.require(TokenType::BraceClose)?.loc;
     Ok(ParseClassBodyResult { members, end })
   }
 
@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
       is_async = true;
     }
     if is_getter || is_setter || is_async {
-      let next_tok = self.peek()?.typ();
+      let next_tok = self.peek()?.typ;
       if next_tok == value_delimiter || next_tok == TokenType::ParenthesisOpen {
         // Not actually getter/setter, just using `get`/`set` as property name.
         self.restore_checkpoint(checkpoint);
@@ -95,7 +95,7 @@ impl<'a> Parser<'a> {
       } else if let Some(loc) = self.consume_if(TokenType::PrivateMember)?.match_loc_take() {
         loc
       } else if let Some(loc) = self
-        .consume_if_pred(|t| is_valid_pattern_identifier(t.typ(), ctx.rules))?
+        .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
         .match_loc_take()
       {
         loc
@@ -105,12 +105,12 @@ impl<'a> Parser<'a> {
             |t| KEYWORDS_MAPPING.contains_key(&t),
             "keyword or identifier",
           )?
-          .loc_take()
+          .loc
       };
       ClassOrObjectMemberKey::Direct(loc)
     };
     // Check is_generator/is_async first so that we don't have to check that they're false in every other branch.
-    let value = if is_generator || is_async || self.peek()?.typ() == TokenType::ParenthesisOpen {
+    let value = if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
       let signature = self.parse_signature_function(ctx)?;
       ClassOrObjectMemberValue::Method {
         is_async,
@@ -140,11 +140,11 @@ impl<'a> Parser<'a> {
     } else if match key {
       ClassOrObjectMemberKey::Direct(_) => match self.peek()? {
         // Given `class A {1}`, `"1" in new A`.
-        t if t.typ() == TokenType::BraceClose => true,
+        t if t.typ == TokenType::BraceClose => true,
         // Given `class A {1;}`, `"1" in new A`.
-        t if t.typ() == statement_delimiter => true,
+        t if t.typ == statement_delimiter => true,
         // Given `class A {1\n2}`, `"2" in new A`.
-        t if property_initialiser_asi.can_end_with_asi && t.preceded_by_line_terminator() => true,
+        t if property_initialiser_asi.can_end_with_asi && t.preceded_by_line_terminator => true,
         _ => false,
       },
       _ => false,

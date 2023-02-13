@@ -25,7 +25,7 @@ impl<'a> Parser<'a> {
       })?;
 
       // TODO Location
-      parameters.push(ctx.create_node(pattern.loc().clone(), Syntax::ParamDecl {
+      parameters.push(ctx.create_node(pattern.loc, Syntax::ParamDecl {
         rest,
         pattern,
         default_value,

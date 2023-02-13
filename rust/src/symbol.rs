@@ -1,4 +1,3 @@
-use crate::ast::Node;
 use crate::error::SyntaxResult;
 use crate::session::Session;
 use crate::session::SessionHashMap;
@@ -19,8 +18,6 @@ pub struct Symbol<'a> {
   scope: Scope<'a>,
   // Index in the containing ScopeData's symbol_declaration_order Vec.
   ordinal_in_scope: usize,
-  // This should refer to an ObjectPatternProperty if shorthand property, FunctionName if function name, or IdentifierPattern otherwise.
-  declarator_pattern: Node<'a>,
 }
 
 // Equality means referring to the same unique symbol. Useful for HashMap.
@@ -140,11 +137,7 @@ impl<'a> Scope<'a> {
     self.get_mut().flags |= 1 << (flag as u8);
   }
 
-  pub fn add_symbol(
-    self,
-    identifier: Identifier<'a>,
-    declarator_pattern: Node<'a>,
-  ) -> SyntaxResult<'a, ()> {
+  pub fn add_symbol(self, identifier: Identifier<'a>) -> SyntaxResult<'a, ()> {
     // We must get before we borrow as mut, even if we won't use it.
     let ordinal_in_scope = self.get().symbol_declaration_order.len();
     let mut as_mut = self.get_mut();
@@ -156,7 +149,6 @@ impl<'a> Scope<'a> {
       Entry::Vacant(e) => {
         e.insert(Symbol {
           scope: self,
-          declarator_pattern,
           ordinal_in_scope,
         });
         as_mut.symbol_declaration_order.push(identifier.clone());
@@ -165,13 +157,9 @@ impl<'a> Scope<'a> {
     Ok(())
   }
 
-  pub fn add_block_symbol(
-    self,
-    identifier: Identifier<'a>,
-    declarator_pattern: Node<'a>,
-  ) -> SyntaxResult<'a, ()> {
+  pub fn add_block_symbol(self, identifier: Identifier<'a>) -> SyntaxResult<'a, ()> {
     if self.get().typ != ScopeType::Global {
-      self.add_symbol(identifier, declarator_pattern)?;
+      self.add_symbol(identifier)?;
     };
     Ok(())
   }

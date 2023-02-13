@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
     ctx: ParseCtx<'a>,
   ) -> SyntaxResult<'a, SessionString<'a>> {
     let t = self.require(TokenType::LiteralString)?;
-    let s = normalise_literal_string(ctx, t.loc())?;
+    let s = normalise_literal_string(ctx, t.loc)?;
     Ok(s)
   }
 
@@ -72,10 +72,10 @@ impl<'a> Parser<'a> {
       ClassOrObjectMemberKey::Computed(expr)
     } else {
       let name = self.next()?;
-      if !is_valid_pattern_identifier(name.typ(), ctx.rules) {
+      if !is_valid_pattern_identifier(name.typ, ctx.rules) {
         return Err(name.error(SyntaxErrorType::ExpectedNotFound));
       };
-      ClassOrObjectMemberKey::Direct(name.loc().clone())
+      ClassOrObjectMemberKey::Direct(name.loc)
     })
   }
 }
