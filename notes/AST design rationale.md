@@ -1,6 +1,6 @@
-AST design rationale:
+# AST design rationale
 
-1. We want a type for our AST nodes:
+## We want a type for our AST nodes
 
 ```rust
 struct Node {
@@ -12,7 +12,7 @@ enum Stx {
 }
 ```
 
-2. We want to avoid `malloc` and use a bump arena allocator:
+## We want to avoid `malloc` and use a bump arena allocator
 
 ```rust
 struct Node<'bump> {
@@ -24,7 +24,7 @@ enum Stx {
 }
 ```
 
-3. We want to be able to mutate the tree:
+## We want to be able to mutate the tree
 
 ```rust
 struct Node<'bump> {
@@ -32,11 +32,11 @@ struct Node<'bump> {
   stx: Stx<'bump>
 }
 enum Stx {
-  AddExpr { left: &'mut bump Node<'bump>, right: &'mut bump Node<'bump>, fast: bool },
+  AddExpr { left: &'bump mut Node<'bump>, right: &'bump mut Node<'bump>, fast: bool },
 }
 ```
 
-4. We want to be able to move subtrees around while mutating, as many transforms will require this.
+## We want to be able to move subtrees around while mutating, as many transforms will require this
 
 In Rust, there are three main options:
 - Make an entire Node cloneable. This is impossible now as we use mut references which aren't cloneable. Even if they were, cloning an entire subtree just to move it (we don't actually want a copy) is very wasteful and slow.
@@ -68,11 +68,11 @@ add_node.stx.left = right;
 add_node.stx.right = left;
 ```
 
-5. Can we clone a subtree?
+## Can we clone a subtree?
 
 This is not possible via the Clone trait, since Node references in the tree are mutable, and even then it would still require accessing the arena allocator to create the clones. This isn't available by default, as it's very rare to actually want to deep clone a subtree; it's expensive but doesn't transform anything. Usually transforms are about moves, and some manual partial cloning usually arises from more complex traversal logic while transforming. To clone anyway, manually do so using the visitor pattern. Note that shallow clones are also not possible as Node references are mutable and aren't copyable.
 
-6. Summary.
+## Summary
 
 - RefCell has a significant performance penalty, but we still want to be able to mutate the tree, so we keep mut references for Node values (which must be unique as per Rust rules).
 - `malloc` has a significant performance penalty, so we use an arena allocator.
