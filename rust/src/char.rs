@@ -55,7 +55,7 @@ impl CharFilter {
   }
 }
 
-// WARNING: Does not consider Unicode characters allowed by spec.
+// WARNING: These do not consider Unicode characters allowed by spec.
 pub const ID_START_CHARSTR: &'static [u8] =
   b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 pub const ID_CONTINUE_CHARSTR: &'static [u8] =

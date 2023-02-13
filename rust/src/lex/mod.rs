@@ -88,25 +88,19 @@ impl<'a> Lexer<'a> {
   }
 
   pub fn source_range(&self) -> SourceRange<'a> {
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: 0,
-      end: self.end(),
-    }
+    SourceRange::new(self.source, 0, self.end())
   }
 
   fn eof_range(&self) -> SourceRange<'a> {
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: self.end(),
-      end: self.end(),
-    }
+    SourceRange::new(self.source, self.end(), self.end())
   }
 
   fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
-    SyntaxError::new(typ, self.source, self.next, None)
+    SyntaxError::new(
+      typ,
+      SourceRange::new(self.source, self.next, self.end()),
+      None,
+    )
   }
 
   fn at_end(&self) -> bool {
@@ -128,12 +122,7 @@ impl<'a> Lexer<'a> {
   }
 
   pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange<'a> {
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: checkpoint.next,
-      end: self.next,
-    }
+    SourceRange::new(self.source, checkpoint.next, self.next)
   }
 
   pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) -> () {
@@ -195,12 +184,7 @@ impl<'a> Lexer<'a> {
   }
 
   fn range(&self, m: Match) -> SourceRange<'a> {
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: self.next,
-      end: self.next + m.len,
-    }
+    SourceRange::new(self.source, self.next, self.next + m.len)
   }
 
   fn consume(&mut self, m: Match) -> Match {
@@ -224,7 +208,7 @@ impl<'a> Index<SourceRange<'a>> for Lexer<'a> {
   type Output = [u8];
 
   fn index(&self, index: SourceRange<'a>) -> &Self::Output {
-    &self.source[index.start..index.end]
+    &self.source[index.start()..index.end()]
   }
 }
 

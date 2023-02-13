@@ -210,7 +210,23 @@ impl<'a> Scope<'a> {
     Ref::map(self.get(), |scope| &scope.symbol_declaration_order)
   }
 
+  // Same return value rationale as `symbol_names`.
   pub fn children<'b>(self) -> Ref<'b, SessionVec<'a, Scope<'a>>> {
     Ref::map(self.get(), |scope| &scope.children)
+  }
+}
+
+// Equality means referring to the same unique scope. Useful for HashMap.
+impl<'a> PartialEq for Scope<'a> {
+  fn eq(&self, other: &Self) -> bool {
+    core::ptr::eq(self.0, other.0)
+  }
+}
+
+impl<'a> Eq for Scope<'a> {}
+
+impl<'a> Hash for Scope<'a> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    core::ptr::hash(self.0, state);
   }
 }

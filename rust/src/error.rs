@@ -1,11 +1,8 @@
 use crate::source::SourceRange;
 use crate::token::TokenType;
-use core::cmp::max;
-use core::cmp::min;
 use core::fmt;
 use core::fmt::Debug;
 use core::fmt::Formatter;
-use core::str::from_utf8_unchecked;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -31,8 +28,7 @@ pub enum SyntaxErrorType {
 
 #[derive(Clone)]
 pub struct SyntaxError<'a> {
-  pub source: &'a [u8],
-  pub position: usize,
+  pub source: SourceRange<'a>,
   pub typ: SyntaxErrorType,
   pub actual_token: Option<TokenType>,
 }
@@ -40,14 +36,12 @@ pub struct SyntaxError<'a> {
 impl<'a> SyntaxError<'a> {
   pub fn new(
     typ: SyntaxErrorType,
-    source: &'a [u8],
-    position: usize,
+    source: SourceRange<'a>,
     actual_token: Option<TokenType>,
   ) -> SyntaxError<'a> {
     SyntaxError {
       typ,
       source,
-      position,
       actual_token,
     }
   }
@@ -58,9 +52,8 @@ impl<'a> SyntaxError<'a> {
     actual_token: Option<TokenType>,
   ) -> SyntaxError<'a> {
     SyntaxError {
-      source: loc.source,
+      source: loc,
       typ,
-      position: loc.start,
       actual_token,
     }
   }
@@ -68,22 +61,13 @@ impl<'a> SyntaxError<'a> {
 
 impl<'a> Debug for SyntaxError<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(f, "{} around ```{}```", self, unsafe {
-      from_utf8_unchecked(
-        &self.source[max(0, self.position as isize - 40) as usize
-          ..min(self.source.len() as isize, self.position as isize + 40) as usize],
-      )
-    })
+    write!(f, "{} around ```{}```", self, self.source.as_str())
   }
 }
 
 impl<'a> Display for SyntaxError<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "{:?} [position={} token={:?}]",
-      self.typ, self.position, self.actual_token,
-    )
+    write!(f, "{:?} [token={:?}]", self.typ, self.actual_token,)
   }
 }
 

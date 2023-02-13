@@ -11,51 +11,50 @@ use core::hash::Hash;
 use core::hash::Hasher;
 use core::ops::Add;
 use core::ops::AddAssign;
+use std::marker::PhantomData;
 
-/// A string backed by a source. Treated as a string, so contents rather than position is considered the value. It's illegal to operate on two SourceRange values from different sources, like Add or Eq. Adding two SourceRange (Add, AddAssign, add_option, etc.) values is illegal if at least one has an edit, due to ambiguity. Performing these illegal actions may result in a panic.
-// It's debatable whether to make this Copy. It's a bit large, but it's also very frequently used. Having to use `&` (esp. with operators) and wrestling with reference lifetimes (esp. with methods) everywhere without necessity probably makes using this by Copy more worthwhile on the whole. This parser will probably be used for visiting and mutating, so `.clone()` littered everywhere by library users also hinders readability. The compiler most likely can "see through" copying that is simply using or changing one field and perform relevant optimisations. SourceRange is essentially like a pointer/reference/slice anyway, and those are always treated like primitive Copy values.
+/// A string backed by a source. Treated as a string, so contents rather than position is considered the value (and this is used for equality). However, it's illegal to add two SourceRange values from different sources.
+// We want to make this Copy, as it's also very frequently used. Having to use `&` (esp. with operators) and wrestling with reference lifetimes (esp. with methods) everywhere without necessity probably makes using this by Copy more worthwhile on the whole. This parser will probably be used for visiting and mutating, so `.clone()` littered everywhere by library users also hinders readability. SourceRange is essentially like a pointer/reference/slice anyway, and those are always treated like primitive Copy values.
+// However, because we use it a lot, if we want Copy, we need to make it as small as possible. Therefore, we degrade the reference to a const pointer so we can use smaller u32 offsets. We still want to keep the original pointer (and not simply offset it by `start`) so we can assert safety when adding two SourceRange values (i.e. sources are identical).
+// We used to store the original source as a reference, an "edit" override `&'a [u8]` (to allow edits while still retaining original source and position for debuggability), and offsets as u64; however, this ended up being too big, and copying it around became very costly. We now drop the "edit" override, as it should be inferrable from the tree where the original position was, and Node values should retain their original `loc` even if their `stx` has updated SourceRange (e.g. edited identifiers). Using an "edit" also made it unwiedly to use, even for basic equality and hashing, as we needed an original SourceRange and then add an edit.
 #[derive(Copy, Clone)]
 pub struct SourceRange<'a> {
-  pub source: &'a [u8],
-  // This replaces the previous Source::Anonymous functionality. Instead of having SourceRange values point to different Source backings, including anonymous ones that own their own Vec<u8> for edits to the input code, and then replacing the original SourceRange, we now use an optional overlay over the original SourceRange. This allows preserving the original location and context that the edit is supposed to replace, useful for debugging and error message/context formatting. To insert, use `start == end`; to delete, use `edit == Some(b"")`.
-  // The edit value should be immutable inside the arena. The idea here is to create a SessionVec, build the edit, and then copy the bytes into the Session as a slice (to make ownership escape Vec), so we can use a reference instead of an owned Vec. This allows for cheap copying and sharing and no possibility of mutation.
-  pub edit: Option<&'a [u8]>,
-  pub start: usize,
-  pub end: usize,
+  phantom: PhantomData<&'a [u8]>,
+  source: *const u8,
+  start: u32,
+  end: u32,
 }
 
 impl<'a> SourceRange<'a> {
-  #[inline(always)]
-  fn debug_assert_same_source(&self, other: SourceRange<'a>) {
-    debug_assert!(core::ptr::eq(self.source, other.source));
-  }
-
-  #[inline(always)]
-  fn debug_assert_can_merge(&self, other: Option<SourceRange<'a>>) {
-    debug_assert!(self.edit.is_none());
-    if let Some(other) = other {
-      debug_assert!(other.edit.is_none());
-      self.debug_assert_same_source(other);
-    };
-  }
-
-  #[inline(always)]
-  pub fn get_start_of_source(&self) -> SourceRange<'a> {
+  pub fn new(source: &'a [u8], start: usize, end: usize) -> SourceRange<'a> {
+    debug_assert!(start <= end);
+    debug_assert!(end <= source.len());
     SourceRange {
-      source: self.source,
-      edit: None,
-      start: 0,
-      end: 0,
+      phantom: PhantomData,
+      source: source.as_ptr(),
+      start: start.try_into().unwrap(),
+      end: end.try_into().unwrap(),
     }
   }
 
-  #[inline(always)]
-  pub fn get_end_of_source(&self) -> SourceRange<'a> {
+  pub fn from_slice(source: &'a [u8]) -> SourceRange<'a> {
+    SourceRange::new(source, 0, source.len())
+  }
+
+  pub fn start(&self) -> usize {
+    self.start.try_into().unwrap()
+  }
+
+  pub fn end(&self) -> usize {
+    self.end.try_into().unwrap()
+  }
+
+  pub fn at_end(&self) -> SourceRange<'a> {
     SourceRange {
+      phantom: PhantomData,
       source: self.source,
-      edit: None,
-      start: self.source.len(),
-      end: self.source.len(),
+      start: self.end,
+      end: self.end,
     }
   }
 
@@ -64,22 +63,12 @@ impl<'a> SourceRange<'a> {
   }
 
   #[inline(always)]
-  pub fn add_option(&self, rhs: Option<SourceRange<'a>>) -> SourceRange<'a> {
-    self.debug_assert_can_merge(rhs);
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: min(self.start, rhs.map(|l| l.start).unwrap_or(0)),
-      end: max(self.end, rhs.map(|l| l.end).unwrap_or(0)),
-    }
-  }
-
-  #[inline(always)]
-  pub fn with_edit(&self, edit: &'a [u8]) -> SourceRange<'a> {
-    SourceRange {
-      edit: Some(edit),
-      ..*self
-    }
+  pub fn add_option(self, rhs: Option<SourceRange<'a>>) -> SourceRange<'a> {
+    let mut new = self;
+    if let Some(rhs) = rhs {
+      new.extend(rhs);
+    };
+    new
   }
 
   #[inline(always)]
@@ -88,15 +77,11 @@ impl<'a> SourceRange<'a> {
   }
 
   #[inline(always)]
-  pub fn is_eof(&self) -> bool {
-    self.start >= self.source.len()
-  }
-
-  #[inline(always)]
   pub fn as_slice(&self) -> &[u8] {
-    self
-      .edit
-      .unwrap_or_else(|| &self.source[self.start..self.end])
+    unsafe {
+      // TODO SAFETY: Does this work if EOF?
+      core::slice::from_raw_parts(self.source.add(self.start()), self.len())
+    }
   }
 
   #[inline(always)]
@@ -106,12 +91,12 @@ impl<'a> SourceRange<'a> {
 
   #[inline(always)]
   pub fn len(&self) -> usize {
-    self.end - self.start
+    (self.end - self.start).try_into().unwrap()
   }
 
   #[inline(always)]
   pub fn extend(&mut self, other: SourceRange) {
-    self.debug_assert_can_merge(Some(other));
+    assert_eq!(self.source, other.source);
     self.start = min(self.start, other.start);
     self.end = max(self.end, other.end);
   }
@@ -122,13 +107,9 @@ impl<'a> Add for SourceRange<'a> {
 
   #[inline(always)]
   fn add(self, rhs: Self) -> Self::Output {
-    self.debug_assert_can_merge(Some(rhs));
-    SourceRange {
-      source: self.source,
-      edit: None,
-      start: min(self.start, rhs.start),
-      end: max(self.end, rhs.end),
-    }
+    let mut new = self;
+    new.extend(rhs);
+    new
   }
 }
 
@@ -142,11 +123,7 @@ impl<'a> AddAssign for SourceRange<'a> {
 impl<'a> Debug for SourceRange<'a> {
   #[inline(always)]
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    if self.is_eof() {
-      Ok(())
-    } else {
-      write!(f, "`{}`[{}:{}]", self.as_str(), self.start, self.end)
-    }
+    write!(f, "`{}`[{}:{}]", self.as_str(), self.start, self.end)
   }
 }
 
@@ -155,21 +132,21 @@ impl<'a> Eq for SourceRange<'a> {}
 impl<'a> Hash for SourceRange<'a> {
   #[inline(always)]
   fn hash<H: Hasher>(&self, state: &mut H) {
-    if !self.is_eof() {
-      self.as_slice().hash(state);
-    };
+    self.as_slice().hash(state);
   }
 }
 
 impl<'a> PartialEq for SourceRange<'a> {
   #[inline(always)]
   fn eq(&self, other: &Self) -> bool {
-    self.debug_assert_same_source(*other);
-    if self.is_eof() {
-      other.is_eof()
-    } else {
-      self.as_slice() == other.as_slice()
-    }
+    self.as_slice() == other.as_slice()
+  }
+}
+
+impl<'a> PartialEq<&[u8]> for SourceRange<'a> {
+  #[inline(always)]
+  fn eq(&self, other: &&[u8]) -> bool {
+    &self.as_slice() == other
   }
 }
 

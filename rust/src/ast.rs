@@ -99,12 +99,7 @@ impl<'a> ClassOrObjectMemberKey<'a> {
   pub fn take(&mut self) -> ClassOrObjectMemberKey<'a> {
     core::mem::replace(
       self,
-      ClassOrObjectMemberKey::Direct(SourceRange {
-        edit: None,
-        end: 0,
-        source: b"",
-        start: 0,
-      }),
+      ClassOrObjectMemberKey::Direct(SourceRange::from_slice(b"")),
     )
   }
 }
