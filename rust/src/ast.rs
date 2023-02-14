@@ -225,7 +225,7 @@ pub enum ForStmtHeader<'a> {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum LiteralTemplatePart<'a> {
   Substitution(Expression<'a>),
-  String(SourceRange<'a>),
+  String(&'a [u8]),
 }
 
 #[derive(Debug)]
@@ -417,7 +417,7 @@ pub enum Syntax<'a> {
   },
   LiteralRegexExpr {},
   LiteralStringExpr {
-    value: SessionString<'a>,
+    value: &'a [u8],
   },
   LiteralTemplateExpr {
     parts: SessionVec<'a, LiteralTemplatePart<'a>>,
@@ -470,7 +470,7 @@ pub enum Syntax<'a> {
   },
   ExportListStmt {
     names: ExportNames<'a>,
-    from: Option<SessionString<'a>>,
+    from: Option<&'a [u8]>,
   },
   ExpressionStmt {
     expression: Expression<'a>,
@@ -484,7 +484,7 @@ pub enum Syntax<'a> {
     // IdentifierPattern.
     default: Option<Pattern<'a>>,
     names: Option<ExportNames<'a>>,
-    module: SessionString<'a>,
+    module: &'a [u8],
   },
   ForStmt {
     header: ForStmtHeader<'a>,

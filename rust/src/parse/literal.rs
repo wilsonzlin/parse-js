@@ -10,6 +10,8 @@ use crate::session::SessionString;
 use crate::source::SourceRange;
 use crate::token::TokenType;
 use core::str::FromStr;
+use memchr::memchr;
+use std::str::from_utf8_unchecked;
 
 fn parse_radix(raw: &str, radix: u32) -> Result<f64, ()> {
   u64::from_str_radix(raw, radix)
@@ -42,21 +44,112 @@ pub fn normalise_literal_bigint<'a>(
   Ok(norm)
 }
 
+pub fn normalise_literal_string_or_template_inner<'a>(
+  ctx: ParseCtx<'a>,
+  mut raw: &[u8],
+) -> Option<&'a [u8]> {
+  let mut norm = ctx.session.new_vec();
+  while !raw.is_empty() {
+    let Some(escape_pos) = memchr(b'\\', raw) else {
+      norm.extend_from_slice(raw);
+      break;
+    };
+    norm.extend_from_slice(&raw[..escape_pos]);
+    raw = &raw[escape_pos + 1..];
+    // https://mathiasbynens.be/notes/javascript-escapes
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String#escape_sequences
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#tagged_templates_and_escape_sequences
+    let mut tmp = [0u8; 4];
+    let (skip, add): (usize, &[u8]) = match raw[0] {
+      b'\n' => (1, b""),
+      b'b' => (1, b"\x08"),
+      b'f' => (1, b"\x0c"),
+      b'n' => (1, b"\n"),
+      b'r' => (1, b"\r"),
+      b't' => (1, b"\t"),
+      b'v' => (1, b"\x0b"),
+      b'0'..=b'7' => {
+        // Octal escape.
+        let mut len = 1;
+        if raw.get(len).filter(|&&c| c >= b'0' && c <= b'7').is_some() {
+          len += 1;
+          if raw.get(len).filter(|&&c| c >= b'0' && c <= b'7').is_some() {
+            len += 1;
+          };
+        };
+        char::from_u32(
+          u32::from_str_radix(unsafe { from_utf8_unchecked(&raw[..len]) }, 8).unwrap(),
+        )
+        .unwrap()
+        .encode_utf8(&mut tmp);
+        (len, tmp.as_slice())
+      }
+      b'x' => {
+        // Hexadecimal escape.
+        if raw.len() < 3 || !raw[1].is_ascii_hexdigit() || !raw[2].is_ascii_hexdigit() {
+          return None;
+        };
+        char::from_u32(
+          u32::from_str_radix(unsafe { from_utf8_unchecked(&raw[1..3]) }, 16).unwrap(),
+        )
+        .unwrap()
+        .encode_utf8(&mut tmp);
+        (3, tmp.as_slice())
+      }
+      b'u' => match raw.get(1) {
+        Some(b'{') => {
+          // Unicode code point escape.
+          let Some(end_pos) = memchr(b'}', raw) else {
+            return None;
+          };
+          if end_pos < 3 || end_pos > 8 {
+            return None;
+          };
+          let cp =
+            u32::from_str_radix(unsafe { from_utf8_unchecked(&raw[2..end_pos]) }, 16).ok()?;
+          let c = char::from_u32(cp)?;
+          c.encode_utf8(&mut tmp);
+          (end_pos + 1, tmp.as_slice())
+        }
+        Some(_) => {
+          // Unicode escape.
+          if raw.len() < 5 {
+            return None;
+          };
+          let cp = u32::from_str_radix(unsafe { from_utf8_unchecked(&raw[1..5]) }, 16).ok()?;
+          let c = char::from_u32(cp)?;
+          c.encode_utf8(&mut tmp);
+          (5, tmp.as_slice())
+        }
+        None => {
+          return None;
+        }
+      },
+      c => (1, {
+        tmp[0] = c;
+        &tmp[..1]
+      }),
+    };
+    norm.extend_from_slice(add);
+    raw = &raw[skip..];
+  }
+  // Copy onto arena so we get immutable references that are cheap to copy.
+  Some(ctx.session.get_allocator().alloc_slice_copy(&norm))
+}
+
 pub fn normalise_literal_string<'a>(
   ctx: ParseCtx<'a>,
   raw: SourceRange<'a>,
-) -> SyntaxResult<'a, SessionString<'a>> {
-  let mut norm = ctx.session.new_string();
-  // TODO Handle escapes.
-  norm.push_str(&raw.as_str()[1..raw.len() - 1]);
-  Ok(norm)
+) -> SyntaxResult<'a, &'a [u8]> {
+  normalise_literal_string_or_template_inner(ctx, &raw.as_slice()[1..raw.len() - 1])
+    .ok_or_else(|| raw.error(SyntaxErrorType::InvalidCharacterEscape, None))
 }
 
 impl<'a> Parser<'a> {
   pub fn parse_and_normalise_literal_string(
     &mut self,
     ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, SessionString<'a>> {
+  ) -> SyntaxResult<'a, &'a [u8]> {
     let t = self.require(TokenType::LiteralString)?;
     let s = normalise_literal_string(ctx, t.loc)?;
     Ok(s)

@@ -14,6 +14,7 @@ pub enum SyntaxErrorType {
   ForLoopHeaderHasMultipleDeclarators,
   ForLoopHeaderHasNoLhs,
   InvalidAssigmentTarget,
+  InvalidCharacterEscape,
   LineTerminatorAfterArrowFunctionParameters,
   LineTerminatorAfterThrow,
   LineTerminatorAfterYield,
