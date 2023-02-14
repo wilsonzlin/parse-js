@@ -74,6 +74,7 @@ pub enum TokenType {
   KeywordDelete,
   KeywordDo,
   KeywordElse,
+  KeywordEnum,
   KeywordExport,
   KeywordExtends,
   KeywordFinally,

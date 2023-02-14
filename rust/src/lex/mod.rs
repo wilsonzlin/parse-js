@@ -311,6 +311,7 @@ lazy_static! {
         map.insert(TokenType::KeywordDelete, b"delete");
         map.insert(TokenType::KeywordDo, b"do");
         map.insert(TokenType::KeywordElse, b"else");
+        map.insert(TokenType::KeywordEnum, b"enum");
         map.insert(TokenType::KeywordExport, b"export");
         map.insert(TokenType::KeywordExtends, b"extends");
         map.insert(TokenType::KeywordFinally, b"finally");
