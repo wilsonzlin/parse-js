@@ -50,6 +50,15 @@ impl<'a> SourceRange<'a> {
     self.end.try_into().unwrap()
   }
 
+  pub fn at_start(&self) -> SourceRange<'a> {
+    SourceRange {
+      phantom: PhantomData,
+      source: self.source,
+      start: self.start,
+      end: self.start,
+    }
+  }
+
   pub fn at_end(&self) -> SourceRange<'a> {
     SourceRange {
       phantom: PhantomData,

@@ -342,7 +342,6 @@ lazy_static! {
         map.insert(TokenType::LiteralFalse, b"false");
         map.insert(TokenType::LiteralNull, b"null");
         map.insert(TokenType::LiteralTrue, b"true");
-        map.insert(TokenType::LiteralUndefined, b"undefined");
         map
     };
 

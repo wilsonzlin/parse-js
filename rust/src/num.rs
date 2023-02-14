@@ -1,10 +1,19 @@
 use core::hash::Hash;
 use core::hash::Hasher;
 use core::mem;
+use std::fmt;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 // This provides Eq for f64.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct JsNumber(pub f64);
+
+impl Display for JsNumber {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
 
 impl PartialEq for JsNumber {
   fn eq(&self, other: &Self) -> bool {

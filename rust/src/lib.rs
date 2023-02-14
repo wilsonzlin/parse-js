@@ -6,6 +6,7 @@ use parse::Parser;
 use session::Session;
 
 pub mod ast;
+pub mod builtin;
 pub mod char;
 pub mod error;
 pub mod lex;

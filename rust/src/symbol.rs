@@ -66,6 +66,13 @@ impl ScopeType {
       t => t.is_closure(),
     }
   }
+
+  pub fn is_closure_or_block(&self) -> bool {
+    match self {
+      ScopeType::Block => true,
+      t => t.is_closure(),
+    }
+  }
 }
 
 #[repr(u8)]
@@ -138,6 +145,27 @@ impl<'a> Scope<'a> {
     } else {
       None
     }
+  }
+
+  pub fn find_furthest_self_or_ancestor<F: Fn(ScopeType) -> bool>(
+    self,
+    pred: F,
+  ) -> Option<Scope<'a>> {
+    let mut latest_match = None;
+    let mut cur = self;
+    loop {
+      let scope = cur.get();
+      if pred(scope.typ) {
+        latest_match = Some(cur);
+      } else {
+        break;
+      }
+      let Some(parent) = scope.parent else {
+        break;
+      };
+      cur = parent;
+    }
+    latest_match
   }
 
   pub fn has_flag(&self, flag: ScopeFlag) -> bool {

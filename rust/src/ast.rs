@@ -345,6 +345,13 @@ pub enum Syntax<'a> {
     alternate: Expression<'a>,
   },
   ComputedMemberExpr {
+    /// Set to `true` if this MemberExpr is the LHS of an assignment expression.
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
+    assignment_target: bool,
     optional_chaining: bool,
     object: Expression<'a>,
     member: Expression<'a>,
@@ -415,11 +422,17 @@ pub enum Syntax<'a> {
   LiteralTemplateExpr {
     parts: SessionVec<'a, LiteralTemplatePart<'a>>,
   },
-  LiteralUndefined {},
   // Dedicated special type to easily distinguish when analysing and minifying. Also done to avoid using IdentifierExpr as right, which is incorrect (not a variable usage).
   MemberExpr {
     parenthesised: bool,
     optional_chaining: bool,
+    /// Set to `true` if this MemberExpr is the LHS of an assignment expression.
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
+    assignment_target: bool,
     left: Expression<'a>,
     right: SourceRange<'a>,
   },

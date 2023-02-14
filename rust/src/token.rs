@@ -115,7 +115,6 @@ pub enum TokenType {
   LiteralTemplatePartString,
   LiteralTemplatePartStringEnd,
   LiteralTrue,
-  LiteralUndefined,
   ParenthesisClose,
   ParenthesisOpen,
   Percent,
@@ -149,7 +148,6 @@ lazy_static! {
     set.insert(TokenType::KeywordOf);
     set.insert(TokenType::KeywordSet);
     set.insert(TokenType::KeywordStatic);
-    set.insert(TokenType::LiteralUndefined);
     set
   };
 }

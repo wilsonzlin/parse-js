@@ -8,6 +8,7 @@ use hashbrown::BumpWrapper;
 #[cfg(feature = "serialize")]
 use serde::ser::SerializeSeq;
 use std::fmt;
+use std::fmt::Display;
 use std::fmt::Formatter;
 
 // Some of these are newtypes so that we can implement Serialize.
@@ -77,11 +78,12 @@ impl<'a, T: serde::Serialize> serde::Serialize for SessionVec<'a, T> {
   }
 }
 
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct SessionString<'a>(bumpalo::collections::String<'a>);
 
 impl<'a> Debug for SessionString<'a> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    self.0.fmt(f)
+    write!(f, "{:?}", self.0)
   }
 }
 
@@ -96,6 +98,12 @@ impl<'a> Deref for SessionString<'a> {
 impl<'a> DerefMut for SessionString<'a> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
+  }
+}
+
+impl<'a> Display for SessionString<'a> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.0)
   }
 }
 

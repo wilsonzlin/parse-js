@@ -60,7 +60,7 @@ fn convert_assignment_lhs_to_target<'a>(
   lhs: Node<'a>,
   operator_name: OperatorName,
 ) -> SyntaxResult<'a, Node<'a>> {
-  match &lhs.stx {
+  match &mut lhs.stx {
     e @ (Syntax::LiteralArrayExpr { .. }
     | Syntax::LiteralObjectExpr { .. }
     | Syntax::IdentifierExpr { .. }) => {
@@ -77,11 +77,17 @@ fn convert_assignment_lhs_to_target<'a>(
       Ok(root)
     }
     Syntax::ComputedMemberExpr {
-      optional_chaining, ..
+      assignment_target,
+      optional_chaining,
+      ..
     }
     | Syntax::MemberExpr {
-      optional_chaining, ..
-    } if !optional_chaining => {
+      assignment_target,
+      optional_chaining,
+      ..
+    } if !*optional_chaining => {
+      debug_assert!(!*assignment_target);
+      *assignment_target = true;
       // As long as the expression ends with ComputedMemberExpr or MemberExpr, it's valid e.g. `(a, b?.a ?? 3, c = d || {})[1] = x`. Note that this is after parsing, so `a + b.c = 3` is invalid because that parses to `(a + b.c) = 3`, with a LHS of BinaryExpr with Addition operator.
       // TODO Technically there cannot be any optional chaining in the entire access/call path, not just in the last part (e.g. `a.b?.c.d = e` is invalid).
       Ok(lhs)
@@ -877,7 +883,6 @@ impl<'a> Parser<'a> {
             parts.push(LiteralTemplatePart::String(t.loc));
             ctx.create_node(t.loc, Syntax::LiteralTemplateExpr { parts })
           }
-          TokenType::LiteralUndefined => ctx.create_node(t.loc, Syntax::LiteralUndefined {}),
           TokenType::ParenthesisOpen => {
             self.restore_checkpoint(cp);
             self.parse_expr_arrow_function_or_grouping(ctx, terminator_a, terminator_b, asi)?
@@ -975,6 +980,7 @@ impl<'a> Parser<'a> {
               let member = self.parse_expr(ctx, TokenType::BracketClose)?;
               let end = self.require(TokenType::BracketClose)?;
               ctx.create_node(left.loc + end.loc, Syntax::ComputedMemberExpr {
+                assignment_target: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingComputedMemberAccess => true,
                   _ => false,
@@ -1015,6 +1021,7 @@ impl<'a> Parser<'a> {
               };
               let right = right_tok.loc;
               ctx.create_node(left.loc + right, Syntax::MemberExpr {
+                assignment_target: false,
                 parenthesised: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingMemberAccess => true,

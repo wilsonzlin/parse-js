@@ -337,7 +337,6 @@ pub trait Visitor<'a> {
           }
         }
       }
-      Syntax::LiteralUndefined {} => {}
       Syntax::ObjectPattern { properties, rest } => {
         for prop in properties {
           self.visit(*prop);
