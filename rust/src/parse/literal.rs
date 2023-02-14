@@ -47,7 +47,7 @@ pub fn normalise_literal_bigint<'a>(
 pub fn normalise_literal_string_or_template_inner<'a>(
   ctx: ParseCtx<'a>,
   mut raw: &[u8],
-) -> Option<&'a [u8]> {
+) -> Option<&'a str> {
   let mut norm = ctx.session.new_vec();
   while !raw.is_empty() {
     let Some(escape_pos) = memchr(b'\\', raw) else {
@@ -134,13 +134,14 @@ pub fn normalise_literal_string_or_template_inner<'a>(
     raw = &raw[skip..];
   }
   // Copy onto arena so we get immutable references that are cheap to copy.
-  Some(ctx.session.get_allocator().alloc_slice_copy(&norm))
+  // We return str instead of [u8] so that serialisation is easy and str methods are available.
+  Some(unsafe { from_utf8_unchecked(ctx.session.get_allocator().alloc_slice_copy(&norm)) })
 }
 
 pub fn normalise_literal_string<'a>(
   ctx: ParseCtx<'a>,
   raw: SourceRange<'a>,
-) -> SyntaxResult<'a, &'a [u8]> {
+) -> SyntaxResult<'a, &'a str> {
   normalise_literal_string_or_template_inner(ctx, &raw.as_slice()[1..raw.len() - 1])
     .ok_or_else(|| raw.error(SyntaxErrorType::InvalidCharacterEscape, None))
 }
@@ -149,7 +150,7 @@ impl<'a> Parser<'a> {
   pub fn parse_and_normalise_literal_string(
     &mut self,
     ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, &'a [u8]> {
+  ) -> SyntaxResult<'a, &'a str> {
     let t = self.require(TokenType::LiteralString)?;
     let s = normalise_literal_string(ctx, t.loc)?;
     Ok(s)
