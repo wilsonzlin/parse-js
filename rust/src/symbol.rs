@@ -84,6 +84,46 @@ pub enum ScopeFlag {
   UsesArguments,
 }
 
+impl ScopeFlag {
+  fn bitfield(self) -> u64 {
+    1 << (self as u8)
+  }
+}
+
+pub struct ScopeFlags(u64);
+
+impl core::ops::BitOr<ScopeFlag> for ScopeFlag {
+  type Output = ScopeFlags;
+
+  fn bitor(self, rhs: Self) -> Self::Output {
+    ScopeFlags(self.bitfield() | rhs.bitfield())
+  }
+}
+
+impl core::ops::BitOr<ScopeFlags> for ScopeFlag {
+  type Output = ScopeFlags;
+
+  fn bitor(self, rhs: ScopeFlags) -> Self::Output {
+    ScopeFlags(self.bitfield() | rhs.0)
+  }
+}
+
+impl core::ops::BitOr<ScopeFlag> for ScopeFlags {
+  type Output = ScopeFlags;
+
+  fn bitor(self, rhs: ScopeFlag) -> Self::Output {
+    ScopeFlags(self.0 | rhs.bitfield())
+  }
+}
+
+impl core::ops::BitOr<ScopeFlags> for ScopeFlags {
+  type Output = ScopeFlags;
+
+  fn bitor(self, rhs: Self) -> Self::Output {
+    ScopeFlags(self.0 | rhs.0)
+  }
+}
+
 struct ScopeData<'a> {
   symbols: SessionHashMap<'a, Identifier<'a>, Symbol<'a>>,
   // For deterministic outputs, and to give each Symbol an ID.
@@ -169,7 +209,15 @@ impl<'a> Scope<'a> {
   }
 
   pub fn has_flag(&self, flag: ScopeFlag) -> bool {
-    (self.get().flags & (1 << (flag as u8))) != 0
+    (self.get().flags & flag.bitfield()) != 0
+  }
+
+  pub fn has_any_of_flags(&self, q: ScopeFlags) -> bool {
+    (self.get().flags & q.0) != 0
+  }
+
+  pub fn has_all_of_flags(&self, q: ScopeFlags) -> bool {
+    (!self.get().flags & q.0) == 0
   }
 
   pub fn set_flag(&mut self, flag: ScopeFlag) {
