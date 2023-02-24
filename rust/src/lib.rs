@@ -4,6 +4,7 @@ use lex::Lexer;
 use parse::toplevel::TopLevelMode;
 use parse::Parser;
 use session::Session;
+use symbol::SymbolGenerator;
 
 pub mod ast;
 pub mod builtin;
@@ -27,5 +28,6 @@ pub fn parse<'a>(
 ) -> SyntaxResult<'a, Node<'a>> {
   let lexer = Lexer::new(source);
   let mut parser = Parser::new(lexer);
-  parser.parse_top_level(session, top_level_mode)
+  let symbol_generator = SymbolGenerator::new();
+  parser.parse_top_level(session, symbol_generator, top_level_mode)
 }

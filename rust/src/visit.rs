@@ -21,6 +21,7 @@ impl JourneyControls {
 }
 
 // Don't use `Node<'a>` as that requires reference to live for entire `'a`.
+// Nodes must be visited in execution order. This is helpful for many uses.
 pub trait Visitor<'a> {
   fn on_syntax_down(&mut self, node: &mut NodeData<'a>, ctl: &mut JourneyControls) -> () {}
 
@@ -119,10 +120,10 @@ pub trait Visitor<'a> {
       Syntax::CallExpr {
         callee, arguments, ..
       } => {
-        self.visit(*callee);
         for arg in arguments {
           self.visit(*arg);
         }
+        self.visit(*callee);
       }
       Syntax::CatchBlock { parameter, body } => {
         if let Some(param) = parameter {
@@ -204,9 +205,7 @@ pub trait Visitor<'a> {
       Syntax::ForStmt { header, body } => {
         match header {
           ForStmtHeader::Three {
-            init,
-            condition,
-            post,
+            init, condition, ..
           } => {
             match init {
               ForThreeInit::None => {}
@@ -216,19 +215,22 @@ pub trait Visitor<'a> {
             if let Some(condition) = condition {
               self.visit(*condition);
             }
-            if let Some(post) = post {
-              self.visit(*post);
-            }
           }
           ForStmtHeader::InOf { lhs, rhs, .. } => {
+            self.visit(*rhs);
             match lhs {
               ForInOfStmtHeaderLhs::Declaration(decl) => self.visit(*decl),
               ForInOfStmtHeaderLhs::Pattern(pat) => self.visit(*pat),
             }
-            self.visit(*rhs);
           }
         };
         self.visit(*body);
+        if let ForStmtHeader::Three {
+          post: Some(post), ..
+        } = header
+        {
+          self.visit(*post);
+        };
       }
       Syntax::FunctionDecl {
         name,

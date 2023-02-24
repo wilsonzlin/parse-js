@@ -7,6 +7,7 @@ use crate::error::SyntaxResult;
 use crate::session::Session;
 use crate::symbol::Scope;
 use crate::symbol::ScopeType;
+use crate::symbol::SymbolGenerator;
 use crate::token::TokenType;
 use core::str::FromStr;
 
@@ -32,10 +33,11 @@ impl<'a> Parser<'a> {
   pub fn parse_top_level(
     &mut self,
     session: &'a Session,
+    symbol_generator: SymbolGenerator,
     top_level_mode: TopLevelMode,
   ) -> SyntaxResult<'a, Node<'a>> {
     let ctx = ParseCtx {
-      scope: Scope::new(session, None, match top_level_mode {
+      scope: Scope::new(session, symbol_generator, None, match top_level_mode {
         TopLevelMode::Global => ScopeType::Global,
         TopLevelMode::Module => ScopeType::Module,
       }),

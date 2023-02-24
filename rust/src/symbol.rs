@@ -3,36 +3,35 @@ use crate::session::Session;
 use crate::session::SessionHashMap;
 use crate::session::SessionVec;
 use crate::source::SourceRange;
+use core::ops::BitOr;
 use hashbrown::hash_map::Entry;
+use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::hash::Hash;
+use std::rc::Rc;
 
 pub type Identifier<'a> = SourceRange<'a>;
 
+// We don't store the associated Scope anymore as we want to allow easy moving of symbols between scopes (the parser doesn't do this, but library consumers might), which allows for easy migration of usages without having to rename every one of them. Since we don't have anything else to store, we can't use a reference due to potential zero-sized allocation issues, so we just use a unique sequence number instead.
 // To attach additional custom state to a Symbol, use a HashMap. We prefer this instead of adding an extra generic state field on Symbol, as that would require propagating the generic type everywhere.
 // Cloning means to cheaply clone the reference to this unique symbol, not create a duplicate symbol. This is useful for sharing a reference to a symbol, including uses in data structures like HashMap.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Symbol(u64);
+
 #[derive(Clone)]
-pub struct Symbol<'a> {
-  scope: Scope<'a>,
-  // Index in the containing ScopeData's symbol_declaration_order Vec.
-  ordinal_in_scope: usize,
-}
+pub struct SymbolGenerator(Rc<Cell<u64>>);
 
-// Equality means referring to the same unique symbol. Useful for HashMap.
-impl<'a> PartialEq for Symbol<'a> {
-  fn eq(&self, other: &Self) -> bool {
-    core::ptr::eq(self.scope.0, other.scope.0) && self.ordinal_in_scope == other.ordinal_in_scope
+impl SymbolGenerator {
+  pub fn new() -> SymbolGenerator {
+    SymbolGenerator(Rc::new(Cell::new(0)))
   }
-}
 
-impl<'a> Eq for Symbol<'a> {}
-
-impl<'a> Hash for Symbol<'a> {
-  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-    core::ptr::hash(self.scope.0, state);
-    self.ordinal_in_scope.hash(state);
+  pub fn next(&self) -> Symbol {
+    let id = self.0.get();
+    self.0.set(id + 1);
+    Symbol(id)
   }
 }
 
@@ -92,7 +91,7 @@ impl ScopeFlag {
 
 pub struct ScopeFlags(u64);
 
-impl core::ops::BitOr<ScopeFlag> for ScopeFlag {
+impl BitOr<ScopeFlag> for ScopeFlag {
   type Output = ScopeFlags;
 
   fn bitor(self, rhs: Self) -> Self::Output {
@@ -100,7 +99,7 @@ impl core::ops::BitOr<ScopeFlag> for ScopeFlag {
   }
 }
 
-impl core::ops::BitOr<ScopeFlags> for ScopeFlag {
+impl BitOr<ScopeFlags> for ScopeFlag {
   type Output = ScopeFlags;
 
   fn bitor(self, rhs: ScopeFlags) -> Self::Output {
@@ -108,7 +107,7 @@ impl core::ops::BitOr<ScopeFlags> for ScopeFlag {
   }
 }
 
-impl core::ops::BitOr<ScopeFlag> for ScopeFlags {
+impl BitOr<ScopeFlag> for ScopeFlags {
   type Output = ScopeFlags;
 
   fn bitor(self, rhs: ScopeFlag) -> Self::Output {
@@ -116,7 +115,7 @@ impl core::ops::BitOr<ScopeFlag> for ScopeFlags {
   }
 }
 
-impl core::ops::BitOr<ScopeFlags> for ScopeFlags {
+impl BitOr<ScopeFlags> for ScopeFlags {
   type Output = ScopeFlags;
 
   fn bitor(self, rhs: Self) -> Self::Output {
@@ -125,7 +124,8 @@ impl core::ops::BitOr<ScopeFlags> for ScopeFlags {
 }
 
 struct ScopeData<'a> {
-  symbols: SessionHashMap<'a, Identifier<'a>, Symbol<'a>>,
+  symbol_generator: SymbolGenerator,
+  symbols: SessionHashMap<'a, Identifier<'a>, Symbol>,
   // For deterministic outputs, and to give each Symbol an ID.
   symbol_declaration_order: SessionVec<'a, Identifier<'a>>,
   // Does not exist for top-level.
@@ -149,8 +149,14 @@ impl<'a> Scope<'a> {
     self.0.borrow_mut()
   }
 
-  pub fn new(session: &'a Session, parent: Option<Scope<'a>>, typ: ScopeType) -> Scope<'a> {
+  pub fn new(
+    session: &'a Session,
+    symbol_generator: SymbolGenerator,
+    parent: Option<Scope<'a>>,
+    typ: ScopeType,
+  ) -> Scope<'a> {
     let scope = Scope(session.mem.alloc(RefCell::new(ScopeData {
+      symbol_generator,
       symbols: session.new_hashmap(),
       symbol_declaration_order: session.new_vec(),
       parent,
@@ -173,7 +179,12 @@ impl<'a> Scope<'a> {
   }
 
   pub fn create_child_scope(self, session: &'a Session, typ: ScopeType) -> Scope<'a> {
-    Scope::new(session, Some(self), typ)
+    Scope::new(
+      session,
+      self.get().symbol_generator.clone(),
+      Some(self),
+      typ,
+    )
   }
 
   pub fn find_self_or_ancestor<F: Fn(ScopeType) -> bool>(self, pred: F) -> Option<Scope<'a>> {
@@ -234,10 +245,7 @@ impl<'a> Scope<'a> {
         // TODO Investigate raising an error; however, many production codebases redeclare `var`.
       }
       Entry::Vacant(e) => {
-        e.insert(Symbol {
-          scope: self,
-          ordinal_in_scope,
-        });
+        e.insert(self.get().symbol_generator.next());
         as_mut.symbol_declaration_order.push(identifier.clone());
       }
     };
@@ -251,11 +259,11 @@ impl<'a> Scope<'a> {
     Ok(())
   }
 
-  pub fn get_symbol(self, identifier: Identifier<'a>) -> Option<Symbol<'a>> {
+  pub fn get_symbol(self, identifier: Identifier<'a>) -> Option<Symbol> {
     self.get().symbols.get(&identifier).cloned()
   }
 
-  pub fn find_symbol(self, identifier: Identifier<'a>) -> Option<Symbol<'a>> {
+  pub fn find_symbol(self, identifier: Identifier<'a>) -> Option<Symbol> {
     match self.get().symbols.get(&identifier) {
       Some(symbol) => Some(symbol.clone()),
       None => match self.get().parent {
@@ -269,7 +277,7 @@ impl<'a> Scope<'a> {
     self,
     identifier: Identifier<'a>,
     scope_type: ScopeType,
-  ) -> Option<Symbol<'a>> {
+  ) -> Option<Symbol> {
     let mut scope = self;
     loop {
       let scope_data = scope.get();

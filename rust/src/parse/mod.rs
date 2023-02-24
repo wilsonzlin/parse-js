@@ -47,7 +47,7 @@ impl<'a> ParseCtx<'a> {
   }
 
   pub fn create_child_scope(&self, typ: ScopeType) -> Scope<'a> {
-    Scope::new(self.session, Some(self.scope), typ)
+    self.scope.create_child_scope(self.session, typ)
   }
 
   /// This node will be created in the current scope.
