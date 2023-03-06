@@ -1,39 +1,36 @@
 {
-  "$t": "VarStmt",
-  "declaration": {
-    "$t": "VarDecl",
-    "declarators": [
-      {
-        "initializer": {
-          "$t": "ArrowFunctionExpr",
-          "parenthesised": false,
-          "is_async": false,
-          "body": {
-            "$t": "BlockStmt",
-            "body": []
-          },
-          "signature": {
-            "$t": "FunctionSignature",
-            "parameters": [
-              {
-                "$t": "ParamDecl",
-                "default_value": null,
-                "pattern": {
-                  "$t": "ObjectPattern",
-                  "properties": [],
-                  "rest": null
-                },
-                "rest": false
-              }
-            ]
-          }
+  "$t": "VarDecl",
+  "declarators": [
+    {
+      "initializer": {
+        "$t": "ArrowFunctionExpr",
+        "parenthesised": false,
+        "is_async": false,
+        "body": {
+          "$t": "BlockStmt",
+          "body": []
         },
-        "pattern": {
-          "$t": "IdentifierPattern",
-          "name": "x"
+        "signature": {
+          "$t": "FunctionSignature",
+          "parameters": [
+            {
+              "$t": "ParamDecl",
+              "default_value": null,
+              "pattern": {
+                "$t": "ObjectPattern",
+                "properties": [],
+                "rest": null
+              },
+              "rest": false
+            }
+          ]
         }
+      },
+      "pattern": {
+        "$t": "IdentifierPattern",
+        "name": "x"
       }
-    ],
-    "mode": "Const"
-  }
+    }
+  ],
+  "mode": "Const"
 }

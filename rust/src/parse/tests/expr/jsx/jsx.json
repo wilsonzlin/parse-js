@@ -83,7 +83,9 @@
                       "$t": "ObjectMember",
                       "typ": {
                         "Valued": {
-                          "key": { "Direct": "a" },
+                          "key": {
+                            "Direct": "a"
+                          },
                           "value": {
                             "Property": {
                               "initializer": {
@@ -98,7 +100,12 @@
                     {
                       "$t": "ObjectMember",
                       "typ": {
-                        "Shorthand": { "name": "c" }
+                        "Shorthand": {
+                          "identifier": {
+                            "$t": "IdentifierExpr",
+                            "name": "c"
+                          }
+                        }
                       }
                     }
                   ]
@@ -129,8 +136,11 @@
       "attributes": [],
       "children": [],
       "name": {
-        "$t": "JsxMember",
-        "base": "red",
+        "$t": "JsxMemberExpression",
+        "base": {
+          "$t": "IdentifierExpr",
+          "name": "red"
+        },
         "path": [
           "a"
         ]
@@ -148,8 +158,11 @@
     }
   ],
   "name": {
-    "$t": "JsxMember",
-    "base": "a",
+    "$t": "JsxMemberExpression",
+    "base": {
+      "$t": "IdentifierExpr",
+      "name": "a"
+    },
     "path": [
       "b",
       "c"

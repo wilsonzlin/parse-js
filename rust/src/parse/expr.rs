@@ -132,6 +132,10 @@ fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
         namespace: b_ns,
       }),
     ) => a_ns == b_ns && a_name == b_name,
+    (
+      Some(Syntax::IdentifierExpr { name: a_name }),
+      Some(Syntax::IdentifierExpr { name: b_name }),
+    ) => a_name == b_name,
     _ => false,
   }
 }

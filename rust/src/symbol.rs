@@ -147,12 +147,9 @@ impl<'a> Scope<'a> {
   }
 
   pub fn create_child_scope(self, session: &'a Session, typ: ScopeType) -> Scope<'a> {
-    Scope::new(
-      session,
-      self.get().symbol_generator.clone(),
-      Some(self),
-      typ,
-    )
+    // Scope::new will also acquire ref, so we cannot do this inline.
+    let symbol_generator = self.get().symbol_generator.clone();
+    Scope::new(session, symbol_generator, Some(self), typ)
   }
 
   pub fn find_self_or_ancestor<F: Fn(ScopeType) -> bool>(self, pred: F) -> Option<Scope<'a>> {
@@ -196,6 +193,8 @@ impl<'a> Scope<'a> {
   }
 
   pub fn add_symbol(self, identifier: Identifier<'a>) -> SyntaxResult<'a, ()> {
+    // We must always generate this value, even if unused, as we'll borrow self as mut.
+    let next_symbol_id = self.get().symbol_generator.next();
     let mut as_mut = self.get_mut();
     match as_mut.symbols.entry(identifier.clone()) {
       Entry::Occupied(_) => {
@@ -203,7 +202,7 @@ impl<'a> Scope<'a> {
         // TODO Investigate raising an error; however, many production codebases redeclare `var`.
       }
       Entry::Vacant(e) => {
-        e.insert(self.get().symbol_generator.next());
+        e.insert(next_symbol_id);
         as_mut.symbol_declaration_order.push(identifier.clone());
       }
     };
