@@ -155,21 +155,4 @@ impl<'a> Parser<'a> {
     let s = normalise_literal_string(ctx, t.loc)?;
     Ok(s)
   }
-
-  pub fn parse_class_or_object_member_key(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, ClassOrObjectMemberKey<'a>> {
-    Ok(if self.consume_if(TokenType::BracketOpen)?.is_match() {
-      let expr = self.parse_expr(ctx, TokenType::BracketClose)?;
-      self.require(TokenType::BracketClose)?;
-      ClassOrObjectMemberKey::Computed(expr)
-    } else {
-      let name = self.next()?;
-      if !is_valid_pattern_identifier(name.typ, ctx.rules) {
-        return Err(name.error(SyntaxErrorType::ExpectedNotFound));
-      };
-      ClassOrObjectMemberKey::Direct(name.loc)
-    })
-  }
 }

@@ -1,9 +1,10 @@
 use crate::error::SyntaxResult;
+use crate::flag::Flag;
+use crate::flag::Flags;
 use crate::session::Session;
 use crate::session::SessionHashMap;
 use crate::session::SessionVec;
 use crate::source::SourceRange;
-use core::ops::BitOr;
 use hashbrown::hash_map::Entry;
 use std::cell::Cell;
 use std::cell::Ref;
@@ -83,43 +84,9 @@ pub enum ScopeFlag {
   UsesArguments,
 }
 
-impl ScopeFlag {
+impl Flag for ScopeFlag {
   fn bitfield(self) -> u64 {
     1 << (self as u8)
-  }
-}
-
-pub struct ScopeFlags(u64);
-
-impl BitOr<ScopeFlag> for ScopeFlag {
-  type Output = ScopeFlags;
-
-  fn bitor(self, rhs: Self) -> Self::Output {
-    ScopeFlags(self.bitfield() | rhs.bitfield())
-  }
-}
-
-impl BitOr<ScopeFlags> for ScopeFlag {
-  type Output = ScopeFlags;
-
-  fn bitor(self, rhs: ScopeFlags) -> Self::Output {
-    ScopeFlags(self.bitfield() | rhs.0)
-  }
-}
-
-impl BitOr<ScopeFlag> for ScopeFlags {
-  type Output = ScopeFlags;
-
-  fn bitor(self, rhs: ScopeFlag) -> Self::Output {
-    ScopeFlags(self.0 | rhs.bitfield())
-  }
-}
-
-impl BitOr<ScopeFlags> for ScopeFlags {
-  type Output = ScopeFlags;
-
-  fn bitor(self, rhs: Self) -> Self::Output {
-    ScopeFlags(self.0 | rhs.0)
   }
 }
 
@@ -133,7 +100,7 @@ struct ScopeData<'a> {
   // Not used by the parser, but useful for some library consumers, as there's currently no other way to iterate all scopes.
   children: SessionVec<'a, Scope<'a>>,
   typ: ScopeType,
-  flags: u64,
+  flags: Flags<ScopeFlag>,
 }
 
 // Since Rust only supports newtypes with impls using structs, we cannot have our newtype as a reference, so we must use it like it's a reference despite being a struct i.e. cheaply copyable, take `self` instead of `&self`, use `Scope<'a>` instead of `&'a Scope<'a>`.
@@ -162,7 +129,7 @@ impl<'a> Scope<'a> {
       parent,
       children: session.new_vec(),
       typ,
-      flags: 0,
+      flags: Flags::new(),
     })));
     if let Some(parent) = parent {
       parent.get_mut().children.push(scope);
@@ -219,25 +186,15 @@ impl<'a> Scope<'a> {
     latest_match
   }
 
-  pub fn has_flag(&self, flag: ScopeFlag) -> bool {
-    (self.get().flags & flag.bitfield()) != 0
+  pub fn flags(self) -> Ref<'a, Flags<ScopeFlag>> {
+    Ref::map(self.get(), |s| &s.flags)
   }
 
-  pub fn has_any_of_flags(&self, q: ScopeFlags) -> bool {
-    (self.get().flags & q.0) != 0
-  }
-
-  pub fn has_all_of_flags(&self, q: ScopeFlags) -> bool {
-    (!self.get().flags & q.0) == 0
-  }
-
-  pub fn set_flag(&mut self, flag: ScopeFlag) {
-    self.get_mut().flags |= 1 << (flag as u8);
+  pub fn flags_mut(self) -> RefMut<'a, Flags<ScopeFlag>> {
+    RefMut::map(self.get_mut(), |s| &mut s.flags)
   }
 
   pub fn add_symbol(self, identifier: Identifier<'a>) -> SyntaxResult<'a, ()> {
-    // We must get before we borrow as mut, even if we won't use it.
-    let ordinal_in_scope = self.get().symbol_declaration_order.len();
     let mut as_mut = self.get_mut();
     match as_mut.symbols.entry(identifier.clone()) {
       Entry::Occupied(_) => {

@@ -9,9 +9,12 @@ use crate::ast::ForInOfStmtHeaderLhs;
 use crate::ast::ForStmtHeader;
 use crate::ast::ForThreeInit;
 use crate::ast::Node;
+use crate::ast::NodeFlag;
 use crate::ast::Syntax;
+use crate::ast::VarDeclMode;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
+use crate::flag::Flags;
 use crate::parse::pattern::ParsePatternAction;
 use crate::source::SourceRange;
 use crate::symbol::ScopeType;
@@ -63,7 +66,7 @@ impl<'a> Parser<'a> {
       TokenType::KeywordBreak => self.parse_stmt_break(ctx),
       TokenType::KeywordClass => self.parse_decl_class(ctx, false, false),
       TokenType::KeywordConst | TokenType::KeywordLet | TokenType::KeywordVar => {
-        self.parse_stmt_var(ctx)
+        self.parse_decl_var(ctx, VarDeclParseMode::Asi, false)
       }
       TokenType::KeywordContinue => self.parse_stmt_continue(ctx),
       TokenType::KeywordDebugger => self.parse_stmt_debugger(ctx),
@@ -111,24 +114,72 @@ impl<'a> Parser<'a> {
     &mut self,
     ctx: ParseCtx<'a>,
   ) -> SyntaxResult<'a, Node<'a>> {
+    let mut flags = Flags::new();
     let start = self.require(TokenType::BraceOpen)?;
     let mut body = ctx.session.new_vec();
+    let mut dead = false;
     loop {
       if let Some(end_loc) = self.consume_if(TokenType::BraceClose)?.match_loc() {
-        return Ok(ctx.create_node(start.loc + end_loc, Syntax::BlockStmt { body }));
+        return Ok(ctx.create_node_with_flags(
+          start.loc + end_loc,
+          Syntax::BlockStmt { body },
+          flags,
+        ));
       };
-      body.push(self.parse_stmt(ctx)?);
+      let stmt = self.parse_stmt(ctx)?;
+      if dead {
+        stmt.flags |= NodeFlag::Unreachable;
+      };
+      if stmt.flags.has(NodeFlag::UnconditionallyBreaks) {
+        flags |= NodeFlag::UnconditionallyBreaks;
+        dead = true;
+      };
+      if stmt.flags.has(NodeFlag::UnconditionallyContinues) {
+        flags |= NodeFlag::UnconditionallyContinues;
+        dead = true;
+      }
+      if stmt.flags.has(NodeFlag::UnconditionallyReturns) {
+        flags |= NodeFlag::UnconditionallyReturns;
+        dead = true;
+      };
+      if stmt.flags.has(NodeFlag::UnconditionallyThrows) {
+        flags |= NodeFlag::UnconditionallyThrows;
+        dead = true;
+      };
+      match &stmt.stx {
+        Syntax::ClassDecl { .. } => {
+          flags |= NodeFlag::HasClassDecl;
+        }
+        Syntax::FunctionDecl { .. } => {
+          flags |= NodeFlag::HasFunctionDecl;
+        }
+        Syntax::VarDecl {
+          mode, declarators, ..
+        } => {
+          for decl in declarators {
+            match &decl.pattern.stx {
+              Syntax::IdentifierPattern { .. } => match mode {
+                VarDeclMode::Const => flags |= NodeFlag::HasConstDeclWithIdentifierPattern,
+                VarDeclMode::Let => flags |= NodeFlag::HasLetDeclWithIdentifierPattern,
+                VarDeclMode::Var => flags |= NodeFlag::HasVarDeclWithIdentifierPattern,
+              },
+              _ => match mode {
+                VarDeclMode::Const => flags |= NodeFlag::HasConstDeclWithNonIdentifierPattern,
+                VarDeclMode::Let => flags |= NodeFlag::HasLetDeclWithNonIdentifierPattern,
+                VarDeclMode::Var => flags |= NodeFlag::HasVarDeclWithNonIdentifierPattern,
+              },
+            };
+          }
+        }
+        _ => {}
+      }
+      body.push(stmt);
     }
   }
 
   pub fn parse_stmt_block(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let block_scope = ctx.create_child_scope(ScopeType::Block);
     self.parse_stmt_block_with_existing_scope(ctx.with_scope(block_scope))
-  }
-
-  pub fn parse_stmt_var(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let declaration = self.parse_decl_var(ctx, VarDeclParseMode::Asi, false)?;
-    Ok(ctx.create_node(declaration.loc, Syntax::VarStmt { declaration }))
   }
 
   fn parse_stmt_break_or_continue(
@@ -158,12 +209,20 @@ impl<'a> Parser<'a> {
 
   pub fn parse_stmt_break(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordBreak)?;
-    Ok(ctx.create_node(stmt.loc, Syntax::BreakStmt { label: stmt.label }))
+    Ok(ctx.create_node_with_flag(
+      stmt.loc,
+      Syntax::BreakStmt { label: stmt.label },
+      NodeFlag::UnconditionallyBreaks,
+    ))
   }
 
   pub fn parse_stmt_continue(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordContinue)?;
-    Ok(ctx.create_node(stmt.loc, Syntax::ContinueStmt { label: stmt.label }))
+    Ok(ctx.create_node_with_flag(
+      stmt.loc,
+      Syntax::ContinueStmt { label: stmt.label },
+      NodeFlag::UnconditionallyContinues,
+    ))
   }
 
   pub fn parse_stmt_debugger(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
@@ -472,7 +531,11 @@ impl<'a> Parser<'a> {
         loc.extend(value.loc);
         Some(value)
       };
-    Ok(ctx.create_node(loc, Syntax::ReturnStmt { value }))
+    Ok(ctx.create_node_with_flag(
+      loc,
+      Syntax::ReturnStmt { value },
+      NodeFlag::UnconditionallyReturns,
+    ))
   }
 
   pub fn parse_stmt_throw(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
@@ -486,7 +549,11 @@ impl<'a> Parser<'a> {
     if !asi.did_end_with_asi {
       self.require(TokenType::Semicolon)?;
     };
-    Ok(ctx.create_node(start.loc + value.loc, Syntax::ThrowStmt { value }))
+    Ok(ctx.create_node_with_flag(
+      start.loc + value.loc,
+      Syntax::ThrowStmt { value },
+      NodeFlag::UnconditionallyThrows,
+    ))
   }
 
   pub fn parse_stmt_try(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {

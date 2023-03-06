@@ -1,10 +1,14 @@
 use self::pattern::ParsePatternRules;
 use crate::ast::new_node;
+use crate::ast::new_node_with_flag;
+use crate::ast::new_node_with_flags;
 use crate::ast::Node;
+use crate::ast::NodeFlag;
 use crate::ast::Syntax;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
+use crate::flag::Flags;
 use crate::lex::lex_next;
 use crate::lex::LexMode;
 use crate::lex::Lexer;
@@ -48,6 +52,26 @@ impl<'a> ParseCtx<'a> {
 
   pub fn create_child_scope(&self, typ: ScopeType) -> Scope<'a> {
     self.scope.create_child_scope(self.session, typ)
+  }
+
+  /// This node will be created in the current scope.
+  pub fn create_node_with_flags(
+    &self,
+    loc: SourceRange<'a>,
+    stx: Syntax<'a>,
+    flags: Flags<NodeFlag>,
+  ) -> Node<'a> {
+    new_node_with_flags(self.session, self.scope, loc, stx, flags)
+  }
+
+  /// This node will be created in the current scope.
+  pub fn create_node_with_flag(
+    &self,
+    loc: SourceRange<'a>,
+    stx: Syntax<'a>,
+    flag: NodeFlag,
+  ) -> Node<'a> {
+    new_node_with_flag(self.session, self.scope, loc, stx, flag)
   }
 
   /// This node will be created in the current scope.

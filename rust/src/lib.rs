@@ -10,6 +10,7 @@ pub mod ast;
 pub mod builtin;
 pub mod char;
 pub mod error;
+pub mod flag;
 pub mod lex;
 pub mod num;
 pub mod operator;

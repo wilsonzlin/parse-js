@@ -1,5 +1,7 @@
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
+use crate::flag::Flag;
+use crate::flag::Flags;
 use crate::num::JsNumber;
 use crate::operator::OperatorName;
 use crate::session::Session;
@@ -11,6 +13,29 @@ use core::fmt::Debug;
 use std::fmt;
 use std::fmt::Formatter;
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NodeFlag {
+  HasClassDecl,                         // BlockStmt
+  HasConstDeclWithIdentifierPattern,    // BlockStmt
+  HasConstDeclWithNonIdentifierPattern, // BlockStmt
+  HasFunctionDecl,                      // BlockStmt
+  HasLetDeclWithIdentifierPattern,      // BlockStmt
+  HasLetDeclWithNonIdentifierPattern,   // BlockStmt
+  HasVarDeclWithIdentifierPattern,      // BlockStmt
+  HasVarDeclWithNonIdentifierPattern,   // BlockStmt
+  UnconditionallyBreaks,                // BlockStmt, BreakStmt
+  UnconditionallyContinues,             // BlockStmt, ContinueStmt
+  UnconditionallyReturns,               // BlockStmt, ReturnStmt
+  UnconditionallyThrows,                // BlockStmt, ThrowStmt
+  Unreachable,                          // Any child of BlockStmt
+}
+
+impl Flag for NodeFlag {
+  fn bitfield(self) -> u64 {
+    1 << (self as u8)
+  }
+}
+
 // To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
 // - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
 // - Same syntax, location, and scope.
@@ -21,6 +46,7 @@ pub struct NodeData<'a> {
   pub stx: Syntax<'a>,
   // For the purposes of disambiguation, the scope of a function or block is only set on its children and not itself. This is merely an arbitrary decision. For example, the scope created by a function is assigned to its signature nodes (and descendants e.g. default values), but not to the FunctionStmt itself. For a `for` loop, the scope created by it is assigned to its header nodes and descendants, but not to the ForStmt itself. For a block statement, the scope created by it is assigned to statements inside it, but not to the BlockStmt itself.
   pub scope: Scope<'a>,
+  pub flags: Flags<NodeFlag>,
 }
 
 impl<'a> NodeData<'a> {
@@ -34,6 +60,7 @@ impl<'a> NodeData<'a> {
       loc: self.loc,
       scope: self.scope,
       stx,
+      flags: self.flags,
     };
     let taken = core::mem::replace(self, dummy);
     session.get_allocator().alloc(taken)
@@ -60,13 +87,38 @@ impl<'a> serde::Serialize for NodeData<'a> {
 
 pub type Node<'a> = &'a mut NodeData<'a>;
 
+pub fn new_node_with_flags<'a>(
+  session: &'a Session,
+  scope: Scope<'a>,
+  loc: SourceRange<'a>,
+  stx: Syntax<'a>,
+  flags: Flags<NodeFlag>,
+) -> Node<'a> {
+  session.mem.alloc(NodeData {
+    loc,
+    stx,
+    scope,
+    flags,
+  })
+}
+
+pub fn new_node_with_flag<'a>(
+  session: &'a Session,
+  scope: Scope<'a>,
+  loc: SourceRange<'a>,
+  stx: Syntax<'a>,
+  flag: NodeFlag,
+) -> Node<'a> {
+  new_node_with_flags(session, scope, loc, stx, Flags::new() | flag)
+}
+
 pub fn new_node<'a>(
   session: &'a Session,
   scope: Scope<'a>,
   loc: SourceRange<'a>,
   stx: Syntax<'a>,
 ) -> Node<'a> {
-  session.mem.alloc(NodeData { loc, stx, scope })
+  new_node_with_flags(session, scope, loc, stx, Flags::new())
 }
 
 // These are for readability only, and do not increase type safety or define different structures.
@@ -95,6 +147,7 @@ pub enum ArrayElement<'a> {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ClassOrObjectMemberKey<'a> {
   // Identifier, keyword, string, or number.
+  // NOTE: This isn't used by ObjectMemberType::Shorthand.
   Direct(SourceRange<'a>),
   Computed(Expression<'a>),
 }
@@ -146,7 +199,7 @@ pub enum ObjectMemberType<'a> {
     value: ClassOrObjectMemberValue<'a>,
   },
   Shorthand {
-    name: SourceRange<'a>,
+    identifier: Node<'a>, // Always IdentifierExpr.
   },
   Rest {
     value: Expression<'a>,
@@ -376,16 +429,19 @@ pub enum Syntax<'a> {
     value: Option<Expression<'a>>, // JsxExpressionContainer or JsxText
   },
   JsxElement {
-    name: Option<Expression<'a>>, // JsxName or JsxMember; None if fragment
+    // When an element name starts with a lowercase ASCII character, it's a built-in component like '<div>' or '<span>'.
+    // For easier differentiation, we use IdentifierExpr for user-defined components as they are references to symbols and built-in components are not.
+    // https://reactjs.org/docs/jsx-in-depth.html#user-defined-components-must-be-capitalized
+    name: Option<Expression<'a>>, // IdentifierExpr or JsxName or JsxMemberExpression; None if fragment
     attributes: SessionVec<'a, Expression<'a>>, // JsxAttribute or JsxSpreadAttribute; always empty if fragment
     children: SessionVec<'a, Expression<'a>>,   // JsxElement or JsxExpressionContainer or JsxText
   },
   JsxExpressionContainer {
     value: Expression<'a>,
   },
-  JsxMember {
+  JsxMemberExpression {
     // This is a separate property to indicate it's required and for easier pattern matching.
-    base: SourceRange<'a>,
+    base: Node<'a>, // Always IdentifierExpr
     path: SessionVec<'a, SourceRange<'a>>,
   },
   JsxName {
@@ -509,9 +565,6 @@ pub enum Syntax<'a> {
     // One of these must be present.
     catch: Option<Node<'a>>,
     finally: Option<Statement<'a>>,
-  },
-  VarStmt {
-    declaration: Declaration<'a>,
   },
   WhileStmt {
     condition: Expression<'a>,

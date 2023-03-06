@@ -305,7 +305,7 @@ pub trait Visitor<'a> {
       Syntax::JsxExpressionContainer { value } => {
         self.visit(*value);
       }
-      Syntax::JsxMember { .. } => {}
+      Syntax::JsxMemberExpression { .. } => {}
       Syntax::JsxName { .. } => {}
       Syntax::JsxSpreadAttribute { value } => {
         self.visit(*value);
@@ -422,9 +422,6 @@ pub trait Visitor<'a> {
             self.visit(init);
           }
         }
-      }
-      Syntax::VarStmt { declaration } => {
-        self.visit(*declaration);
       }
       Syntax::WhileStmt { condition, body } => {
         self.visit(*condition);

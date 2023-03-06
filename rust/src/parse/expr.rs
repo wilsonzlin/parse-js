@@ -105,12 +105,20 @@ fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
   match (a, b) {
     (None, None) => true,
     (
-      Some(Syntax::JsxMember {
-        base: a_base,
+      Some(Syntax::JsxMemberExpression {
+        base:
+          NodeData {
+            stx: Syntax::IdentifierExpr { name: a_base },
+            ..
+          },
         path: a_path,
       }),
-      Some(Syntax::JsxMember {
-        base: b_base,
+      Some(Syntax::JsxMemberExpression {
+        base:
+          NodeData {
+            stx: Syntax::IdentifierExpr { name: b_base },
+            ..
+          },
         path: b_path,
       }),
     ) => a_base == b_base && a_path == b_path,
@@ -232,9 +240,9 @@ fn transform_literal_expr_to_destructuring_pattern<'a>(
                 default_value: default_value.map(|n| n.take(ctx.session)),
               }));
             }
-            ObjectMemberType::Shorthand { name } => {
+            ObjectMemberType::Shorthand { identifier } => {
               properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
-                key: ClassOrObjectMemberKey::Direct(name.clone()),
+                key: ClassOrObjectMemberKey::Direct(identifier.loc),
                 target: None,
                 default_value: None,
               }));
@@ -260,14 +268,12 @@ impl<'a> Parser<'a> {
   pub fn parse_jsx_name(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
     let start = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
     Ok(if self.consume_if(TokenType::Colon)?.is_match() {
-      // Namespaced name.
       let name = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
       ctx.create_node(start.loc + name.loc, Syntax::JsxName {
         namespace: Some(start.loc),
         name: name.loc,
       })
     } else {
-      // Plain name.
       ctx.create_node(start.loc, Syntax::JsxName {
         namespace: None,
         name: start.loc,
@@ -297,15 +303,21 @@ impl<'a> Parser<'a> {
             while self.consume_if(TokenType::Dot)?.is_match() {
               path.push(self.require(TokenType::Identifier)?.loc);
             }
-            ctx.create_node(start.add_option(path.last().copied()), Syntax::JsxMember {
-              base: start.clone(),
-              path,
-            })
+            ctx.create_node(
+              start.add_option(path.last().copied()),
+              Syntax::JsxMemberExpression {
+                base: ctx.create_node(start, Syntax::IdentifierExpr { name: start }),
+                path,
+              },
+            )
+          } else if !start.as_slice()[0].is_ascii_lowercase() {
+            // User-defined component.
+            ctx.create_node(start, Syntax::IdentifierExpr { name: start })
           } else {
-            // Plain name.
-            ctx.create_node(start.clone(), Syntax::JsxName {
+            // Built-in component without namespace.
+            ctx.create_node(start, Syntax::JsxName {
               namespace: None,
-              name: start.clone(),
+              name: start,
             })
           }
         }),
@@ -530,8 +542,10 @@ impl<'a> Parser<'a> {
             typ: match value {
               ClassOrObjectMemberValue::Property { initializer: None } => {
                 ObjectMemberType::Shorthand {
-                  name: match key {
-                    ClassOrObjectMemberKey::Direct(key) => key.clone(),
+                  identifier: match key {
+                    ClassOrObjectMemberKey::Direct(key) => {
+                      ctx.create_node(key, Syntax::IdentifierExpr { name: key })
+                    }
                     _ => unreachable!(),
                   },
                 }
@@ -812,11 +826,11 @@ impl<'a> Parser<'a> {
                     .find_symbol_up_to_nearest_scope_of_type(t.loc, ScopeType::NonArrowFunction)
                     .is_none()
                 {
-                  if let Some(mut closure) = ctx
+                  if let Some(closure) = ctx
                     .scope
                     .find_self_or_ancestor(|t| t == ScopeType::NonArrowFunction)
                   {
-                    closure.set_flag(ScopeFlag::UsesArguments);
+                    closure.flags_mut().set(ScopeFlag::UsesArguments);
                   };
                 };
                 ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
@@ -837,10 +851,10 @@ impl<'a> Parser<'a> {
             TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
             TokenType::KeywordThis => {
               let new_node = ctx.create_node(t.loc, Syntax::ThisExpr {});
-              if let Some(mut closure) = ctx.scope.find_self_or_ancestor(|t| {
+              if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| {
                 t == ScopeType::Class || t == ScopeType::NonArrowFunction
               }) {
-                closure.set_flag(ScopeFlag::UsesThis);
+                closure.flags_mut().set(ScopeFlag::UsesThis);
               };
               new_node
             }
