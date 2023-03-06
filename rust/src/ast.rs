@@ -23,10 +23,10 @@ pub enum NodeFlag {
   HasLetDeclWithNonIdentifierPattern,   // BlockStmt
   HasVarDeclWithIdentifierPattern,      // BlockStmt
   HasVarDeclWithNonIdentifierPattern,   // BlockStmt
-  UnconditionallyBreaks,                // BlockStmt, BreakStmt
-  UnconditionallyContinues,             // BlockStmt, ContinueStmt
-  UnconditionallyReturns,               // BlockStmt, ReturnStmt
-  UnconditionallyThrows,                // BlockStmt, ThrowStmt
+  UnconditionallyBreaks,                // BlockStmt, BreakStmt, DoWhileStmt IfStmt, TryStmt
+  UnconditionallyContinues,             // BlockStmt, ContinueStmt, DoWhileStmt, IfStmt, TryStmt
+  UnconditionallyReturns,               // BlockStmt, DoWhileStmt, IfStmt, ReturnStmt, TryStmt
+  UnconditionallyThrows,                // BlockStmt, DoWhileStmt, IfStmt, ThrowStmt, TryStmt
   Unreachable,                          // Any child of BlockStmt
 }
 

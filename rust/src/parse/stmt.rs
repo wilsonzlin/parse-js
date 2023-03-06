@@ -446,11 +446,30 @@ impl<'a> Parser<'a> {
       None
     };
     let end = alternate.as_ref().unwrap_or(&consequent);
-    Ok(ctx.create_node(start.loc + end.loc, Syntax::IfStmt {
-      test,
-      consequent,
-      alternate,
-    }))
+
+    let mut flags = Flags::new();
+    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyBreaks) {
+      flags |= NodeFlag::UnconditionallyBreaks;
+    };
+    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyContinues) {
+      flags |= NodeFlag::UnconditionallyContinues;
+    }
+    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyReturns) {
+      flags |= NodeFlag::UnconditionallyReturns;
+    };
+    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyThrows) {
+      flags |= NodeFlag::UnconditionallyThrows;
+    };
+
+    Ok(ctx.create_node_with_flags(
+      start.loc + end.loc,
+      Syntax::IfStmt {
+        test,
+        consequent,
+        alternate,
+      },
+      flags,
+    ))
   }
 
   pub fn parse_stmt_import_or_expr_import(
@@ -576,8 +595,21 @@ impl<'a> Parser<'a> {
     } else {
       None
     };
+    let mut flags = Flags::new();
     let finally = if self.consume_if(TokenType::KeywordFinally)?.is_match() {
       let body = self.parse_stmt_block(ctx)?;
+      if body.flags.has(NodeFlag::UnconditionallyBreaks) {
+        flags |= NodeFlag::UnconditionallyBreaks;
+      };
+      if body.flags.has(NodeFlag::UnconditionallyContinues) {
+        flags |= NodeFlag::UnconditionallyContinues;
+      }
+      if body.flags.has(NodeFlag::UnconditionallyReturns) {
+        flags |= NodeFlag::UnconditionallyReturns;
+      };
+      if body.flags.has(NodeFlag::UnconditionallyThrows) {
+        flags |= NodeFlag::UnconditionallyThrows;
+      };
       loc.extend(body.loc);
       Some(body)
     } else {
@@ -586,11 +618,15 @@ impl<'a> Parser<'a> {
     if catch.is_none() && finally.is_none() {
       return Err(start.error(SyntaxErrorType::TryStatementHasNoCatchOrFinally));
     }
-    Ok(ctx.create_node(loc, Syntax::TryStmt {
-      wrapped,
-      catch,
-      finally,
-    }))
+    Ok(ctx.create_node_with_flags(
+      loc,
+      Syntax::TryStmt {
+        wrapped,
+        catch,
+        finally,
+      },
+      flags,
+    ))
   }
 
   pub fn parse_stmt_while(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
@@ -610,6 +646,21 @@ impl<'a> Parser<'a> {
     let condition = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     let end = self.require(TokenType::ParenthesisClose)?;
     self.consume_if(TokenType::Semicolon)?;
+
+    let mut flags = Flags::new();
+    if body.flags.has(NodeFlag::UnconditionallyBreaks) {
+      flags |= NodeFlag::UnconditionallyBreaks;
+    };
+    if body.flags.has(NodeFlag::UnconditionallyContinues) {
+      flags |= NodeFlag::UnconditionallyContinues;
+    }
+    if body.flags.has(NodeFlag::UnconditionallyReturns) {
+      flags |= NodeFlag::UnconditionallyReturns;
+    };
+    if body.flags.has(NodeFlag::UnconditionallyThrows) {
+      flags |= NodeFlag::UnconditionallyThrows;
+    };
+
     Ok(ctx.create_node(start.loc + end.loc, Syntax::DoWhileStmt { condition, body }))
   }
 

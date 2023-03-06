@@ -21,6 +21,7 @@ pub type Identifier<'a> = SourceRange<'a>;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Symbol(u64);
 
+// TODO We can probably avoid using a Rc, but this would require refs and lifetimes (possibly not 'a but an additional one) everywhere. Investigate if performance becomes costly.
 #[derive(Clone)]
 pub struct SymbolGenerator(Rc<Cell<u64>>);
 
