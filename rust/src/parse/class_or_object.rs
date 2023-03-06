@@ -86,17 +86,17 @@ impl<'a> Parser<'a> {
       self.require(TokenType::BracketClose)?;
       key
     } else {
-      let loc = if let Some(str) = self.consume_if(TokenType::LiteralString)?.match_loc_take() {
+      let loc = if let Some(str) = self.consume_if(TokenType::LiteralString)?.match_loc() {
         // TODO Do we need to remove quotes and/or decode?
         str
-      } else if let Some(num) = self.consume_if(TokenType::LiteralNumber)?.match_loc_take() {
+      } else if let Some(num) = self.consume_if(TokenType::LiteralNumber)?.match_loc() {
         // TODO Do we need to normalise?
         num
-      } else if let Some(loc) = self.consume_if(TokenType::PrivateMember)?.match_loc_take() {
+      } else if let Some(loc) = self.consume_if(TokenType::PrivateMember)?.match_loc() {
         loc
       } else if let Some(loc) = self
         .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
-        .match_loc_take()
+        .match_loc()
       {
         loc
       } else {

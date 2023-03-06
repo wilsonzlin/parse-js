@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
     // The name can only be omitted in default exports.
     let name = match self
       .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
-      .match_loc_take()
+      .match_loc()
     {
       Some(name) => {
         let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName { name });
@@ -148,7 +148,7 @@ impl<'a> Parser<'a> {
     // Names can be omitted only in default exports.
     let name = match self
       .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
-      .match_loc_take()
+      .match_loc()
     {
       Some(name) => {
         let name_node = ctx.create_node(name.clone(), Syntax::ClassOrFunctionName {

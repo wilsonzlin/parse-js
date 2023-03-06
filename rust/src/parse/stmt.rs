@@ -29,7 +29,7 @@ impl<'a> Parser<'a> {
     ctx: ParseCtx<'a>,
     add_to_scope: bool,
   ) -> SyntaxResult<'a, ExportName<'a>> {
-    let (target, alias) = match self.consume_if(TokenType::KeywordDefault)?.match_loc_take() {
+    let (target, alias) = match self.consume_if(TokenType::KeywordDefault)?.match_loc() {
       Some(target) => {
         self.require(TokenType::KeywordAs)?;
         let alias = self.require(TokenType::Identifier)?.loc;

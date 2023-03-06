@@ -77,14 +77,6 @@ impl<'a> MaybeToken<'a> {
     }
   }
 
-  pub fn match_loc_take(self) -> Option<SourceRange<'a>> {
-    if self.matched {
-      Some(self.range)
-    } else {
-      None
-    }
-  }
-
   pub fn error(&self, err: SyntaxErrorType) -> SyntaxError<'a> {
     debug_assert!(!self.matched);
     SyntaxError::from_loc(self.range, err, Some(self.typ))

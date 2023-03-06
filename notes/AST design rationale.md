@@ -77,3 +77,4 @@ This is not possible via the Clone trait, since Node references in the tree are 
 - RefCell has a significant performance penalty, but we still want to be able to mutate the tree, so we keep mut references for Node values (which must be unique as per Rust rules).
 - `malloc` has a significant performance penalty, so we use an arena allocator.
 - For these reasons, we don't have cheaply copyable Node references, but this is OK, as we usually don't share/store Node references elsewhere and don't want to deep clone subtrees (transforms are almost always moves).
+- Using RefCell instead of mutable references will usually only move lifetime errors from compile time to runtime.
