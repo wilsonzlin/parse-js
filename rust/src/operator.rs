@@ -77,6 +77,30 @@ pub enum OperatorName {
   YieldDelegated,
 }
 
+impl OperatorName {
+  pub fn is_assignment(self) -> bool {
+    match self {
+      OperatorName::Assignment
+      | OperatorName::AssignmentAddition
+      | OperatorName::AssignmentBitwiseAnd
+      | OperatorName::AssignmentBitwiseLeftShift
+      | OperatorName::AssignmentBitwiseOr
+      | OperatorName::AssignmentBitwiseRightShift
+      | OperatorName::AssignmentBitwiseUnsignedRightShift
+      | OperatorName::AssignmentBitwiseXor
+      | OperatorName::AssignmentDivision
+      | OperatorName::AssignmentExponentiation
+      | OperatorName::AssignmentLogicalAnd
+      | OperatorName::AssignmentLogicalOr
+      | OperatorName::AssignmentMultiplication
+      | OperatorName::AssignmentNullishCoalescing
+      | OperatorName::AssignmentRemainder
+      | OperatorName::AssignmentSubtraction => true,
+      _ => false,
+    }
+  }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Arity {
   Unary,

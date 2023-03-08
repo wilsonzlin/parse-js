@@ -9,6 +9,7 @@ use crate::ast::LiteralTemplatePart;
 use crate::ast::NodeData;
 use crate::ast::ObjectMemberType;
 use crate::ast::Syntax;
+use crate::operator::OperatorName;
 
 pub struct JourneyControls {
   skip: bool,
@@ -107,9 +108,26 @@ pub trait Visitor<'a> {
         self.visit(*signature);
         self.visit(*body);
       }
-      Syntax::BinaryExpr { left, right, .. } => {
-        self.visit(*left);
-        self.visit(*right);
+      Syntax::BinaryExpr {
+        left,
+        right,
+        operator,
+        ..
+      } => {
+        if operator.is_assignment()
+          && match left.stx {
+            Syntax::ArrayPattern { .. }
+            | Syntax::ObjectPattern { .. }
+            | Syntax::IdentifierPattern { .. } => true,
+            _ => false,
+          }
+        {
+          self.visit(*right);
+          self.visit(*left);
+        } else {
+          self.visit(*left);
+          self.visit(*right);
+        };
       }
       Syntax::BlockStmt { body } => {
         for stmt in body {
@@ -353,14 +371,13 @@ pub trait Visitor<'a> {
         key,
         target,
         default_value,
+        ..
       } => {
         match key {
           ClassOrObjectMemberKey::Direct(..) => {}
           ClassOrObjectMemberKey::Computed(key) => self.visit(*key),
         };
-        if let Some(target) = target {
-          self.visit(*target);
-        }
+        self.visit(*target);
         if let Some(value) = default_value {
           self.visit(*value);
         }

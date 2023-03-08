@@ -12,6 +12,7 @@ use crate::ast::Node;
 use crate::ast::NodeFlag;
 use crate::ast::Syntax;
 use crate::ast::VarDeclMode;
+use crate::ast::NODE_FLAG_UNCONDITIONAL_FLOWS;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
 use crate::flag::Flags;
@@ -130,20 +131,8 @@ impl<'a> Parser<'a> {
       if dead {
         stmt.flags |= NodeFlag::Unreachable;
       };
-      if stmt.flags.has(NodeFlag::UnconditionallyBreaks) {
-        flags |= NodeFlag::UnconditionallyBreaks;
-        dead = true;
-      };
-      if stmt.flags.has(NodeFlag::UnconditionallyContinues) {
-        flags |= NodeFlag::UnconditionallyContinues;
-        dead = true;
-      }
-      if stmt.flags.has(NodeFlag::UnconditionallyReturns) {
-        flags |= NodeFlag::UnconditionallyReturns;
-        dead = true;
-      };
-      if stmt.flags.has(NodeFlag::UnconditionallyThrows) {
-        flags |= NodeFlag::UnconditionallyThrows;
+      flags |= stmt.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
+      if stmt.flags.has_any(NODE_FLAG_UNCONDITIONAL_FLOWS) {
         dead = true;
       };
       match &stmt.stx {
@@ -159,14 +148,14 @@ impl<'a> Parser<'a> {
           for decl in declarators {
             match &decl.pattern.stx {
               Syntax::IdentifierPattern { .. } => match mode {
-                VarDeclMode::Const => flags |= NodeFlag::HasConstDeclWithIdentifierPattern,
-                VarDeclMode::Let => flags |= NodeFlag::HasLetDeclWithIdentifierPattern,
-                VarDeclMode::Var => flags |= NodeFlag::HasVarDeclWithIdentifierPattern,
+                VarDeclMode::Const => flags |= NodeFlag::HasConstVarDeclWithIdentifierPattern,
+                VarDeclMode::Let => flags |= NodeFlag::HasLetVarDeclWithIdentifierPattern,
+                VarDeclMode::Var => flags |= NodeFlag::HasVarVarDeclWithIdentifierPattern,
               },
               _ => match mode {
-                VarDeclMode::Const => flags |= NodeFlag::HasConstDeclWithNonIdentifierPattern,
-                VarDeclMode::Let => flags |= NodeFlag::HasLetDeclWithNonIdentifierPattern,
-                VarDeclMode::Var => flags |= NodeFlag::HasVarDeclWithNonIdentifierPattern,
+                VarDeclMode::Const => flags |= NodeFlag::HasConstVarDeclWithNonIdentifierPattern,
+                VarDeclMode::Let => flags |= NodeFlag::HasLetVarDeclWithNonIdentifierPattern,
+                VarDeclMode::Var => flags |= NodeFlag::HasVarVarDeclWithNonIdentifierPattern,
               },
             };
           }
@@ -447,19 +436,7 @@ impl<'a> Parser<'a> {
     };
     let end = alternate.as_ref().unwrap_or(&consequent);
 
-    let mut flags = Flags::new();
-    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyBreaks) {
-      flags |= NodeFlag::UnconditionallyBreaks;
-    };
-    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyContinues) {
-      flags |= NodeFlag::UnconditionallyContinues;
-    }
-    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyReturns) {
-      flags |= NodeFlag::UnconditionallyReturns;
-    };
-    if (consequent.flags | end.flags).has(NodeFlag::UnconditionallyThrows) {
-      flags |= NodeFlag::UnconditionallyThrows;
-    };
+    let mut flags = (consequent.flags | end.flags).select(NODE_FLAG_UNCONDITIONAL_FLOWS);
 
     Ok(ctx.create_node_with_flags(
       start.loc + end.loc,
@@ -598,18 +575,7 @@ impl<'a> Parser<'a> {
     let mut flags = Flags::new();
     let finally = if self.consume_if(TokenType::KeywordFinally)?.is_match() {
       let body = self.parse_stmt_block(ctx)?;
-      if body.flags.has(NodeFlag::UnconditionallyBreaks) {
-        flags |= NodeFlag::UnconditionallyBreaks;
-      };
-      if body.flags.has(NodeFlag::UnconditionallyContinues) {
-        flags |= NodeFlag::UnconditionallyContinues;
-      }
-      if body.flags.has(NodeFlag::UnconditionallyReturns) {
-        flags |= NodeFlag::UnconditionallyReturns;
-      };
-      if body.flags.has(NodeFlag::UnconditionallyThrows) {
-        flags |= NodeFlag::UnconditionallyThrows;
-      };
+      flags |= body.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
       loc.extend(body.loc);
       Some(body)
     } else {
@@ -648,18 +614,7 @@ impl<'a> Parser<'a> {
     self.consume_if(TokenType::Semicolon)?;
 
     let mut flags = Flags::new();
-    if body.flags.has(NodeFlag::UnconditionallyBreaks) {
-      flags |= NodeFlag::UnconditionallyBreaks;
-    };
-    if body.flags.has(NodeFlag::UnconditionallyContinues) {
-      flags |= NodeFlag::UnconditionallyContinues;
-    }
-    if body.flags.has(NodeFlag::UnconditionallyReturns) {
-      flags |= NodeFlag::UnconditionallyReturns;
-    };
-    if body.flags.has(NodeFlag::UnconditionallyThrows) {
-      flags |= NodeFlag::UnconditionallyThrows;
-    };
+    flags |= body.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
 
     Ok(ctx.create_node(start.loc + end.loc, Syntax::DoWhileStmt { condition, body }))
   }

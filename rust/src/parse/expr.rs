@@ -240,15 +240,19 @@ fn transform_literal_expr_to_destructuring_pattern<'a>(
               };
               properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
                 key: key.take(),
-                target: Some(target),
+                target,
                 default_value: default_value.map(|n| n.take(ctx.session)),
+                shorthand: true,
               }));
             }
             ObjectMemberType::Shorthand { identifier } => {
               properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
                 key: ClassOrObjectMemberKey::Direct(identifier.loc),
-                target: None,
+                target: ctx.create_node(loc, Syntax::IdentifierPattern {
+                  name: identifier.loc,
+                }),
                 default_value: None,
+                shorthand: true,
               }));
             }
             ObjectMemberType::Rest { value } => {
@@ -1064,26 +1068,8 @@ impl<'a> Parser<'a> {
               })
             }
             _ => {
-              match operator.name {
-                OperatorName::Assignment
-                | OperatorName::AssignmentAddition
-                | OperatorName::AssignmentBitwiseAnd
-                | OperatorName::AssignmentBitwiseLeftShift
-                | OperatorName::AssignmentBitwiseOr
-                | OperatorName::AssignmentBitwiseRightShift
-                | OperatorName::AssignmentBitwiseUnsignedRightShift
-                | OperatorName::AssignmentBitwiseXor
-                | OperatorName::AssignmentDivision
-                | OperatorName::AssignmentExponentiation
-                | OperatorName::AssignmentLogicalAnd
-                | OperatorName::AssignmentLogicalOr
-                | OperatorName::AssignmentMultiplication
-                | OperatorName::AssignmentNullishCoalescing
-                | OperatorName::AssignmentRemainder
-                | OperatorName::AssignmentSubtraction => {
-                  left = convert_assignment_lhs_to_target(ctx, left, operator.name)?;
-                }
-                _ => {}
+              if operator.name.is_assignment() {
+                left = convert_assignment_lhs_to_target(ctx, left, operator.name)?;
               };
               let right = self.parse_expr_with_min_prec(
                 ctx,

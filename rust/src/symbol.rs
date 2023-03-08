@@ -1,4 +1,5 @@
 use crate::error::SyntaxResult;
+use crate::flag::flag_bitfield;
 use crate::flag::Flag;
 use crate::flag::Flags;
 use crate::session::Session;
@@ -11,6 +12,7 @@ use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::hash::Hash;
+use std::ops::BitOr;
 use std::rc::Rc;
 
 pub type Identifier<'a> = SourceRange<'a>;
@@ -61,6 +63,13 @@ impl ScopeType {
     }
   }
 
+  pub fn is_closure_or_class(&self) -> bool {
+    match self {
+      ScopeType::Class => true,
+      t => t.is_closure(),
+    }
+  }
+
   pub fn is_closure_or_global(&self) -> bool {
     match self {
       ScopeType::Global => true,
@@ -85,9 +94,17 @@ pub enum ScopeFlag {
   UsesArguments,
 }
 
+impl BitOr for ScopeFlag {
+  type Output = Flags<ScopeFlag>;
+
+  fn bitor(self, rhs: Self) -> Self::Output {
+    Flags::from_raw(self.bitfield() | rhs.bitfield())
+  }
+}
+
 impl Flag for ScopeFlag {
   fn bitfield(self) -> u64 {
-    1 << (self as u8)
+    flag_bitfield!(self)
   }
 }
 
@@ -220,14 +237,20 @@ impl<'a> Scope<'a> {
     self.get().symbols.get(&identifier).cloned()
   }
 
-  pub fn find_symbol(self, identifier: Identifier<'a>) -> Option<Symbol> {
+  pub fn find_symbol_with_scope(self, identifier: Identifier<'a>) -> Option<(Scope<'a>, Symbol)> {
     match self.get().symbols.get(&identifier) {
-      Some(symbol) => Some(symbol.clone()),
+      Some(symbol) => Some((self, symbol.clone())),
       None => match self.get().parent {
-        Some(parent) => parent.find_symbol(identifier),
+        Some(parent) => parent.find_symbol_with_scope(identifier),
         None => None,
       },
     }
+  }
+
+  pub fn find_symbol(self, identifier: Identifier<'a>) -> Option<Symbol> {
+    self
+      .find_symbol_with_scope(identifier)
+      .map(|(_, symbol)| symbol)
   }
 
   pub fn find_symbol_up_to_nearest_scope_of_type<'b>(

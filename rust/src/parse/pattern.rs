@@ -116,40 +116,43 @@ impl<'a> Parser<'a> {
             };
             ClassOrObjectMemberKey::Direct(name.loc)
           };
-          let target = if self.consume_if(TokenType::Colon)?.is_match() {
-            Some(self.parse_pattern(ctx, action)?)
+          let (shorthand, target) = if self.consume_if(TokenType::Colon)?.is_match() {
+            (false, self.parse_pattern(ctx, action)?)
           } else {
-            if let ClassOrObjectMemberKey::Computed(name) = key {
-              return Err(name.error(SyntaxErrorType::ExpectedSyntax(
-                "object pattern property subpattern",
-              )));
-            };
-            None
+            match key {
+              ClassOrObjectMemberKey::Computed(name) => {
+                return Err(name.error(SyntaxErrorType::ExpectedSyntax(
+                  "object pattern property subpattern",
+                )));
+              }
+              ClassOrObjectMemberKey::Direct(name) => (
+                true,
+                ctx.create_node(name, Syntax::IdentifierPattern { name }),
+              ),
+            }
           };
           let default_value = if self.consume_if(TokenType::Equals)?.is_match() {
             Some(self.parse_expr_until_either(ctx, TokenType::Comma, TokenType::BraceClose)?)
           } else {
             None
           };
-          if let Some(n) = default_value.as_ref().or(target.as_ref()) {
-            loc.extend(n.loc);
-          };
+          loc.extend(default_value.as_ref().unwrap_or(&target).loc);
           let direct_key_name = match &key {
             ClassOrObjectMemberKey::Direct(name) => Some(name.clone()),
             _ => None,
           };
-          let target_exists = target.is_some();
           let property = ctx.create_node(loc, Syntax::ObjectPatternProperty {
             key,
             target,
             default_value,
+            shorthand,
           });
           properties.push(property);
-          match (direct_key_name, target_exists, action) {
-            (Some(name), false, ParsePatternAction::AddToBlockScope) => {
+          match (direct_key_name, shorthand, action) {
+            (Some(name), true, ParsePatternAction::AddToBlockScope) => {
               ctx.scope.add_block_symbol(name)?;
             }
-            (Some(name), false, ParsePatternAction::AddToClosureScope) => {
+            (Some(name), true, ParsePatternAction::AddToClosureScope) => {
               if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
                 closure.add_symbol(name)?;
               }

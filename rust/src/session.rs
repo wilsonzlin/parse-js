@@ -17,7 +17,7 @@ pub type SessionHashMap<'a, K, V> = hashbrown::HashMap<K, V, DefaultHashBuilder,
 
 pub type SessionHashSet<'a, T> = hashbrown::HashSet<T, DefaultHashBuilder, BumpWrapper<'a>>;
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub struct SessionVec<'a, T>(bumpalo::collections::Vec<'a, T>);
 
 impl<'a, T: Debug> Debug for SessionVec<'a, T> {

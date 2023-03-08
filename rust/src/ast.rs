@@ -1,5 +1,6 @@
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
+use crate::flag::flag_bitfield;
 use crate::flag::Flag;
 use crate::flag::Flags;
 use crate::num::JsNumber;
@@ -12,29 +13,46 @@ use crate::symbol::Scope;
 use core::fmt::Debug;
 use std::fmt;
 use std::fmt::Formatter;
+use std::ops::BitOr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeFlag {
-  HasClassDecl,                         // BlockStmt
-  HasConstDeclWithIdentifierPattern,    // BlockStmt
-  HasConstDeclWithNonIdentifierPattern, // BlockStmt
-  HasFunctionDecl,                      // BlockStmt
-  HasLetDeclWithIdentifierPattern,      // BlockStmt
-  HasLetDeclWithNonIdentifierPattern,   // BlockStmt
-  HasVarDeclWithIdentifierPattern,      // BlockStmt
-  HasVarDeclWithNonIdentifierPattern,   // BlockStmt
-  UnconditionallyBreaks,                // BlockStmt, BreakStmt, DoWhileStmt IfStmt, TryStmt
-  UnconditionallyContinues,             // BlockStmt, ContinueStmt, DoWhileStmt, IfStmt, TryStmt
-  UnconditionallyReturns,               // BlockStmt, DoWhileStmt, IfStmt, ReturnStmt, TryStmt
-  UnconditionallyThrows,                // BlockStmt, DoWhileStmt, IfStmt, ThrowStmt, TryStmt
-  Unreachable,                          // Any child of BlockStmt
+  HasClassDecl,                            // BlockStmt
+  HasConstVarDeclWithIdentifierPattern,    // BlockStmt
+  HasConstVarDeclWithNonIdentifierPattern, // BlockStmt
+  HasFunctionDecl,                         // BlockStmt
+  HasLetVarDeclWithIdentifierPattern,      // BlockStmt
+  HasLetVarDeclWithNonIdentifierPattern,   // BlockStmt
+  HasNonExprStmtOrVarDecl,                 // BlockStmt
+  HasVarVarDeclWithIdentifierPattern,      // BlockStmt
+  HasVarVarDeclWithNonIdentifierPattern,   // BlockStmt
+  UnconditionallyBreaks,                   // BlockStmt, BreakStmt, DoWhileStmt IfStmt, TryStmt
+  UnconditionallyContinues,                // BlockStmt, ContinueStmt, DoWhileStmt, IfStmt, TryStmt
+  UnconditionallyReturns,                  // BlockStmt, DoWhileStmt, IfStmt, ReturnStmt, TryStmt
+  UnconditionallyThrows,                   // BlockStmt, DoWhileStmt, IfStmt, ThrowStmt, TryStmt
+  Unreachable,                             // Any child of BlockStmt
 }
 
 impl Flag for NodeFlag {
   fn bitfield(self) -> u64 {
-    1 << (self as u8)
+    flag_bitfield!(self)
   }
 }
+
+impl BitOr for NodeFlag {
+  type Output = Flags<NodeFlag>;
+
+  fn bitor(self, rhs: Self) -> Self::Output {
+    Flags::from_raw(self.bitfield() | rhs.bitfield())
+  }
+}
+
+pub const NODE_FLAG_UNCONDITIONAL_FLOWS: Flags<NodeFlag> = Flags::from_raw(
+  flag_bitfield!(NodeFlag::UnconditionallyBreaks)
+    | flag_bitfield!(NodeFlag::UnconditionallyContinues)
+    | flag_bitfield!(NodeFlag::UnconditionallyReturns)
+    | flag_bitfield!(NodeFlag::UnconditionallyThrows),
+);
 
 // To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
 // - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
@@ -589,9 +607,14 @@ pub enum Syntax<'a> {
   },
   ObjectPatternProperty {
     key: ClassOrObjectMemberKey<'a>,
-    // Omitted if shorthand i.e. key is Direct and target is IdentifierPattern of same name.
-    // TODO Ideally for simplicity this should be duplicated from `key` if shorthand, with a `shorthand` boolean field to indicate so.
-    target: Option<Pattern<'a>>,
+    // If `shorthand`, `key` is Direct and `target` is IdentifierPattern of same name. This way, there is always an IdentifierPattern that exists and can be visited, instead of also having to consider ClassOrObjectMemberKey::Direct as identifier if shorthand.
+    target: Pattern<'a>,
+    #[cfg_attr(feature = "serialize", serde(default))]
+    #[cfg_attr(
+      feature = "serialize",
+      serde(skip_serializing_if = "core::ops::Not::not")
+    )]
+    shorthand: bool,
     default_value: Option<Expression<'a>>,
   },
   SwitchBranch {

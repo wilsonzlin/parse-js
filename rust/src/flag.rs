@@ -3,15 +3,32 @@ use std::ops::BitOr;
 use std::ops::BitOrAssign;
 
 pub trait Flag {
+  // This should always be the same code; use `flag_bitfield!(self)`. This trait exists to allow for generic F in Flags<F>, not for shared interfaces.
   fn bitfield(self) -> u64;
 }
+
+macro_rules! flag_bitfield {
+  ($f:expr) => {
+    1 << ($f as u8)
+  };
+}
+
+pub(crate) use flag_bitfield;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Flags<F: Flag>(u64, PhantomData<F>);
 
 impl<F: Flag> Flags<F> {
+  pub const fn from_raw(raw: u64) -> Self {
+    Self(0, PhantomData)
+  }
+
   pub fn new() -> Self {
     Self(0, PhantomData)
+  }
+
+  pub fn select(self, flags: Flags<F>) -> Flags<F> {
+    Self(self.0 & flags.0, PhantomData)
   }
 
   pub fn has(self, flag: F) -> bool {
