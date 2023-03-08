@@ -104,7 +104,11 @@
             "key": {
               "Direct": "get"
             },
-            "target": null
+            "target": {
+              "$t": "IdentifierPattern",
+              "name": "get"
+            },
+            "shorthand": true
           },
           {
             "$t": "ObjectPatternProperty",
@@ -112,7 +116,11 @@
             "key": {
               "Direct": "set"
             },
-            "target": null
+            "target": {
+              "$t": "IdentifierPattern",
+              "name": "set"
+            },
+            "shorthand": true
           },
           {
             "$t": "ObjectPatternProperty",

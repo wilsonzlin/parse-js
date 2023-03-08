@@ -58,14 +58,26 @@
                   {
                     "$t": "ObjectPatternProperty",
                     "default_value": null,
-                    "key": { "Direct": "a" },
-                    "target": null
+                    "key": {
+                      "Direct": "a"
+                    },
+                    "target": {
+                      "$t": "IdentifierPattern",
+                      "name": "a"
+                    },
+                    "shorthand": true
                   },
                   {
                     "$t": "ObjectPatternProperty",
                     "default_value": null,
-                    "key": { "Direct": "b" },
-                    "target": null
+                    "key": {
+                      "Direct": "b"
+                    },
+                    "target": {
+                      "$t": "IdentifierPattern",
+                      "name": "b"
+                    },
+                    "shorthand": true
                   }
                 ],
                 "rest": null
@@ -88,8 +100,14 @@
               {
                 "$t": "ObjectPatternProperty",
                 "default_value": null,
-                "key": { "Direct": "a" },
-                "target": null
+                "key": {
+                  "Direct": "a"
+                },
+                "target": {
+                  "$t": "IdentifierPattern",
+                  "name": "a"
+                },
+                "shorthand": true
               }
             ],
             "rest": null
