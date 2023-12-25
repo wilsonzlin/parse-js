@@ -690,7 +690,6 @@ impl<'a> Parser<'a> {
     }
     self.require(TokenType::ParenthesisOpen)?;
     let module = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
-    self.require(TokenType::ParenthesisClose)?;
     let end = self.require(TokenType::ParenthesisClose)?;
     Ok(ctx.create_node(start.loc + end.loc, Syntax::ImportExpr { module }))
   }
