@@ -222,9 +222,10 @@ impl<'a> Parser<'a> {
     self.peek_with_mode(LexMode::Standard)
   }
 
-  pub fn consume_peeked(&mut self) -> () {
+  pub fn consume_peeked(&mut self) -> Token<'a> {
     let b = self.buffered.take().unwrap();
     self.lexer.apply_checkpoint(b.after_checkpoint);
+    b.token
   }
 
   pub fn maybe_with_mode(

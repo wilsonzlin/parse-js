@@ -391,8 +391,13 @@ impl<'a> Parser<'a> {
       // Children.
       let mut children = ctx.session.new_vec();
       let close_start = loop {
-        match self.consume_if(TokenType::ChevronLeftSlash)? {
-          t if t.is_match() => break t,
+        match self.peek()? {
+          t if t.typ == TokenType::ChevronLeftSlash => {
+            break self.consume_peeked();
+          }
+          t if t.typ == TokenType::EOF => {
+            return Err(t.error(SyntaxErrorType::UnexpectedEnd));
+          }
           _ => {}
         };
         let text = self.require_with_mode(TokenType::JsxTextContent, LexMode::JsxTextContent)?;
