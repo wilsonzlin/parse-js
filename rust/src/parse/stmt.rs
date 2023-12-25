@@ -316,6 +316,7 @@ impl<'a> Parser<'a> {
     let for_ctx = ctx.with_scope(for_scope);
 
     let start = self.require(TokenType::KeywordFor)?;
+    let await_ = self.consume_if(TokenType::KeywordAwait)?;
     self.require(TokenType::ParenthesisOpen)?;
     enum LhsRaw<'a> {
       Declaration(Node<'a>),
@@ -358,6 +359,12 @@ impl<'a> Parser<'a> {
           TokenType::KeywordIn => false,
           _ => unreachable!(),
         };
+        if !of && await_.is_match() {
+          // A for-in statement cannot have await.
+          return Err(await_.error(SyntaxErrorType::RequiredTokenNotFound(
+            TokenType::ParenthesisOpen,
+          )));
+        };
         let lhs = match lhs_raw {
           LhsRaw::Empty => return Err(start.error(SyntaxErrorType::ForLoopHeaderHasNoLhs)),
           LhsRaw::Declaration(node) => match &node.stx {
@@ -376,10 +383,21 @@ impl<'a> Parser<'a> {
         };
         let rhs = self.parse_expr(for_ctx, TokenType::ParenthesisClose)?;
         self.require(TokenType::ParenthesisClose)?;
-        ForStmtHeader::InOf { of, lhs, rhs }
+        ForStmtHeader::InOf {
+          of,
+          lhs,
+          rhs,
+          await_: await_.is_match(),
+        }
       }
       _ => {
         // for statement.
+        if await_.is_match() {
+          // A for statement cannot have await.
+          return Err(await_.error(SyntaxErrorType::RequiredTokenNotFound(
+            TokenType::ParenthesisOpen,
+          )));
+        }
         let init = match lhs_raw {
           LhsRaw::Declaration(decl) => {
             self.require(TokenType::Semicolon)?;

@@ -289,6 +289,9 @@ pub enum ForStmtHeader<'a> {
     of: bool,
     lhs: ForInOfStmtHeaderLhs<'a>,
     rhs: Expression<'a>,
+    // Only on `for-of` statements.
+    #[cfg_attr(feature = "serialize", serde(default))]
+    await_: bool,
   },
 }
 
