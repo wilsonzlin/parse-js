@@ -1,0 +1,12 @@
+{
+  "$t": "TaggedTemplateExpr",
+  "function": {
+    "$t": "IdentifierExpr",
+    "name": "a"
+  },
+  "parts": [
+    {
+      "String": ""
+    }
+  ]
+}

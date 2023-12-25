@@ -752,6 +752,51 @@ impl<'a> Parser<'a> {
     }))
   }
 
+  // NOTE: The next token must definitely be LiteralTemplatePartString{,End}.
+  fn parse_expr_literal_template_parts(
+    &mut self,
+    ctx: ParseCtx<'a>,
+  ) -> SyntaxResult<'a, SessionVec<'a, LiteralTemplatePart<'a>>> {
+    let t = self.next().unwrap();
+    let is_end = match t.typ {
+      TokenType::LiteralTemplatePartString => false,
+      TokenType::LiteralTemplatePartStringEnd => true,
+      _ => unreachable!(),
+    };
+
+    let mut loc = t.loc;
+    let mut parts = ctx.session.new_vec();
+    parts.push(LiteralTemplatePart::String(
+      normalise_literal_string_or_template_inner(ctx, t.loc.as_slice())
+        .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
+    ));
+    if !is_end {
+      loop {
+        let substitution = self.parse_expr(ctx, TokenType::BraceClose)?;
+        self.require(TokenType::BraceClose)?;
+        parts.push(LiteralTemplatePart::Substitution(substitution));
+        let string = lex_template_string_continue(self.lexer_mut(), false)?;
+        loc.extend(string.loc);
+        parts.push(LiteralTemplatePart::String(
+          normalise_literal_string_or_template_inner(ctx, string.loc.as_slice()).ok_or_else(
+            || {
+              string
+                .loc
+                .error(SyntaxErrorType::InvalidCharacterEscape, None)
+            },
+          )?,
+        ));
+        self.clear_buffered();
+        match string.typ {
+          TokenType::LiteralTemplatePartStringEnd => break,
+          _ => {}
+        };
+      }
+    };
+
+    Ok(parts)
+  }
+
   fn parse_expr_operand(
     &mut self,
     ctx: ParseCtx<'a>,
@@ -761,176 +806,144 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<'a, Node<'a>> {
     let cp = self.checkpoint();
     let t = self.next_with_mode(LexMode::SlashIsRegex)?;
-    let operand =
-      match UNARY_OPERATOR_MAPPING.get(&t.typ) {
-        Some(operator)
-          if (
-            // TODO Is this correct? Should it be possible to use as operator or keyword depending on whether there is an operand following?
-            (operator.name != OperatorName::Await && operator.name != OperatorName::Yield)
-              || (operator.name == OperatorName::Await && !ctx.rules.await_allowed)
-              || (operator.name == OperatorName::Yield && !ctx.rules.yield_allowed)
-          ) =>
+    let operand = match UNARY_OPERATOR_MAPPING.get(&t.typ) {
+      Some(operator)
+        if (
+          // TODO Is this correct? Should it be possible to use as operator or keyword depending on whether there is an operand following?
+          (operator.name != OperatorName::Await && operator.name != OperatorName::Yield)
+            || (operator.name == OperatorName::Await && !ctx.rules.await_allowed)
+            || (operator.name == OperatorName::Yield && !ctx.rules.yield_allowed)
+        ) =>
+      {
+        let operator = if operator.name == OperatorName::Yield
+          && self.consume_if(TokenType::Asterisk)?.is_match()
         {
-          let operator = if operator.name == OperatorName::Yield
-            && self.consume_if(TokenType::Asterisk)?.is_match()
-          {
-            &OPERATORS[&OperatorName::YieldDelegated]
-          } else {
-            *operator
-          };
-          let next_min_prec =
-            operator.precedence + (operator.associativity == Associativity::Left) as u8;
-          let operand = self.parse_expr_with_min_prec(
-            ctx,
-            next_min_prec,
-            terminator_a,
-            terminator_b,
-            false,
-            asi,
-          )?;
-          ctx.create_node(t.loc + operand.loc, Syntax::UnaryExpr {
-            parenthesised: false,
-            operator: operator.name,
-            argument: operand,
-          })
-        }
-        _ => {
-          match t.typ {
-            TokenType::BracketOpen => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_array(ctx)?
-            }
-            TokenType::BraceOpen => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_object(ctx)?
-            }
-            TokenType::ChevronLeft => {
-              self.restore_checkpoint(cp);
-              self.parse_jsx_element(ctx)?
-            }
-            // Check this before is_valid_pattern_identifier.
-            TokenType::KeywordAsync => {
-              match self.peek()?.typ {
-                TokenType::ParenthesisOpen => {
-                  self.restore_checkpoint(cp);
-                  self.parse_expr_arrow_function(ctx, terminator_a, terminator_b)?
-                }
-                TokenType::KeywordFunction => {
-                  self.restore_checkpoint(cp);
-                  self.parse_expr_function(ctx)?
-                }
-                _ => {
-                  // `await` is being used as an identifier.
-                  ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
-                }
-              }
-            }
-            typ if is_valid_pattern_identifier(typ, ctx.rules) => {
-              if self.peek()?.typ == TokenType::EqualsChevronRight {
-                // Single-unparenthesised-parameter arrow function.
-                // NOTE: `await` is not allowed as an arrow function parameter, but we'll check this in parse_expr_arrow_function.
+          &OPERATORS[&OperatorName::YieldDelegated]
+        } else {
+          *operator
+        };
+        let next_min_prec =
+          operator.precedence + (operator.associativity == Associativity::Left) as u8;
+        let operand = self.parse_expr_with_min_prec(
+          ctx,
+          next_min_prec,
+          terminator_a,
+          terminator_b,
+          false,
+          asi,
+        )?;
+        ctx.create_node(t.loc + operand.loc, Syntax::UnaryExpr {
+          parenthesised: false,
+          operator: operator.name,
+          argument: operand,
+        })
+      }
+      _ => {
+        match t.typ {
+          TokenType::BracketOpen => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_array(ctx)?
+          }
+          TokenType::BraceOpen => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_object(ctx)?
+          }
+          TokenType::ChevronLeft => {
+            self.restore_checkpoint(cp);
+            self.parse_jsx_element(ctx)?
+          }
+          // Check this before is_valid_pattern_identifier.
+          TokenType::KeywordAsync => {
+            match self.peek()?.typ {
+              TokenType::ParenthesisOpen => {
                 self.restore_checkpoint(cp);
                 self.parse_expr_arrow_function(ctx, terminator_a, terminator_b)?
-              } else {
-                if t.loc == "arguments"
-                  && ctx
-                    .scope
-                    .find_symbol_up_to_nearest_scope_of_type(t.loc, ScopeType::NonArrowFunction)
-                    .is_none()
-                {
-                  if let Some(closure) = ctx
-                    .scope
-                    .find_self_or_ancestor(|t| t == ScopeType::NonArrowFunction)
-                  {
-                    closure.flags_mut().set(ScopeFlag::UsesArguments);
-                  };
-                };
+              }
+              TokenType::KeywordFunction => {
+                self.restore_checkpoint(cp);
+                self.parse_expr_function(ctx)?
+              }
+              _ => {
+                // `await` is being used as an identifier.
                 ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
               }
             }
-            TokenType::KeywordClass => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_class(ctx)?
-            }
-            TokenType::KeywordFunction => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_function(ctx)?
-            }
-            TokenType::KeywordImport => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_import(ctx)?
-            }
-            TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
-            TokenType::KeywordThis => {
-              let new_node = ctx.create_node(t.loc, Syntax::ThisExpr {});
-              if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| {
-                t == ScopeType::Class || t == ScopeType::NonArrowFunction
-              }) {
-                closure.flags_mut().set(ScopeFlag::UsesThis);
-              };
-              new_node
-            }
-            TokenType::LiteralBigInt => ctx.create_node(t.loc, Syntax::LiteralBigIntExpr {
-              value: normalise_literal_bigint(ctx, t.loc)?,
-            }),
-            TokenType::LiteralTrue | TokenType::LiteralFalse => {
-              ctx.create_node(t.loc, Syntax::LiteralBooleanExpr {
-                value: t.typ == TokenType::LiteralTrue,
-              })
-            }
-            TokenType::LiteralNull => ctx.create_node(t.loc, Syntax::LiteralNull {}),
-            TokenType::LiteralNumber => ctx.create_node(t.loc, Syntax::LiteralNumberExpr {
-              value: normalise_literal_number(t.loc)?,
-            }),
-            TokenType::LiteralRegex => ctx.create_node(t.loc, Syntax::LiteralRegexExpr {}),
-            TokenType::LiteralString => ctx.create_node(t.loc, Syntax::LiteralStringExpr {
-              value: normalise_literal_string(ctx, t.loc)?,
-            }),
-            TokenType::LiteralTemplatePartString => {
-              let mut loc = t.loc;
-              let mut parts = ctx.session.new_vec();
-              parts.push(LiteralTemplatePart::String(
-                normalise_literal_string_or_template_inner(ctx, t.loc.as_slice())
-                  .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
-              ));
-              loop {
-                let substitution = self.parse_expr(ctx, TokenType::BraceClose)?;
-                self.require(TokenType::BraceClose)?;
-                parts.push(LiteralTemplatePart::Substitution(substitution));
-                let string = lex_template_string_continue(self.lexer_mut(), false)?;
-                loc.extend(string.loc);
-                parts.push(LiteralTemplatePart::String(
-                  normalise_literal_string_or_template_inner(ctx, string.loc.as_slice())
-                    .ok_or_else(|| {
-                      string
-                        .loc
-                        .error(SyntaxErrorType::InvalidCharacterEscape, None)
-                    })?,
-                ));
-                self.clear_buffered();
-                match string.typ {
-                  TokenType::LiteralTemplatePartStringEnd => break,
-                  _ => {}
-                };
-              }
-              ctx.create_node(loc, Syntax::LiteralTemplateExpr { parts })
-            }
-            TokenType::LiteralTemplatePartStringEnd => {
-              let mut parts = ctx.session.new_vec();
-              parts.push(LiteralTemplatePart::String(
-                normalise_literal_string_or_template_inner(ctx, t.loc.as_slice())
-                  .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
-              ));
-              ctx.create_node(t.loc, Syntax::LiteralTemplateExpr { parts })
-            }
-            TokenType::ParenthesisOpen => {
-              self.restore_checkpoint(cp);
-              self.parse_expr_arrow_function_or_grouping(ctx, terminator_a, terminator_b, asi)?
-            }
-            _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("expression operand"))),
           }
+          typ if is_valid_pattern_identifier(typ, ctx.rules) => {
+            if self.peek()?.typ == TokenType::EqualsChevronRight {
+              // Single-unparenthesised-parameter arrow function.
+              // NOTE: `await` is not allowed as an arrow function parameter, but we'll check this in parse_expr_arrow_function.
+              self.restore_checkpoint(cp);
+              self.parse_expr_arrow_function(ctx, terminator_a, terminator_b)?
+            } else {
+              if t.loc == "arguments"
+                && ctx
+                  .scope
+                  .find_symbol_up_to_nearest_scope_of_type(t.loc, ScopeType::NonArrowFunction)
+                  .is_none()
+              {
+                if let Some(closure) = ctx
+                  .scope
+                  .find_self_or_ancestor(|t| t == ScopeType::NonArrowFunction)
+                {
+                  closure.flags_mut().set(ScopeFlag::UsesArguments);
+                };
+              };
+              ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
+            }
+          }
+          TokenType::KeywordClass => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_class(ctx)?
+          }
+          TokenType::KeywordFunction => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_function(ctx)?
+          }
+          TokenType::KeywordImport => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_import(ctx)?
+          }
+          TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
+          TokenType::KeywordThis => {
+            let new_node = ctx.create_node(t.loc, Syntax::ThisExpr {});
+            if let Some(closure) = ctx
+              .scope
+              .find_self_or_ancestor(|t| t == ScopeType::Class || t == ScopeType::NonArrowFunction)
+            {
+              closure.flags_mut().set(ScopeFlag::UsesThis);
+            };
+            new_node
+          }
+          TokenType::LiteralBigInt => ctx.create_node(t.loc, Syntax::LiteralBigIntExpr {
+            value: normalise_literal_bigint(ctx, t.loc)?,
+          }),
+          TokenType::LiteralTrue | TokenType::LiteralFalse => {
+            ctx.create_node(t.loc, Syntax::LiteralBooleanExpr {
+              value: t.typ == TokenType::LiteralTrue,
+            })
+          }
+          TokenType::LiteralNull => ctx.create_node(t.loc, Syntax::LiteralNull {}),
+          TokenType::LiteralNumber => ctx.create_node(t.loc, Syntax::LiteralNumberExpr {
+            value: normalise_literal_number(t.loc)?,
+          }),
+          TokenType::LiteralRegex => ctx.create_node(t.loc, Syntax::LiteralRegexExpr {}),
+          TokenType::LiteralString => ctx.create_node(t.loc, Syntax::LiteralStringExpr {
+            value: normalise_literal_string(ctx, t.loc)?,
+          }),
+          TokenType::LiteralTemplatePartString | TokenType::LiteralTemplatePartStringEnd => {
+            self.restore_checkpoint(cp);
+            let parts = self.parse_expr_literal_template_parts(ctx)?;
+            ctx.create_node(t.loc, Syntax::LiteralTemplateExpr { parts })
+          }
+          TokenType::ParenthesisOpen => {
+            self.restore_checkpoint(cp);
+            self.parse_expr_arrow_function_or_grouping(ctx, terminator_a, terminator_b, asi)?
+          }
+          _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("expression operand"))),
         }
-      };
+      }
+    };
     Ok(operand)
   }
 
@@ -971,6 +984,19 @@ impl<'a> Parser<'a> {
             parenthesised: false,
             operator: operator_name,
             argument: left,
+          });
+          continue;
+        }
+        // Automatic Semicolon Insertion rules: no newline between operand and template literal.
+        TokenType::LiteralTemplatePartString | TokenType::LiteralTemplatePartStringEnd
+          if !t.preceded_by_line_terminator =>
+        {
+          let loc = t.loc;
+          self.restore_checkpoint(cp);
+          let parts = self.parse_expr_literal_template_parts(ctx)?;
+          left = ctx.create_node(left.loc + loc, Syntax::TaggedTemplateExpr {
+            function: left,
+            parts,
           });
           continue;
         }

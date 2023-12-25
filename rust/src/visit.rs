@@ -411,6 +411,15 @@ pub trait Visitor<'a> {
           self.visit(*branch);
         }
       }
+      Syntax::TaggedTemplateExpr { function, parts } => {
+        self.visit(function);
+        for part in parts {
+          match part {
+            LiteralTemplatePart::Substitution(expr) => self.visit(*expr),
+            LiteralTemplatePart::String(_) => {}
+          }
+        }
+      }
       Syntax::ThisExpr {} => {}
       Syntax::ThrowStmt { value } => {
         self.visit(*value);

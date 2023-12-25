@@ -515,6 +515,10 @@ pub enum Syntax<'a> {
   },
   SuperExpr {},
   ThisExpr {},
+  TaggedTemplateExpr {
+    function: Expression<'a>,
+    parts: SessionVec<'a, LiteralTemplatePart<'a>>,
+  },
   UnaryExpr {
     parenthesised: bool,
     operator: OperatorName,
