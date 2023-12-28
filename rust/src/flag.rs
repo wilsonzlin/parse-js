@@ -20,7 +20,7 @@ pub struct Flags<F: Flag>(u64, PhantomData<F>);
 
 impl<F: Flag> Flags<F> {
   pub const fn from_raw(raw: u64) -> Self {
-    Self(0, PhantomData)
+    Self(raw, PhantomData)
   }
 
   pub fn new() -> Self {

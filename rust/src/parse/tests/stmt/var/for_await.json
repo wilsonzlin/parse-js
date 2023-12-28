@@ -1,32 +1,17 @@
 {
-  "$t": "ForStmt",
+  "$t": "ForOfStmt",
   "body": {
     "$t": "BlockStmt",
     "body": []
   },
-  "header": {
-    "InOf": {
-      "await_": true,
-      "lhs": {
-        "Declaration": {
-          "$t": "VarDecl",
-          "declarators": [
-            {
-              "initializer": null,
-              "pattern": {
-                "$t": "IdentifierPattern",
-                "name": "s"
-              }
-            }
-          ],
-          "mode": "Const"
-        }
-      },
-      "of": true,
-      "rhs": {
-        "$t": "IdentifierExpr",
-        "name": "expr"
-      }
-    }
+  "await_": true,
+  "pat": {
+    "$t": "IdentifierPattern",
+    "name": "s"
+  },
+  "decl_mode": "Const",
+  "rhs": {
+    "$t": "IdentifierExpr",
+    "name": "expr"
   }
 }

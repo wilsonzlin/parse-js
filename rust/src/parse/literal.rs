@@ -1,7 +1,5 @@
-use super::pattern::is_valid_pattern_identifier;
 use super::ParseCtx;
 use super::Parser;
-use crate::ast::ClassOrObjectMemberKey;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;

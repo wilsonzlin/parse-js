@@ -5,9 +5,7 @@ use super::ParseCtx;
 use super::Parser;
 use crate::ast::ExportName;
 use crate::ast::ExportNames;
-use crate::ast::ForInOfStmtHeaderLhs;
-use crate::ast::ForStmtHeader;
-use crate::ast::ForThreeInit;
+use crate::ast::ForInit;
 use crate::ast::Node;
 use crate::ast::NodeFlag;
 use crate::ast::Syntax;
@@ -351,7 +349,7 @@ impl<'a> Parser<'a> {
         }
       }
     };
-    let header = match self.peek()?.typ {
+    let n = match self.peek()?.typ {
       TokenType::KeywordOf | TokenType::KeywordIn => {
         // for-of or for-in statement.
         let of = match self.next()?.typ {
@@ -365,29 +363,51 @@ impl<'a> Parser<'a> {
             TokenType::ParenthesisOpen,
           )));
         };
-        let lhs = match lhs_raw {
+        let (decl_mode, pat) = match lhs_raw {
           LhsRaw::Empty => return Err(start.error(SyntaxErrorType::ForLoopHeaderHasNoLhs)),
-          LhsRaw::Declaration(node) => match &node.stx {
-            Syntax::VarDecl { declarators, .. } => {
+          LhsRaw::Declaration(node) => match &mut node.stx {
+            Syntax::VarDecl {
+              declarators,
+              mode,
+              export,
+            } => {
+              if *export {
+                return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs));
+              };
               if declarators.len() != 1 {
                 return Err(start.error(SyntaxErrorType::ForLoopHeaderHasMultipleDeclarators));
               }
-              ForInOfStmtHeaderLhs::Declaration(node)
+              let decl = declarators.first_mut().unwrap();
+              if decl.initializer.is_some() {
+                return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs));
+              };
+              (Some(*mode), decl.pattern.take(ctx.session))
             }
             _ => unreachable!(),
           },
-          LhsRaw::Pattern(pat) => ForInOfStmtHeaderLhs::Pattern(pat),
+          LhsRaw::Pattern(pat) => (None, pat),
           LhsRaw::Expression(_) => {
             return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs))
           }
         };
         let rhs = self.parse_expr(for_ctx, TokenType::ParenthesisClose)?;
         self.require(TokenType::ParenthesisClose)?;
-        ForStmtHeader::InOf {
-          of,
-          lhs,
-          rhs,
-          await_: await_.is_match(),
+        let body = self.parse_stmt(for_ctx)?;
+        if of {
+          ctx.create_node(start.loc + body.loc, Syntax::ForOfStmt {
+            await_: await_.is_match(),
+            decl_mode,
+            pat,
+            rhs,
+            body,
+          })
+        } else {
+          ctx.create_node(start.loc + body.loc, Syntax::ForInStmt {
+            decl_mode,
+            pat,
+            rhs,
+            body,
+          })
         }
       }
       _ => {
@@ -401,16 +421,16 @@ impl<'a> Parser<'a> {
         let init = match lhs_raw {
           LhsRaw::Declaration(decl) => {
             self.require(TokenType::Semicolon)?;
-            ForThreeInit::Declaration(decl)
+            ForInit::Declaration(decl)
           }
           LhsRaw::Expression(expr) => {
             // We must check, due to possibility of illegal ASI (see previous).
             self.require(TokenType::Semicolon)?;
-            ForThreeInit::Expression(expr)
+            ForInit::Expression(expr)
           }
           LhsRaw::Empty => {
             self.require(TokenType::Semicolon)?;
-            ForThreeInit::None
+            ForInit::None
           }
           LhsRaw::Pattern(_) => {
             return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs))
@@ -430,15 +450,16 @@ impl<'a> Parser<'a> {
           self.require(TokenType::ParenthesisClose)?;
           Some(expr)
         };
-        ForStmtHeader::Three {
+        let body = self.parse_stmt(for_ctx)?;
+        ctx.create_node(start.loc + body.loc, Syntax::ForStmt {
           init,
           condition,
           post,
-        }
+          body,
+        })
       }
     };
-    let body = self.parse_stmt(for_ctx)?;
-    Ok(ctx.create_node(start.loc + body.loc, Syntax::ForStmt { header, body }))
+    Ok(n)
   }
 
   pub fn parse_stmt_if(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
@@ -454,7 +475,7 @@ impl<'a> Parser<'a> {
     };
     let end = alternate.as_ref().unwrap_or(&consequent);
 
-    let mut flags = (consequent.flags | end.flags).select(NODE_FLAG_UNCONDITIONAL_FLOWS);
+    let flags = (consequent.flags | end.flags).select(NODE_FLAG_UNCONDITIONAL_FLOWS);
 
     Ok(ctx.create_node_with_flags(
       start.loc + end.loc,

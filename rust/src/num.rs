@@ -1,12 +1,13 @@
 use core::hash::Hash;
 use core::hash::Hasher;
 use core::mem;
+use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 // This provides Eq for f64.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialOrd, Debug)]
 pub struct JsNumber(pub f64);
 
 impl Display for JsNumber {
@@ -25,6 +26,13 @@ impl PartialEq for JsNumber {
 }
 
 impl Eq for JsNumber {}
+
+impl Ord for JsNumber {
+  fn cmp(&self, other: &Self) -> Ordering {
+    // Only NaNs cannot be compared, and we treat them as equal.
+    self.0.partial_cmp(&other.0).unwrap_or(Ordering::Equal)
+  }
+}
 
 impl Hash for JsNumber {
   fn hash<H: Hasher>(&self, state: &mut H) {

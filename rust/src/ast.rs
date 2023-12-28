@@ -264,35 +264,10 @@ pub struct VariableDeclarator<'a> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-pub enum ForThreeInit<'a> {
+pub enum ForInit<'a> {
   None,
   Expression(Expression<'a>),
   Declaration(Declaration<'a>),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-pub enum ForInOfStmtHeaderLhs<'a> {
-  Declaration(Declaration<'a>),
-  Pattern(Pattern<'a>),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-pub enum ForStmtHeader<'a> {
-  Three {
-    init: ForThreeInit<'a>,
-    condition: Option<Expression<'a>>,
-    post: Option<Expression<'a>>,
-  },
-  InOf {
-    of: bool,
-    lhs: ForInOfStmtHeaderLhs<'a>,
-    rhs: Expression<'a>,
-    // Only on `for-of` statements.
-    #[cfg_attr(feature = "serialize", serde(default))]
-    await_: bool,
-  },
 }
 
 #[derive(Debug)]
@@ -568,7 +543,25 @@ pub enum Syntax<'a> {
     module: &'a str,
   },
   ForStmt {
-    header: ForStmtHeader<'a>,
+    init: ForInit<'a>,
+    condition: Option<Expression<'a>>,
+    post: Option<Expression<'a>>,
+    body: Statement<'a>,
+  },
+  ForInStmt {
+    // for-in and for-of statements can have `x`/`[x]`/`{x:a}`/etc. on the lhs or `var x`/`var [x]`/etc. on the lhs. But for the latter, while it's technically a Decl, it's always a VarDecl with exactly one declaration that has no initialiser. If you strip down VarDecl to this, it's basically just a VarDeclMode and a Pattern. Therefore, we can represent both a destructuring expr or a decl on the lhs with an Option<VarDeclMode> and a Pattern.
+    decl_mode: Option<VarDeclMode>,
+    pat: Pattern<'a>,
+    rhs: Expression<'a>,
+    body: Statement<'a>,
+  },
+  ForOfStmt {
+    #[cfg_attr(feature = "serialize", serde(default))]
+    await_: bool,
+    // See comment in ForInStmt.
+    decl_mode: Option<VarDeclMode>,
+    pat: Pattern<'a>,
+    rhs: Expression<'a>,
     body: Statement<'a>,
   },
   LabelStmt {

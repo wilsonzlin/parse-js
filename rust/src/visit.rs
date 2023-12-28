@@ -2,14 +2,11 @@ use crate::ast::ArrayElement;
 use crate::ast::ClassOrObjectMemberKey;
 use crate::ast::ClassOrObjectMemberValue;
 use crate::ast::ExportNames;
-use crate::ast::ForInOfStmtHeaderLhs;
-use crate::ast::ForStmtHeader;
-use crate::ast::ForThreeInit;
+use crate::ast::ForInit;
 use crate::ast::LiteralTemplatePart;
 use crate::ast::NodeData;
 use crate::ast::ObjectMemberType;
 use crate::ast::Syntax;
-use crate::operator::OperatorName;
 
 pub struct JourneyControls {
   skip: bool,
@@ -220,35 +217,45 @@ pub trait Visitor<'a> {
       Syntax::ExpressionStmt { expression } => {
         self.visit(*expression);
       }
-      Syntax::ForStmt { header, body } => {
-        match header {
-          ForStmtHeader::Three {
-            init, condition, ..
-          } => {
-            match init {
-              ForThreeInit::None => {}
-              ForThreeInit::Expression(expr) => self.visit(*expr),
-              ForThreeInit::Declaration(decl) => self.visit(*decl),
-            };
-            if let Some(condition) = condition {
-              self.visit(*condition);
-            }
-          }
-          ForStmtHeader::InOf { lhs, rhs, .. } => {
-            self.visit(*rhs);
-            match lhs {
-              ForInOfStmtHeaderLhs::Declaration(decl) => self.visit(*decl),
-              ForInOfStmtHeaderLhs::Pattern(pat) => self.visit(*pat),
-            }
-          }
+      Syntax::ForStmt {
+        body,
+        condition,
+        init,
+        post,
+      } => {
+        match init {
+          ForInit::None => {}
+          ForInit::Expression(expr) => self.visit(*expr),
+          ForInit::Declaration(decl) => self.visit(*decl),
+        };
+        if let Some(condition) = condition {
+          self.visit(*condition);
         };
         self.visit(*body);
-        if let ForStmtHeader::Three {
-          post: Some(post), ..
-        } = header
-        {
+        if let Some(post) = post {
           self.visit(*post);
         };
+      }
+      Syntax::ForInStmt {
+        decl_mode,
+        pat,
+        rhs,
+        body,
+      } => {
+        self.visit(*pat);
+        self.visit(*rhs);
+        self.visit(*body);
+      }
+      Syntax::ForOfStmt {
+        await_,
+        decl_mode,
+        pat,
+        rhs,
+        body,
+      } => {
+        self.visit(*pat);
+        self.visit(*rhs);
+        self.visit(*body);
       }
       Syntax::FunctionDecl {
         name,
