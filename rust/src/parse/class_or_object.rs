@@ -115,7 +115,7 @@ impl<'a> Parser<'a> {
         is_async,
         generator: is_generator,
         signature,
-        body: self.parse_stmt_block_with_existing_scope(ctx.with_rules(ParsePatternRules {
+        body: self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?,

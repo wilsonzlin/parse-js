@@ -96,8 +96,7 @@ impl<'a> Parser<'a> {
     Ok(Node::new(loc, Syntax::EmptyStmt {}))
   }
 
-  // The scope can be provided when parsing function bodies, as their scope starts at the signature and a new one isn't introduced upon braces.
-  pub fn parse_stmt_block_with_existing_scope(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
+  pub fn parse_stmt_block(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::BraceOpen)?;
     let mut body = Vec::new();
     loop {
@@ -106,10 +105,6 @@ impl<'a> Parser<'a> {
       };
       body.push(self.parse_stmt(ctx)?);
     }
-  }
-
-  pub fn parse_stmt_block(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
-    self.parse_stmt_block_with_existing_scope(ctx)
   }
 
   fn parse_stmt_break_or_continue(

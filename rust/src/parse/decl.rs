@@ -114,7 +114,7 @@ impl<'a> Parser<'a> {
       }
     };
     let signature = self.parse_signature_function(ctx)?;
-    let body = self.parse_stmt_block_with_existing_scope(ctx.with_rules(ParsePatternRules {
+    let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     }))?;
