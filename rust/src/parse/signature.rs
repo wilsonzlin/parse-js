@@ -24,7 +24,7 @@ impl<'a> Parser<'a> {
       })?;
 
       // TODO Location
-      parameters.push(ctx.create_node(pattern.loc, Syntax::ParamDecl {
+      parameters.push(Node::new(pattern.loc, Syntax::ParamDecl {
         rest,
         pattern,
         default_value,
@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
       };
     }
 
-    Ok(ctx.create_node(
+    Ok(Node::new(
       self.since_checkpoint(start_pos),
       Syntax::FunctionSignature { parameters },
     ))

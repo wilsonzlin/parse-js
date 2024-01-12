@@ -35,13 +35,6 @@ impl ParseCtx {
   pub fn with_rules(&self, rules: ParsePatternRules) -> ParseCtx {
     ParseCtx { rules, ..*self }
   }
-
-  pub fn create_node(&self, loc: Loc, stx: Syntax) -> Node {
-    Node {
-      loc,
-      stx: Box::new(stx),
-    }
-  }
 }
 
 #[derive(Debug)]

@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
         }
       }
     }
-    Ok(ctx.create_node(loc, Syntax::VarDecl {
+    Ok(Node::new(loc, Syntax::VarDecl {
       export,
       mode,
       declarators,
@@ -101,7 +101,7 @@ impl<'a> Parser<'a> {
       .match_loc()
     {
       Some(name) => {
-        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName {
+        let name_node = Node::new(name, Syntax::ClassOrFunctionName {
           name: self.string(name),
         });
         Some(name_node)
@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     }))?;
-    Ok(ctx.create_node(start + body.loc, Syntax::FunctionDecl {
+    Ok(Node::new(start + body.loc, Syntax::FunctionDecl {
       export,
       export_default,
       is_async,
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
       .match_loc()
     {
       Some(name) => {
-        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName {
+        let name_node = Node::new(name, Syntax::ClassOrFunctionName {
           name: self.string(name),
         });
         Some(name_node)
@@ -161,7 +161,7 @@ impl<'a> Parser<'a> {
       None
     };
     let ParseClassBodyResult { end, members } = self.parse_class_body(ctx)?;
-    Ok(ctx.create_node(start + end, Syntax::ClassDecl {
+    Ok(Node::new(start + end, Syntax::ClassDecl {
       export,
       export_default,
       name,

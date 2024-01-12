@@ -18,7 +18,7 @@ impl<'a> Parser<'a> {
     while !self.consume_if(TokenType::EOF)?.is_match() {
       body.push(self.parse_stmt(ctx)?);
     }
-    let top_level_node = ctx.create_node(self.source_range(), Syntax::TopLevel { body });
+    let top_level_node = Node::new(self.source_range(), Syntax::TopLevel { body });
     Ok(top_level_node)
   }
 }

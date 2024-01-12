@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
         (target, alias)
       }
     };
-    let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
+    let alias_node = Node::new(alias, Syntax::IdentifierPattern {
       name: self.string(alias),
     });
     Ok(ExportName {
@@ -75,12 +75,13 @@ impl<'a> Parser<'a> {
         let label_name = self.next()?.loc;
         if self.consume_if(TokenType::Colon)?.is_match() {
           let statement = self.parse_stmt(ctx)?;
-          Ok(
-            ctx.create_node(self.since_checkpoint(checkpoint), Syntax::LabelStmt {
+          Ok(Node::new(
+            self.since_checkpoint(checkpoint),
+            Syntax::LabelStmt {
               name: self.string(label_name),
               statement,
-            }),
-          )
+            },
+          ))
         } else {
           self.restore_checkpoint(checkpoint);
           self.parse_stmt_expression(ctx)
@@ -92,7 +93,7 @@ impl<'a> Parser<'a> {
 
   pub fn parse_stmt_empty(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc = self.require(TokenType::Semicolon)?.loc;
-    Ok(ctx.create_node(loc, Syntax::EmptyStmt {}))
+    Ok(Node::new(loc, Syntax::EmptyStmt {}))
   }
 
   // The scope can be provided when parsing function bodies, as their scope starts at the signature and a new one isn't introduced upon braces.
@@ -101,7 +102,7 @@ impl<'a> Parser<'a> {
     let mut body = Vec::new();
     loop {
       if let Some(end_loc) = self.consume_if(TokenType::BraceClose)?.match_loc() {
-        return Ok(ctx.create_node(start.loc + end_loc, Syntax::BlockStmt { body }));
+        return Ok(Node::new(start.loc + end_loc, Syntax::BlockStmt { body }));
       };
       body.push(self.parse_stmt(ctx)?);
     }
@@ -138,17 +139,19 @@ impl<'a> Parser<'a> {
 
   pub fn parse_stmt_break(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordBreak)?;
-    Ok(ctx.create_node(stmt.loc, Syntax::BreakStmt { label: stmt.label }))
+    Ok(Node::new(stmt.loc, Syntax::BreakStmt { label: stmt.label }))
   }
 
   pub fn parse_stmt_continue(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordContinue)?;
-    Ok(ctx.create_node(stmt.loc, Syntax::ContinueStmt { label: stmt.label }))
+    Ok(Node::new(stmt.loc, Syntax::ContinueStmt {
+      label: stmt.label,
+    }))
   }
 
   pub fn parse_stmt_debugger(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc = self.require(TokenType::KeywordDebugger)?.loc;
-    Ok(ctx.create_node(loc, Syntax::DebuggerStmt {}))
+    Ok(Node::new(loc, Syntax::DebuggerStmt {}))
   }
 
   // https://tc39.es/ecma262/#sec-exports
@@ -177,7 +180,7 @@ impl<'a> Parser<'a> {
           Ok(from)
         })?;
         // TODO Loc
-        ctx.create_node(start.loc, Syntax::ExportListStmt {
+        Node::new(start.loc, Syntax::ExportListStmt {
           names: ExportNames::Specific(names),
           from,
         })
@@ -185,7 +188,7 @@ impl<'a> Parser<'a> {
       TokenType::Asterisk => {
         let alias = if self.consume_if(TokenType::KeywordAs)?.is_match() {
           let alias = self.require(TokenType::Identifier)?.loc;
-          let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
+          let alias_node = Node::new(alias, Syntax::IdentifierPattern {
             name: self.string(alias),
           });
           Some(alias_node)
@@ -196,7 +199,7 @@ impl<'a> Parser<'a> {
         self.require(TokenType::KeywordFrom)?;
         let from = self.parse_and_normalise_literal_string(ctx)?;
         // TODO Loc
-        ctx.create_node(start.loc, Syntax::ExportListStmt {
+        Node::new(start.loc, Syntax::ExportListStmt {
           names: ExportNames::All(alias),
           from: Some(from),
         })
@@ -209,7 +212,7 @@ impl<'a> Parser<'a> {
         TokenType::KeywordClass => self.parse_decl_class(ctx, true, true)?,
         _ => {
           let expression = self.parse_expr(ctx, TokenType::Semicolon)?;
-          ctx.create_node(start.loc + expression.loc, Syntax::ExportDefaultExprStmt {
+          Node::new(start.loc + expression.loc, Syntax::ExportDefaultExprStmt {
             expression,
           })
         }
@@ -240,7 +243,9 @@ impl<'a> Parser<'a> {
     if !asi.did_end_with_asi {
       self.require(TokenType::Semicolon)?;
     };
-    Ok(ctx.create_node(expression.loc, Syntax::ExpressionStmt { expression }))
+    Ok(Node::new(expression.loc, Syntax::ExpressionStmt {
+      expression,
+    }))
   }
 
   pub fn parse_stmt_for(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -325,7 +330,7 @@ impl<'a> Parser<'a> {
         self.require(TokenType::ParenthesisClose)?;
         let body = self.parse_stmt(ctx)?;
         if of {
-          ctx.create_node(start.loc + body.loc, Syntax::ForOfStmt {
+          Node::new(start.loc + body.loc, Syntax::ForOfStmt {
             await_: await_.is_match(),
             decl_mode,
             pat,
@@ -333,7 +338,7 @@ impl<'a> Parser<'a> {
             body,
           })
         } else {
-          ctx.create_node(start.loc + body.loc, Syntax::ForInStmt {
+          Node::new(start.loc + body.loc, Syntax::ForInStmt {
             decl_mode,
             pat,
             rhs,
@@ -382,7 +387,7 @@ impl<'a> Parser<'a> {
           Some(expr)
         };
         let body = self.parse_stmt(ctx)?;
-        ctx.create_node(start.loc + body.loc, Syntax::ForStmt {
+        Node::new(start.loc + body.loc, Syntax::ForStmt {
           init,
           condition,
           post,
@@ -406,7 +411,7 @@ impl<'a> Parser<'a> {
     };
     let end = alternate.as_ref().unwrap_or(&consequent);
 
-    Ok(ctx.create_node(start.loc + end.loc, Syntax::IfStmt {
+    Ok(Node::new(start.loc + end.loc, Syntax::IfStmt {
       test,
       consequent,
       alternate,
@@ -425,7 +430,7 @@ impl<'a> Parser<'a> {
 
     let (default, can_have_names) =
       if let Some(alias) = self.consume_if(TokenType::Identifier)?.match_loc() {
-        let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
+        let alias_node = Node::new(alias, Syntax::IdentifierPattern {
           name: self.string(alias),
         });
         (
@@ -440,7 +445,7 @@ impl<'a> Parser<'a> {
     } else if self.consume_if(TokenType::Asterisk)?.is_match() {
       self.require(TokenType::KeywordAs)?;
       let alias = self.require(TokenType::Identifier)?.loc;
-      let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
+      let alias_node = Node::new(alias, Syntax::IdentifierPattern {
         name: self.string(alias),
       });
       Some(ExportNames::All(Some(alias_node)))
@@ -461,7 +466,7 @@ impl<'a> Parser<'a> {
     let module = self.parse_and_normalise_literal_string(ctx)?;
     self.require(TokenType::Semicolon)?;
     // TODO Loc
-    Ok(ctx.create_node(start.loc, Syntax::ImportStmt {
+    Ok(Node::new(start.loc, Syntax::ImportStmt {
       default,
       module,
       names,
@@ -486,7 +491,7 @@ impl<'a> Parser<'a> {
         loc.extend(value.loc);
         Some(value)
       };
-    Ok(ctx.create_node(loc, Syntax::ReturnStmt { value }))
+    Ok(Node::new(loc, Syntax::ReturnStmt { value }))
   }
 
   pub fn parse_stmt_throw(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -500,7 +505,9 @@ impl<'a> Parser<'a> {
     if !asi.did_end_with_asi {
       self.require(TokenType::Semicolon)?;
     };
-    Ok(ctx.create_node(start.loc + value.loc, Syntax::ThrowStmt { value }))
+    Ok(Node::new(start.loc + value.loc, Syntax::ThrowStmt {
+      value,
+    }))
   }
 
   pub fn parse_stmt_try(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -517,7 +524,7 @@ impl<'a> Parser<'a> {
       };
       let body = self.parse_stmt_block(ctx)?;
       loc.extend(body.loc);
-      Some(ctx.create_node(body.loc, Syntax::CatchBlock { parameter, body }))
+      Some(Node::new(body.loc, Syntax::CatchBlock { parameter, body }))
     } else {
       None
     };
@@ -531,7 +538,7 @@ impl<'a> Parser<'a> {
     if catch.is_none() && finally.is_none() {
       return Err(start.error(SyntaxErrorType::TryStatementHasNoCatchOrFinally));
     }
-    Ok(ctx.create_node(loc, Syntax::TryStmt {
+    Ok(Node::new(loc, Syntax::TryStmt {
       wrapped,
       catch,
       finally,
@@ -544,7 +551,10 @@ impl<'a> Parser<'a> {
     let condition = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     self.require(TokenType::ParenthesisClose)?;
     let body = self.parse_stmt(ctx)?;
-    Ok(ctx.create_node(start.loc + body.loc, Syntax::WhileStmt { condition, body }))
+    Ok(Node::new(start.loc + body.loc, Syntax::WhileStmt {
+      condition,
+      body,
+    }))
   }
 
   pub fn parse_stmt_do_while(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -555,7 +565,10 @@ impl<'a> Parser<'a> {
     let condition = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     let end = self.require(TokenType::ParenthesisClose)?;
     self.consume_if(TokenType::Semicolon)?;
-    Ok(ctx.create_node(start.loc + end.loc, Syntax::DoWhileStmt { condition, body }))
+    Ok(Node::new(start.loc + end.loc, Syntax::DoWhileStmt {
+      condition,
+      body,
+    }))
   }
 
   pub fn parse_stmt_switch(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -585,9 +598,12 @@ impl<'a> Parser<'a> {
           }
         }
       }
-      branches.push(ctx.create_node(loc, Syntax::SwitchBranch { case, body }));
+      branches.push(Node::new(loc, Syntax::SwitchBranch { case, body }));
     }
     let end = self.require(TokenType::BraceClose)?;
-    Ok(ctx.create_node(start.loc + end.loc, Syntax::SwitchStmt { test, branches }))
+    Ok(Node::new(start.loc + end.loc, Syntax::SwitchStmt {
+      test,
+      branches,
+    }))
   }
 }

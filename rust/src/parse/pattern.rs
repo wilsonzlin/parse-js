@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
       );
     }
     let t = self.next()?;
-    let node = ctx.create_node(t.loc, Syntax::IdentifierPattern {
+    let node = Node::new(t.loc, Syntax::IdentifierPattern {
       name: self.string(t.loc),
     });
     Ok(node)
@@ -105,7 +105,7 @@ impl<'a> Parser<'a> {
               }
               ClassOrObjectMemberKey::Direct(name) => (
                 true,
-                ctx.create_node(key_loc, Syntax::IdentifierPattern { name: name.clone() }),
+                Node::new(key_loc, Syntax::IdentifierPattern { name: name.clone() }),
               ),
             }
           };
@@ -119,7 +119,7 @@ impl<'a> Parser<'a> {
             ClassOrObjectMemberKey::Direct(name) => Some(name.clone()),
             _ => None,
           };
-          let property = ctx.create_node(loc, Syntax::ObjectPatternProperty {
+          let property = Node::new(loc, Syntax::ObjectPatternProperty {
             key,
             target,
             default_value,
@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
           };
         }
         let close = self.require(TokenType::BraceClose)?;
-        ctx.create_node(t.loc + close.loc, Syntax::ObjectPattern {
+        Node::new(t.loc + close.loc, Syntax::ObjectPattern {
           properties,
           rest,
         })
@@ -171,7 +171,7 @@ impl<'a> Parser<'a> {
           };
         }
         let close = self.require(TokenType::BracketClose)?;
-        ctx.create_node(t.loc + close.loc, Syntax::ArrayPattern { elements, rest })
+        Node::new(t.loc + close.loc, Syntax::ArrayPattern { elements, rest })
       }
       _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("pattern"))),
     })

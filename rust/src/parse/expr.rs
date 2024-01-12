@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
             ArrayElement::Empty => pat_elements.push(None),
           };
         }
-        Ok(ctx.create_node(loc, Syntax::ArrayPattern {
+        Ok(Node::new(loc, Syntax::ArrayPattern {
           elements: pat_elements,
           rest,
         }))
@@ -170,7 +170,7 @@ impl<'a> Parser<'a> {
                   },
                   _ => return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
                 };
-                properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
+                properties.push(Node::new(loc, Syntax::ObjectPatternProperty {
                   key,
                   target,
                   default_value,
@@ -178,9 +178,9 @@ impl<'a> Parser<'a> {
                 }));
               }
               ObjectMemberType::Shorthand { identifier } => {
-                properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
+                properties.push(Node::new(loc, Syntax::ObjectPatternProperty {
                   key: ClassOrObjectMemberKey::Direct(self.string(identifier.loc)),
-                  target: ctx.create_node(loc, Syntax::IdentifierPattern {
+                  target: Node::new(loc, Syntax::IdentifierPattern {
                     name: self.string(identifier.loc),
                   }),
                   default_value: None,
@@ -194,11 +194,13 @@ impl<'a> Parser<'a> {
             _ => unreachable!(),
           };
         }
-        Ok(ctx.create_node(loc, Syntax::ObjectPattern { properties, rest }))
+        Ok(Node::new(loc, Syntax::ObjectPattern { properties, rest }))
       }
       // It's possible to encounter an IdentifierPattern e.g. `{ a: b = 1 } = x`, where `b = 1` is already parsed as an assignment.
       Syntax::IdentifierExpr { name } | Syntax::IdentifierPattern { name } => {
-        Ok(ctx.create_node(loc, Syntax::IdentifierPattern { name: name.clone() }))
+        Ok(Node::new(loc, Syntax::IdentifierPattern {
+          name: name.clone(),
+        }))
       }
       _ => Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
     }
@@ -247,12 +249,12 @@ impl<'a> Parser<'a> {
     let start = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
     Ok(if self.consume_if(TokenType::Colon)?.is_match() {
       let name = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
-      ctx.create_node(start.loc + name.loc, Syntax::JsxName {
+      Node::new(start.loc + name.loc, Syntax::JsxName {
         namespace: Some(self.string(start.loc)),
         name: self.string(name.loc),
       })
     } else {
-      ctx.create_node(start.loc, Syntax::JsxName {
+      Node::new(start.loc, Syntax::JsxName {
         namespace: None,
         name: self.string(start.loc),
       })
@@ -271,7 +273,7 @@ impl<'a> Parser<'a> {
           if self.consume_if(TokenType::Colon)?.is_match() {
             // Namespaced name.
             let name = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
-            ctx.create_node(start + name.loc, Syntax::JsxName {
+            Node::new(start + name.loc, Syntax::JsxName {
               namespace: Some(self.string(start)),
               name: self.string(name.loc),
             })
@@ -284,20 +286,20 @@ impl<'a> Parser<'a> {
               path.push(self.string(l));
               loc += l;
             }
-            ctx.create_node(loc, Syntax::JsxMemberExpression {
-              base: ctx.create_node(start, Syntax::IdentifierExpr {
+            Node::new(loc, Syntax::JsxMemberExpression {
+              base: Node::new(start, Syntax::IdentifierExpr {
                 name: self.string(start),
               }),
               path,
             })
           } else if !self.bytes(start)[0].is_ascii_lowercase() {
             // User-defined component.
-            ctx.create_node(start, Syntax::IdentifierExpr {
+            Node::new(start, Syntax::IdentifierExpr {
               name: self.string(start),
             })
           } else {
             // Built-in component without namespace.
-            ctx.create_node(start, Syntax::JsxName {
+            Node::new(start, Syntax::JsxName {
               namespace: None,
               name: self.string(start),
             })
@@ -323,8 +325,9 @@ impl<'a> Parser<'a> {
           let start = self.require(TokenType::DotDotDot)?;
           let value = self.parse_expr(ctx, TokenType::BraceClose)?;
           let end = self.require(TokenType::BraceClose)?;
-          attributes
-            .push(ctx.create_node(start.loc + end.loc, Syntax::JsxSpreadAttribute { value }));
+          attributes.push(Node::new(start.loc + end.loc, Syntax::JsxSpreadAttribute {
+            value,
+          }));
           continue;
         }
 
@@ -336,17 +339,17 @@ impl<'a> Parser<'a> {
           // TODO Attr values can be an element or fragment directly e.g. `a=<div/>`.
           Some(if self.consume_if(TokenType::BraceOpen)?.is_match() {
             let value = self.parse_expr(ctx, TokenType::BraceClose)?;
-            let expr = ctx.create_node(value.loc, Syntax::JsxExpressionContainer { value });
+            let expr = Node::new(value.loc, Syntax::JsxExpressionContainer { value });
             self.require(TokenType::BraceClose)?;
             expr
           } else {
             let value = self.require(TokenType::LiteralString)?;
-            ctx.create_node(value.loc, Syntax::JsxText {
+            Node::new(value.loc, Syntax::JsxText {
               value: self.string(value.loc),
             })
           })
         };
-        attributes.push(ctx.create_node(
+        attributes.push(Node::new(
           name.loc.add_option(value.as_ref().map(|n| n.loc)),
           Syntax::JsxAttribute { name, value },
         ))
@@ -356,7 +359,7 @@ impl<'a> Parser<'a> {
     Ok(if self.consume_if(TokenType::Slash)?.is_match() {
       // Self closing.
       let end = self.require(TokenType::ChevronRight)?;
-      ctx.create_node(tag_start.loc + end.loc, Syntax::JsxElement {
+      Node::new(tag_start.loc + end.loc, Syntax::JsxElement {
         name: tag_name,
         attributes,
         children: Vec::new(),
@@ -378,7 +381,7 @@ impl<'a> Parser<'a> {
         };
         let text = self.require_with_mode(TokenType::JsxTextContent, LexMode::JsxTextContent)?;
         if !text.loc.is_empty() {
-          children.push(ctx.create_node(text.loc, Syntax::JsxText {
+          children.push(Node::new(text.loc, Syntax::JsxText {
             value: self.string(text.loc),
           }));
         };
@@ -388,7 +391,9 @@ impl<'a> Parser<'a> {
         if self.consume_if(TokenType::BraceOpen)?.is_match() {
           // TODO Allow empty expr.
           let value = self.parse_expr(ctx, TokenType::BraceClose)?;
-          children.push(ctx.create_node(value.loc, Syntax::JsxExpressionContainer { value }));
+          children.push(Node::new(value.loc, Syntax::JsxExpressionContainer {
+            value,
+          }));
           self.require(TokenType::BraceClose)?;
         };
       };
@@ -400,7 +405,7 @@ impl<'a> Parser<'a> {
         return Err(close_start.error(SyntaxErrorType::JsxClosingTagMismatch));
       };
       let end = self.require(TokenType::ChevronRight)?;
-      ctx.create_node(tag_start.loc + end.loc, Syntax::JsxElement {
+      Node::new(tag_start.loc + end.loc, Syntax::JsxElement {
         name: tag_name,
         attributes,
         children,
@@ -417,7 +422,7 @@ impl<'a> Parser<'a> {
       let spread = self.consume_if(TokenType::DotDotDot)?.is_match();
       let value =
         self.parse_expr_until_either(ctx, TokenType::Comma, TokenType::ParenthesisClose)?;
-      args.push(ctx.create_node(value.loc, Syntax::CallArg { spread, value }));
+      args.push(Node::new(value.loc, Syntax::CallArg { spread, value }));
       if !self.consume_if(TokenType::Comma)?.is_match() {
         break;
       };
@@ -495,7 +500,9 @@ impl<'a> Parser<'a> {
       self.require(TokenType::Comma)?;
     }
     let loc_end = self.require(TokenType::BracketClose)?.loc;
-    Ok(ctx.create_node(loc_start + loc_end, Syntax::LiteralArrayExpr { elements }))
+    Ok(Node::new(loc_start + loc_end, Syntax::LiteralArrayExpr {
+      elements,
+    }))
   }
 
   pub fn parse_expr_object(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -509,7 +516,7 @@ impl<'a> Parser<'a> {
       if rest {
         let value = self.parse_expr_until_either(ctx, TokenType::Comma, TokenType::BraceClose)?;
         let loc = value.loc;
-        members.push(ctx.create_node(loc, Syntax::ObjectMember {
+        members.push(Node::new(loc, Syntax::ObjectMember {
           typ: ObjectMemberType::Rest { value },
         }));
       } else {
@@ -524,7 +531,7 @@ impl<'a> Parser<'a> {
           TokenType::Comma,
           &mut Asi::no(),
         )?;
-        members.push(ctx.create_node(
+        members.push(Node::new(
           self.since_checkpoint(loc_checkpoint),
           Syntax::ObjectMember {
             typ: match value {
@@ -532,7 +539,7 @@ impl<'a> Parser<'a> {
                 ObjectMemberType::Shorthand {
                   identifier: match key {
                     ClassOrObjectMemberKey::Direct(key) => {
-                      ctx.create_node(key_loc, Syntax::IdentifierExpr { name: key })
+                      Node::new(key_loc, Syntax::IdentifierExpr { name: key })
                     }
                     _ => unreachable!(),
                   },
@@ -549,7 +556,9 @@ impl<'a> Parser<'a> {
       self.require(TokenType::Comma)?;
     }
     let loc_end = self.require(TokenType::BraceClose)?.loc;
-    Ok(ctx.create_node(loc_start + loc_end, Syntax::LiteralObjectExpr { members }))
+    Ok(Node::new(loc_start + loc_end, Syntax::LiteralObjectExpr {
+      members,
+    }))
   }
 
   pub fn parse_expr_arrow_function(
@@ -569,15 +578,15 @@ impl<'a> Parser<'a> {
       // Parse arrow first for fast fail (and in case we are merely trying to parse as arrow function), before we mutate state by creating nodes and adding symbols.
       let param_name = self.next()?.loc;
       let arrow = self.require(TokenType::EqualsChevronRight)?;
-      let pattern = ctx.create_node(param_name, Syntax::IdentifierPattern {
+      let pattern = Node::new(param_name, Syntax::IdentifierPattern {
         name: self.string(param_name),
       });
-      let param = ctx.create_node(param_name, Syntax::ParamDecl {
+      let param = Node::new(param_name, Syntax::ParamDecl {
         rest: false,
         pattern,
         default_value: None,
       });
-      let signature = ctx.create_node(param_name, Syntax::FunctionSignature {
+      let signature = Node::new(param_name, Syntax::FunctionSignature {
         parameters: {
           let mut params = Vec::new();
           params.push(param);
@@ -608,14 +617,15 @@ impl<'a> Parser<'a> {
         &mut Asi::can(),
       )?,
     };
-    Ok(
-      ctx.create_node(signature.loc + body.loc, Syntax::ArrowFunctionExpr {
+    Ok(Node::new(
+      signature.loc + body.loc,
+      Syntax::ArrowFunctionExpr {
         parenthesised: false,
         is_async,
         signature,
         body,
-      }),
-    )
+      },
+    ))
   }
 
   pub fn parse_expr_arrow_function_or_grouping(
@@ -657,12 +667,14 @@ impl<'a> Parser<'a> {
       if self.str(prop.loc) != "meta" {
         return Err(prop.error(SyntaxErrorType::ExpectedSyntax("`meta` property")));
       };
-      return Ok(ctx.create_node(start.loc + prop.loc, Syntax::ImportMeta {}));
+      return Ok(Node::new(start.loc + prop.loc, Syntax::ImportMeta {}));
     }
     self.require(TokenType::ParenthesisOpen)?;
     let module = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     let end = self.require(TokenType::ParenthesisClose)?;
-    Ok(ctx.create_node(start.loc + end.loc, Syntax::ImportExpr { module }))
+    Ok(Node::new(start.loc + end.loc, Syntax::ImportExpr {
+      module,
+    }))
   }
 
   pub fn parse_expr_function(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
@@ -673,7 +685,7 @@ impl<'a> Parser<'a> {
     let name = match self.peek()? {
       t if is_valid_pattern_identifier(t.typ, ctx.rules) => {
         self.consume_peeked();
-        let name_node = ctx.create_node(t.loc, Syntax::ClassOrFunctionName {
+        let name_node = Node::new(t.loc, Syntax::ClassOrFunctionName {
           name: self.string(t.loc),
         });
         Some(name_node)
@@ -686,7 +698,7 @@ impl<'a> Parser<'a> {
       yield_allowed: !generator && ctx.rules.yield_allowed,
     });
     let body = self.parse_stmt_block_with_existing_scope(fn_body_ctx)?;
-    Ok(ctx.create_node(start + body.loc, Syntax::FunctionExpr {
+    Ok(Node::new(start + body.loc, Syntax::FunctionExpr {
       parenthesised: false,
       is_async,
       generator,
@@ -701,7 +713,7 @@ impl<'a> Parser<'a> {
     let name = match self.peek()? {
       t if is_valid_pattern_identifier(t.typ, ctx.rules) => {
         self.consume_peeked();
-        let name_node = ctx.create_node(t.loc, Syntax::ClassOrFunctionName {
+        let name_node = Node::new(t.loc, Syntax::ClassOrFunctionName {
           name: self.string(t.loc),
         });
         Some(name_node)
@@ -714,7 +726,7 @@ impl<'a> Parser<'a> {
       None
     };
     let ParseClassBodyResult { end, members } = self.parse_class_body(ctx)?;
-    Ok(ctx.create_node(start + end, Syntax::ClassExpr {
+    Ok(Node::new(start + end, Syntax::ClassExpr {
       parenthesised: false,
       name,
       extends,
@@ -800,7 +812,7 @@ impl<'a> Parser<'a> {
           false,
           asi,
         )?;
-        ctx.create_node(t.loc + operand.loc, Syntax::UnaryExpr {
+        Node::new(t.loc + operand.loc, Syntax::UnaryExpr {
           parenthesised: false,
           operator: operator.name,
           argument: operand,
@@ -833,7 +845,7 @@ impl<'a> Parser<'a> {
               }
               _ => {
                 // `await` is being used as an identifier.
-                ctx.create_node(t.loc, Syntax::IdentifierExpr {
+                Node::new(t.loc, Syntax::IdentifierExpr {
                   name: self.string(t.loc),
                 })
               }
@@ -846,7 +858,7 @@ impl<'a> Parser<'a> {
               self.restore_checkpoint(cp);
               self.parse_expr_arrow_function(ctx, terminator_a, terminator_b)?
             } else {
-              ctx.create_node(t.loc, Syntax::IdentifierExpr {
+              Node::new(t.loc, Syntax::IdentifierExpr {
                 name: self.string(t.loc),
               })
             }
@@ -863,31 +875,31 @@ impl<'a> Parser<'a> {
             self.restore_checkpoint(cp);
             self.parse_expr_import(ctx)?
           }
-          TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
-          TokenType::KeywordThis => ctx.create_node(t.loc, Syntax::ThisExpr {}),
-          TokenType::LiteralBigInt => ctx.create_node(t.loc, Syntax::LiteralBigIntExpr {
+          TokenType::KeywordSuper => Node::new(t.loc, Syntax::SuperExpr {}),
+          TokenType::KeywordThis => Node::new(t.loc, Syntax::ThisExpr {}),
+          TokenType::LiteralBigInt => Node::new(t.loc, Syntax::LiteralBigIntExpr {
             value: normalise_literal_bigint(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidLiteralBigInt, None))?,
           }),
           TokenType::LiteralTrue | TokenType::LiteralFalse => {
-            ctx.create_node(t.loc, Syntax::LiteralBooleanExpr {
+            Node::new(t.loc, Syntax::LiteralBooleanExpr {
               value: t.typ == TokenType::LiteralTrue,
             })
           }
-          TokenType::LiteralNull => ctx.create_node(t.loc, Syntax::LiteralNull {}),
-          TokenType::LiteralNumber => ctx.create_node(t.loc, Syntax::LiteralNumberExpr {
+          TokenType::LiteralNull => Node::new(t.loc, Syntax::LiteralNull {}),
+          TokenType::LiteralNumber => Node::new(t.loc, Syntax::LiteralNumberExpr {
             value: normalise_literal_number(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::MalformedLiteralNumber, None))?,
           }),
-          TokenType::LiteralRegex => ctx.create_node(t.loc, Syntax::LiteralRegexExpr {}),
-          TokenType::LiteralString => ctx.create_node(t.loc, Syntax::LiteralStringExpr {
+          TokenType::LiteralRegex => Node::new(t.loc, Syntax::LiteralRegexExpr {}),
+          TokenType::LiteralString => Node::new(t.loc, Syntax::LiteralStringExpr {
             value: normalise_literal_string(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
           }),
           TokenType::LiteralTemplatePartString | TokenType::LiteralTemplatePartStringEnd => {
             self.restore_checkpoint(cp);
             let parts = self.parse_expr_literal_template_parts(ctx)?;
-            ctx.create_node(t.loc, Syntax::LiteralTemplateExpr { parts })
+            Node::new(t.loc, Syntax::LiteralTemplateExpr { parts })
           }
           TokenType::ParenthesisOpen => {
             self.restore_checkpoint(cp);
@@ -933,7 +945,7 @@ impl<'a> Parser<'a> {
             self.restore_checkpoint(cp);
             break;
           };
-          left = ctx.create_node(left.loc + t.loc, Syntax::UnaryPostfixExpr {
+          left = Node::new(left.loc + t.loc, Syntax::UnaryPostfixExpr {
             parenthesised: false,
             operator: operator_name,
             argument: left,
@@ -947,7 +959,7 @@ impl<'a> Parser<'a> {
           let loc = t.loc;
           self.restore_checkpoint(cp);
           let parts = self.parse_expr_literal_template_parts(ctx)?;
-          left = ctx.create_node(left.loc + loc, Syntax::TaggedTemplateExpr {
+          left = Node::new(left.loc + loc, Syntax::TaggedTemplateExpr {
             function: left,
             parts,
           });
@@ -984,7 +996,7 @@ impl<'a> Parser<'a> {
             OperatorName::Call | OperatorName::OptionalChainingCall => {
               let arguments = self.parse_call_args(ctx)?;
               let end = self.require(TokenType::ParenthesisClose)?;
-              ctx.create_node(left.loc + end.loc, Syntax::CallExpr {
+              Node::new(left.loc + end.loc, Syntax::CallExpr {
                 parenthesised: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingCall => true,
@@ -998,7 +1010,7 @@ impl<'a> Parser<'a> {
             | OperatorName::OptionalChainingComputedMemberAccess => {
               let member = self.parse_expr(ctx, TokenType::BracketClose)?;
               let end = self.require(TokenType::BracketClose)?;
-              ctx.create_node(left.loc + end.loc, Syntax::ComputedMemberExpr {
+              Node::new(left.loc + end.loc, Syntax::ComputedMemberExpr {
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingComputedMemberAccess => true,
                   _ => false,
@@ -1018,7 +1030,7 @@ impl<'a> Parser<'a> {
                 false,
                 asi,
               )?;
-              ctx.create_node(left.loc + alternate.loc, Syntax::ConditionalExpr {
+              Node::new(left.loc + alternate.loc, Syntax::ConditionalExpr {
                 parenthesised: false,
                 test: left,
                 consequent,
@@ -1038,7 +1050,7 @@ impl<'a> Parser<'a> {
                 }
               };
               let right = right_tok.loc;
-              ctx.create_node(left.loc + right, Syntax::MemberExpr {
+              Node::new(left.loc + right, Syntax::MemberExpr {
                 parenthesised: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingMemberAccess => true,
@@ -1060,7 +1072,7 @@ impl<'a> Parser<'a> {
                 false,
                 asi,
               )?;
-              ctx.create_node(left.loc + right.loc, Syntax::BinaryExpr {
+              Node::new(left.loc + right.loc, Syntax::BinaryExpr {
                 parenthesised: false,
                 operator: operator.name,
                 left,

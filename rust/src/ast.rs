@@ -20,6 +20,13 @@ pub struct Node {
 }
 
 impl Node {
+  pub fn new(loc: Loc, stx: Syntax) -> Node {
+    Node {
+      loc,
+      stx: Box::new(stx),
+    }
+  }
+
   /// Create an error at this node's location.
   pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
     self.loc.error(typ, None)
