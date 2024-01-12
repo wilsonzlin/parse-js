@@ -24,17 +24,17 @@ pub fn normalise_literal_number(raw: &str) -> Option<JsNumber> {
     s if s.starts_with("0x") || s.starts_with("0X") => parse_radix(&s[2..], 16),
     s => f64::from_str(s).map_err(|_| ()),
   }
-  .map(|n| JsNumber(n))
+  .map(JsNumber)
   .ok()
 }
 
-pub fn normalise_literal_bigint(ctx: ParseCtx, raw: &str) -> Option<String> {
+pub fn normalise_literal_bigint(raw: &str) -> Option<String> {
   // TODO Use custom type like JsNumber.
   // TODO
   Some(raw.to_string())
 }
 
-pub fn normalise_literal_string_or_template_inner(ctx: ParseCtx, mut raw: &[u8]) -> Option<String> {
+pub fn normalise_literal_string_or_template_inner(mut raw: &[u8]) -> Option<String> {
   let mut norm = Vec::new();
   while !raw.is_empty() {
     let Some(escape_pos) = memchr(b'\\', raw) else {
@@ -58,9 +58,17 @@ pub fn normalise_literal_string_or_template_inner(ctx: ParseCtx, mut raw: &[u8])
       b'0'..=b'7' => {
         // Octal escape.
         let mut len = 1;
-        if raw.get(len).filter(|&&c| c >= b'0' && c <= b'7').is_some() {
+        if raw
+          .get(len)
+          .filter(|&c| (b'0'..=b'7').contains(c))
+          .is_some()
+        {
           len += 1;
-          if raw.get(len).filter(|&&c| c >= b'0' && c <= b'7').is_some() {
+          if raw
+            .get(len)
+            .filter(|&c| (b'0'..=b'7').contains(c))
+            .is_some()
+          {
             len += 1;
           };
         };
@@ -89,7 +97,7 @@ pub fn normalise_literal_string_or_template_inner(ctx: ParseCtx, mut raw: &[u8])
           let Some(end_pos) = memchr(b'}', raw) else {
             return None;
           };
-          if end_pos < 3 || end_pos > 8 {
+          if !(3..=8).contains(&end_pos) {
             return None;
           };
           let cp =
@@ -124,14 +132,14 @@ pub fn normalise_literal_string_or_template_inner(ctx: ParseCtx, mut raw: &[u8])
   Some(String::from_utf8(norm).unwrap())
 }
 
-pub fn normalise_literal_string(ctx: ParseCtx, raw: &str) -> Option<String> {
-  normalise_literal_string_or_template_inner(ctx, &raw.as_bytes()[1..raw.len() - 1])
+pub fn normalise_literal_string(raw: &str) -> Option<String> {
+  normalise_literal_string_or_template_inner(&raw.as_bytes()[1..raw.len() - 1])
 }
 
 impl<'a> Parser<'a> {
   pub fn parse_and_normalise_literal_string(&mut self, ctx: ParseCtx) -> SyntaxResult<String> {
     let t = self.require(TokenType::LiteralString)?;
-    normalise_literal_string(ctx, self.str(t.loc))
+    normalise_literal_string(self.str(t.loc))
       .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))
   }
 }

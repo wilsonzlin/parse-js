@@ -32,12 +32,12 @@ impl<'a> Parser<'a> {
         let alias = if self.consume_if(TokenType::KeywordAs)?.is_match() {
           self.require(TokenType::Identifier)?.loc
         } else {
-          target.clone()
+          target
         };
         (target, alias)
       }
     };
-    let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
+    let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
       name: self.string(alias),
     });
     Ok(ExportName {
@@ -185,7 +185,7 @@ impl<'a> Parser<'a> {
       TokenType::Asterisk => {
         let alias = if self.consume_if(TokenType::KeywordAs)?.is_match() {
           let alias = self.require(TokenType::Identifier)?.loc;
-          let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
+          let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
             name: self.string(alias),
           });
           Some(alias_node)
@@ -425,7 +425,7 @@ impl<'a> Parser<'a> {
 
     let (default, can_have_names) =
       if let Some(alias) = self.consume_if(TokenType::Identifier)?.match_loc() {
-        let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
+        let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
           name: self.string(alias),
         });
         (
@@ -440,7 +440,7 @@ impl<'a> Parser<'a> {
     } else if self.consume_if(TokenType::Asterisk)?.is_match() {
       self.require(TokenType::KeywordAs)?;
       let alias = self.require(TokenType::Identifier)?.loc;
-      let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
+      let alias_node = ctx.create_node(alias, Syntax::IdentifierPattern {
         name: self.string(alias),
       });
       Some(ExportNames::All(Some(alias_node)))

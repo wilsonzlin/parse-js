@@ -13,29 +13,27 @@ impl CharFilter {
     }
   }
 
-  pub fn add_char(&mut self, c: u8) -> () {
+  pub fn add_char(&mut self, c: u8) {
     self.table[c as usize] = true;
   }
 
-  pub fn add_chars(&mut self, chars: RangeInclusive<u8>) -> () {
+  pub fn add_chars(&mut self, chars: RangeInclusive<u8>) {
     for c in chars {
       self.table[c as usize] = true;
     }
   }
 
-  pub fn add_chars_from_slice(&mut self, chars: &[u8]) -> () {
+  pub fn add_chars_from_slice(&mut self, chars: &[u8]) {
     for c in chars {
       self.table[*c as usize] = true;
     }
   }
 
   pub fn clone(&self) -> CharFilter {
-    CharFilter {
-      table: self.table.clone(),
-    }
+    CharFilter { table: self.table }
   }
 
-  pub fn invert(&mut self) -> () {
+  pub fn invert(&mut self) {
     for i in 0..256 {
       self.table[i] = !self.table[i];
     }
@@ -56,9 +54,8 @@ impl CharFilter {
 }
 
 // WARNING: These do not consider Unicode characters allowed by spec.
-pub const ID_START_CHARSTR: &'static [u8] =
-  b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
-pub const ID_CONTINUE_CHARSTR: &'static [u8] =
+pub const ID_START_CHARSTR: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
+pub const ID_CONTINUE_CHARSTR: &[u8] =
   b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 
 pub static DIGIT: Lazy<CharFilter> = Lazy::new(|| {
@@ -89,7 +86,7 @@ pub static DIGIT_OCT: Lazy<CharFilter> = Lazy::new(|| {
 
 pub static ID_START: Lazy<CharFilter> = Lazy::new(|| {
   let mut filter = CharFilter::new();
-  filter.add_chars_from_slice(&ID_START_CHARSTR);
+  filter.add_chars_from_slice(ID_START_CHARSTR);
   filter
 });
 

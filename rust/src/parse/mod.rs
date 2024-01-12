@@ -136,13 +136,13 @@ impl<'a> Parser<'a> {
     self.lexer.since_checkpoint(checkpoint.checkpoint)
   }
 
-  pub fn restore_checkpoint(&mut self, checkpoint: ParserCheckpoint) -> () {
+  pub fn restore_checkpoint(&mut self, checkpoint: ParserCheckpoint) {
     self.buffered = None;
     self.lexer.apply_checkpoint(checkpoint.checkpoint);
   }
 
   // Useful if lexer was altered outside parser.
-  pub fn clear_buffered(&mut self) -> () {
+  pub fn clear_buffered(&mut self) {
     self.buffered = None;
   }
 

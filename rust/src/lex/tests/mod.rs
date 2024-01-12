@@ -5,7 +5,7 @@ use crate::lex::Lexer;
 use crate::token::TokenType;
 use crate::token::TokenType::*;
 
-fn check(code: &str, expecteds: &[TokenType], expected_err: Option<SyntaxErrorType>) -> () {
+fn check(code: &str, expecteds: &[TokenType], expected_err: Option<SyntaxErrorType>) {
   let mut lexer = Lexer::new(code.as_bytes());
   for expected in expecteds {
     match lex_next(&mut lexer, LexMode::Standard) {

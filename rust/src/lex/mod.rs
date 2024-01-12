@@ -110,7 +110,7 @@ impl<'a> Lexer<'a> {
   }
 
   fn peek_or_eof(&self, n: usize) -> Option<u8> {
-    self.source.get(self.next + n).map(|&c| c)
+    self.source.get(self.next + n).copied()
   }
 
   pub fn checkpoint(&self) -> LexerCheckpoint {
@@ -121,7 +121,7 @@ impl<'a> Lexer<'a> {
     Loc(checkpoint.next, self.next)
   }
 
-  pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) -> () {
+  pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) {
     self.next = checkpoint.next;
   }
 
@@ -202,7 +202,7 @@ impl<'a> Lexer<'a> {
     Ok(c)
   }
 
-  fn skip_expect(&mut self, n: usize) -> () {
+  fn skip_expect(&mut self, n: usize) {
     debug_assert!(self.next + n <= self.end());
     self.next += n;
   }
@@ -394,16 +394,16 @@ static MATCHER: Lazy<AhoCorasick> = Lazy::new(|| {
     .build(PATTERNS.iter().map(|(_, pat)| pat))
 });
 
-static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(&[b"*/"]));
+static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new([b"*/"]));
 
-fn lex_multiple_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<()> {
+fn lex_multiple_comment(lexer: &mut Lexer<'_>) -> SyntaxResult<()> {
   // Consume `/*`.
   lexer.skip_expect(2);
   lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
   Ok(())
 }
 
-fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<()> {
+fn lex_single_comment(lexer: &mut Lexer<'_>) -> SyntaxResult<()> {
   // Consume `//`.
   lexer.skip_expect(2);
   // WARNING: Does not consider other line terminators allowed by spec.
@@ -411,8 +411,8 @@ fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<()> {
   Ok(())
 }
 
-fn lex_identifier<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_identifier(
+  lexer: &mut Lexer<'_>,
   mode: LexMode,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
@@ -438,8 +438,8 @@ fn lex_identifier<'a>(
   ))
 }
 
-fn lex_bigint_or_number<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_bigint_or_number(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -473,8 +473,8 @@ fn lex_bigint_or_number<'a>(
   ))
 }
 
-fn lex_bigint_or_number_bin<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_bigint_or_number_bin(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -494,8 +494,8 @@ fn lex_bigint_or_number_bin<'a>(
   ))
 }
 
-fn lex_bigint_or_number_hex<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_bigint_or_number_hex(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -515,8 +515,8 @@ fn lex_bigint_or_number_hex<'a>(
   ))
 }
 
-fn lex_bigint_or_number_oct<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_bigint_or_number_oct(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -536,8 +536,8 @@ fn lex_bigint_or_number_oct<'a>(
   ))
 }
 
-fn lex_private_member<'a>(
-  lexer: &mut Lexer<'a>,
+fn lex_private_member(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -564,7 +564,7 @@ fn lex_private_member<'a>(
 }
 
 // TODO Validate regex.
-fn lex_regex<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_regex(lexer: &mut Lexer<'_>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   // Consume slash.
   lexer.consume(lexer.n(1)?);
@@ -604,7 +604,7 @@ fn lex_regex<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> Sy
 }
 
 // TODO Validate string.
-fn lex_string<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
+fn lex_string(lexer: &mut Lexer<'_>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   let quote = lexer.peek(0)?;
   lexer.skip_expect(1);
@@ -632,8 +632,8 @@ fn lex_string<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> S
   ))
 }
 
-pub fn lex_template_string_continue<'a>(
-  lexer: &mut Lexer<'a>,
+pub fn lex_template_string_continue(
+  lexer: &mut Lexer<'_>,
   preceded_by_line_terminator: bool,
 ) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
@@ -674,16 +674,13 @@ pub fn lex_template_string_continue<'a>(
 }
 
 // TODO Validate template.
-fn lex_template<'a>(
-  lexer: &mut Lexer<'a>,
-  preceded_by_line_terminator: bool,
-) -> SyntaxResult<Token> {
+fn lex_template(lexer: &mut Lexer<'_>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
   // Consume backtick.
   lexer.skip_expect(1);
   lex_template_string_continue(lexer, preceded_by_line_terminator)
 }
 
-pub fn lex_next<'a>(lexer: &mut Lexer<'a>, mode: LexMode) -> SyntaxResult<Token> {
+pub fn lex_next(lexer: &mut Lexer<'_>, mode: LexMode) -> SyntaxResult<Token> {
   let mut preceded_by_line_terminator = false;
   loop {
     if mode == LexMode::JsxTextContent {

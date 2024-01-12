@@ -55,7 +55,7 @@ fn is_chevron_right_or_slash(typ: TokenType) -> bool {
 
 fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
   let (Some(a), Some(b)) = (a, b) else {
-    return false;
+    return a.is_none() && b.is_none();
   };
   match (a, b) {
     (
@@ -569,15 +569,15 @@ impl<'a> Parser<'a> {
       // Parse arrow first for fast fail (and in case we are merely trying to parse as arrow function), before we mutate state by creating nodes and adding symbols.
       let param_name = self.next()?.loc;
       let arrow = self.require(TokenType::EqualsChevronRight)?;
-      let pattern = ctx.create_node(param_name.clone(), Syntax::IdentifierPattern {
+      let pattern = ctx.create_node(param_name, Syntax::IdentifierPattern {
         name: self.string(param_name),
       });
-      let param = ctx.create_node(param_name.clone(), Syntax::ParamDecl {
+      let param = ctx.create_node(param_name, Syntax::ParamDecl {
         rest: false,
         pattern,
         default_value: None,
       });
-      let signature = ctx.create_node(param_name.clone(), Syntax::FunctionSignature {
+      let signature = ctx.create_node(param_name, Syntax::FunctionSignature {
         parameters: {
           let mut params = Vec::new();
           params.push(param);
@@ -737,7 +737,7 @@ impl<'a> Parser<'a> {
     let mut loc = t.loc;
     let mut parts = Vec::new();
     parts.push(LiteralTemplatePart::String(
-      normalise_literal_string_or_template_inner(ctx, self.bytes(t.loc))
+      normalise_literal_string_or_template_inner(self.bytes(t.loc))
         .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
     ));
     if !is_end {
@@ -748,13 +748,11 @@ impl<'a> Parser<'a> {
         let string = lex_template_string_continue(self.lexer_mut(), false)?;
         loc.extend(string.loc);
         parts.push(LiteralTemplatePart::String(
-          normalise_literal_string_or_template_inner(ctx, self.bytes(string.loc)).ok_or_else(
-            || {
-              string
-                .loc
-                .error(SyntaxErrorType::InvalidCharacterEscape, None)
-            },
-          )?,
+          normalise_literal_string_or_template_inner(self.bytes(string.loc)).ok_or_else(|| {
+            string
+              .loc
+              .error(SyntaxErrorType::InvalidCharacterEscape, None)
+          })?,
         ));
         self.clear_buffered();
         match string.typ {
@@ -866,12 +864,9 @@ impl<'a> Parser<'a> {
             self.parse_expr_import(ctx)?
           }
           TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
-          TokenType::KeywordThis => {
-            let new_node = ctx.create_node(t.loc, Syntax::ThisExpr {});
-            new_node
-          }
+          TokenType::KeywordThis => ctx.create_node(t.loc, Syntax::ThisExpr {}),
           TokenType::LiteralBigInt => ctx.create_node(t.loc, Syntax::LiteralBigIntExpr {
-            value: normalise_literal_bigint(ctx, self.str(t.loc))
+            value: normalise_literal_bigint(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidLiteralBigInt, None))?,
           }),
           TokenType::LiteralTrue | TokenType::LiteralFalse => {
@@ -886,7 +881,7 @@ impl<'a> Parser<'a> {
           }),
           TokenType::LiteralRegex => ctx.create_node(t.loc, Syntax::LiteralRegexExpr {}),
           TokenType::LiteralString => ctx.create_node(t.loc, Syntax::LiteralStringExpr {
-            value: normalise_literal_string(ctx, self.str(t.loc))
+            value: normalise_literal_string(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
           }),
           TokenType::LiteralTemplatePartString | TokenType::LiteralTemplatePartStringEnd => {

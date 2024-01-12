@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
       .match_loc()
     {
       Some(name) => {
-        let name_node = ctx.create_node(name.clone(), Syntax::ClassOrFunctionName {
+        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName {
           name: self.string(name),
         });
         Some(name_node)

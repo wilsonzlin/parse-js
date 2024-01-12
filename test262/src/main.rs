@@ -22,7 +22,7 @@ fn main() {
     .map(|t| {
       let file_path = t.unwrap();
       let file_name = file_path.file_name().to_str().unwrap().to_string();
-      let src = fs::read(&file_path.path()).unwrap();
+      let src = fs::read(file_path.path()).unwrap();
       let error = parse_js::parse(&src).err().map(|err| format!("{:?}", err));
       (file_name, error)
     })

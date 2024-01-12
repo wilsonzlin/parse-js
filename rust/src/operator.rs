@@ -121,7 +121,7 @@ pub struct Operator {
   pub precedence: u8,
 }
 
-const PRECEDENCE_LEVELS: &'static [&'static [(OperatorName, Arity, Associativity)]] = &[
+const PRECEDENCE_LEVELS: &[&[(OperatorName, Arity, Associativity)]] = &[
   &[
     (MemberAccess, Binary, Left),
     (ComputedMemberAccess, Binary, Left),

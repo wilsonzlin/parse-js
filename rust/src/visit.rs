@@ -13,7 +13,7 @@ pub struct JourneyControls {
 }
 
 impl JourneyControls {
-  pub fn skip(&mut self) -> () {
+  pub fn skip(&mut self) {
     self.skip = true;
   }
 }
@@ -21,18 +21,18 @@ impl JourneyControls {
 // Don't use `Node<'a>` as that requires reference to live for entire `'a`.
 // Nodes must be visited in execution order. This is helpful for many uses.
 pub trait Visitor {
-  fn on_syntax_down(&mut self, node: &mut Node, ctl: &mut JourneyControls) -> () {}
+  fn on_syntax_down(&mut self, node: &mut Node, ctl: &mut JourneyControls) {}
 
-  fn on_syntax_up(&mut self, node: &mut Node) -> () {}
+  fn on_syntax_up(&mut self, node: &mut Node) {}
 
-  fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey) -> () {
+  fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey) {
     match key {
       ClassOrObjectMemberKey::Direct(_) => {}
       ClassOrObjectMemberKey::Computed(key) => self.visit(key),
     };
   }
 
-  fn visit_class_or_object_value(&mut self, value: &mut ClassOrObjectMemberValue) -> () {
+  fn visit_class_or_object_value(&mut self, value: &mut ClassOrObjectMemberValue) {
     match value {
       ClassOrObjectMemberValue::Getter { body } => self.visit(body),
       ClassOrObjectMemberValue::Method {
@@ -53,7 +53,7 @@ pub trait Visitor {
     }
   }
 
-  fn visit(&mut self, n: &mut Node) -> () {
+  fn visit(&mut self, n: &mut Node) {
     let mut cur_stx_type = core::mem::discriminant(n.stx.as_ref());
     loop {
       let mut ctl = JourneyControls { skip: false };
@@ -236,23 +236,12 @@ pub trait Visitor {
           self.visit(post);
         };
       }
-      Syntax::ForInStmt {
-        decl_mode,
-        pat,
-        rhs,
-        body,
-      } => {
+      Syntax::ForInStmt { pat, rhs, body, .. } => {
         self.visit(pat);
         self.visit(rhs);
         self.visit(body);
       }
-      Syntax::ForOfStmt {
-        await_,
-        decl_mode,
-        pat,
-        rhs,
-        body,
-      } => {
+      Syntax::ForOfStmt { pat, rhs, body, .. } => {
         self.visit(pat);
         self.visit(rhs);
         self.visit(body);

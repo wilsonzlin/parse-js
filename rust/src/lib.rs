@@ -15,7 +15,7 @@ pub mod token;
 pub mod util;
 pub mod visit;
 
-pub fn parse<'a>(source: &'a [u8]) -> SyntaxResult<Node> {
+pub fn parse(source: &[u8]) -> SyntaxResult<Node> {
   let lexer = Lexer::new(source);
   let mut parser = Parser::new(lexer);
   parser.parse_top_level()
