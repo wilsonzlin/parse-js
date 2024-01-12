@@ -7,7 +7,6 @@ use session::Session;
 use symbol::SymbolGenerator;
 
 pub mod ast;
-pub mod builtin;
 pub mod char;
 pub mod error;
 pub mod flag;

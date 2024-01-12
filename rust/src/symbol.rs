@@ -276,6 +276,29 @@ impl<'a> Scope<'a> {
     None
   }
 
+  pub fn find_symbol_up_to_nearest_scope_matching_pred<'b>(
+    self,
+    identifier: Identifier<'a>,
+    scope_pred: impl Fn(ScopeType) -> bool,
+  ) -> Option<Symbol> {
+    let mut scope = self;
+    loop {
+      let scope_data = scope.get();
+      if let Some(symbol) = scope_data.symbols.get(&identifier) {
+        return Some(symbol.clone());
+      };
+      if scope_pred(scope_data.typ) {
+        break;
+      };
+      if let Some(parent) = scope_data.parent {
+        scope = parent;
+        continue;
+      };
+      break;
+    }
+    None
+  }
+
   pub fn symbol_count(self) -> usize {
     self.get().symbols.len()
   }
