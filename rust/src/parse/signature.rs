@@ -1,4 +1,3 @@
-use super::pattern::ParsePatternAction;
 use super::ParseCtx;
 use super::Parser;
 use crate::ast::Node;
@@ -8,10 +7,10 @@ use crate::token::TokenType;
 
 impl<'a> Parser<'a> {
   // `scope` should be a newly created closure scope for this function.
-  pub fn parse_signature_function(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_signature_function(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start_pos = self.checkpoint();
 
-    let mut parameters = ctx.session.new_vec();
+    let mut parameters = Vec::new();
     self.require(TokenType::ParenthesisOpen)?;
     loop {
       if self.consume_if(TokenType::ParenthesisClose)?.is_match() {
@@ -19,7 +18,7 @@ impl<'a> Parser<'a> {
       };
 
       let rest = self.consume_if(TokenType::DotDotDot)?.is_match();
-      let pattern = self.parse_pattern(ctx, ParsePatternAction::AddToClosureScope)?;
+      let pattern = self.parse_pattern(ctx)?;
       let default_value = self.consume_if(TokenType::Equals)?.and_then(|| {
         self.parse_expr_until_either(ctx, TokenType::Comma, TokenType::ParenthesisClose)
       })?;

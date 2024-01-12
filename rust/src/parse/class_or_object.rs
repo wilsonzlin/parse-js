@@ -1,6 +1,5 @@
 use super::expr::Asi;
 use super::pattern::is_valid_pattern_identifier;
-use super::pattern::ParsePatternAction;
 use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
@@ -9,39 +8,39 @@ use crate::ast::ClassOrObjectMemberKey;
 use crate::ast::ClassOrObjectMemberValue;
 use crate::error::SyntaxResult;
 use crate::lex::KEYWORDS_MAPPING;
-use crate::session::SessionVec;
-use crate::source::SourceRange;
-use crate::symbol::ScopeType;
+use crate::loc::Loc;
 use crate::token::TokenType;
 
-pub struct ParseClassBodyResult<'a> {
-  pub members: SessionVec<'a, ClassMember<'a>>,
-  pub end: SourceRange<'a>,
+pub struct ParseClassBodyResult {
+  pub members: Vec<ClassMember>,
+  pub end: Loc,
 }
 
-pub struct ParseClassOrObjectMemberResult<'a> {
-  pub key: ClassOrObjectMemberKey<'a>,
-  pub value: ClassOrObjectMemberValue<'a>,
+pub struct ParseClassOrObjectMemberResult {
+  pub key: ClassOrObjectMemberKey,
+  pub key_loc: Loc,
+  pub value: ClassOrObjectMemberValue,
 }
 
 impl<'a> Parser<'a> {
-  pub fn parse_class_body(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, ParseClassBodyResult<'a>> {
+  pub fn parse_class_body(&mut self, ctx: ParseCtx) -> SyntaxResult<ParseClassBodyResult> {
     self.require(TokenType::BraceOpen)?;
-    let mut members = ctx.session.new_vec();
+    let mut members = Vec::new();
     while self.peek()?.typ != TokenType::BraceClose {
       // `static` must always come first if present.
-      let statik = self.consume_if(TokenType::KeywordStatic)?.is_match();
-      let ParseClassOrObjectMemberResult { key, value } = self.parse_class_or_object_member(
+      let static_ = self.consume_if(TokenType::KeywordStatic)?.is_match();
+      let ParseClassOrObjectMemberResult { key, value, .. } = self.parse_class_or_object_member(
         ctx,
         TokenType::Equals,
         TokenType::Semicolon,
         &mut Asi::can(),
       )?;
       self.consume_if(TokenType::Semicolon)?;
-      members.push(ClassMember { key, statik, value });
+      members.push(ClassMember {
+        key,
+        static_,
+        value,
+      });
     }
     let end = self.require(TokenType::BraceClose)?.loc;
     Ok(ParseClassBodyResult { members, end })
@@ -54,11 +53,11 @@ impl<'a> Parser<'a> {
   // where <key> = <ident> | <keyword> | <str> | <num> | '[' <expr> ']'
   pub fn parse_class_or_object_member(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     value_delimiter: TokenType,
     statement_delimiter: TokenType,
     property_initialiser_asi: &mut Asi,
-  ) -> SyntaxResult<'a, ParseClassOrObjectMemberResult<'a>> {
+  ) -> SyntaxResult<ParseClassOrObjectMemberResult> {
     let checkpoint = self.checkpoint();
     let mut is_getter = false;
     let mut is_setter = false;
@@ -81,10 +80,10 @@ impl<'a> Parser<'a> {
       };
     }
     let is_generator = self.consume_if(TokenType::Asterisk)?.is_match();
-    let key = if self.consume_if(TokenType::BracketOpen)?.is_match() {
-      let key = ClassOrObjectMemberKey::Computed(self.parse_expr(ctx, TokenType::BracketClose)?);
+    let (key_loc, key) = if self.consume_if(TokenType::BracketOpen)?.is_match() {
+      let key = self.parse_expr(ctx, TokenType::BracketClose)?;
       self.require(TokenType::BracketClose)?;
-      key
+      (key.loc, ClassOrObjectMemberKey::Computed(key))
     } else {
       let loc = if let Some(str) = self.consume_if(TokenType::LiteralString)?.match_loc() {
         // TODO Do we need to remove quotes and/or decode?
@@ -107,18 +106,16 @@ impl<'a> Parser<'a> {
           )?
           .loc
       };
-      ClassOrObjectMemberKey::Direct(loc)
+      (loc, ClassOrObjectMemberKey::Direct(self.string(loc)))
     };
     // Check is_generator/is_async first so that we don't have to check that they're false in every other branch.
     let value = if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
-      let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
-      let fn_ctx = ctx.with_scope(fn_scope);
-      let signature = self.parse_signature_function(fn_ctx)?;
+      let signature = self.parse_signature_function(ctx)?;
       ClassOrObjectMemberValue::Method {
         is_async,
         generator: is_generator,
         signature,
-        body: self.parse_stmt_block_with_existing_scope(fn_ctx.with_rules(ParsePatternRules {
+        body: self.parse_stmt_block_with_existing_scope(ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?,
@@ -130,14 +127,12 @@ impl<'a> Parser<'a> {
         body: self.parse_stmt_block(ctx)?,
       }
     } else if is_setter {
-      let setter_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
-      let setter_ctx = ctx.with_scope(setter_scope);
       self.require(TokenType::ParenthesisOpen)?;
-      let parameter = self.parse_pattern(setter_ctx, ParsePatternAction::AddToClosureScope)?;
+      let parameter = self.parse_pattern(ctx)?;
       self.require(TokenType::ParenthesisClose)?;
       ClassOrObjectMemberValue::Setter {
         parameter,
-        body: self.parse_stmt_block(setter_ctx)?,
+        body: self.parse_stmt_block(ctx)?,
       }
     } else if match key {
       ClassOrObjectMemberKey::Direct(_) => match self.peek()? {
@@ -164,6 +159,10 @@ impl<'a> Parser<'a> {
         initializer: Some(value),
       }
     };
-    Ok(ParseClassOrObjectMemberResult { key, value })
+    Ok(ParseClassOrObjectMemberResult {
+      key,
+      key_loc,
+      value,
+    })
   }
 }

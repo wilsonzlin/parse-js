@@ -1,7 +1,6 @@
 use super::class_or_object::ParseClassBodyResult;
 use super::expr::Asi;
 use super::pattern::is_valid_pattern_identifier;
-use super::pattern::ParsePatternAction;
 use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
@@ -11,7 +10,6 @@ use crate::ast::VarDeclMode;
 use crate::ast::VariableDeclarator;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
-use crate::symbol::ScopeType;
 use crate::token::TokenType;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,10 +23,10 @@ pub enum VarDeclParseMode {
 impl<'a> Parser<'a> {
   pub fn parse_decl_var(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     parse_mode: VarDeclParseMode,
     export: bool,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     let t = self.next()?;
     let mode = match t.typ {
       TokenType::KeywordLet => VarDeclMode::Let,
@@ -36,13 +34,10 @@ impl<'a> Parser<'a> {
       TokenType::KeywordVar => VarDeclMode::Var,
       _ => return Err(t.error(SyntaxErrorType::ExpectedSyntax("variable declaration"))),
     };
-    let mut declarators = ctx.session.new_vec();
+    let mut declarators = Vec::new();
     let mut loc = t.loc;
     loop {
-      let pattern = self.parse_pattern(ctx, match mode {
-        VarDeclMode::Var => ParsePatternAction::AddToClosureScope,
-        _ => ParsePatternAction::AddToBlockScope,
-      })?;
+      let pattern = self.parse_pattern(ctx)?;
       loc.extend(pattern.loc);
       let mut asi = match parse_mode {
         VarDeclParseMode::Asi => Asi::can(),
@@ -91,11 +86,10 @@ impl<'a> Parser<'a> {
 
   pub fn parse_decl_function(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     export: bool,
     export_default: bool,
-  ) -> SyntaxResult<'a, Node<'a>> {
-    let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
+  ) -> SyntaxResult<Node> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
     let start = self.require(TokenType::KeywordFunction)?.loc;
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
@@ -107,10 +101,9 @@ impl<'a> Parser<'a> {
       .match_loc()
     {
       Some(name) => {
-        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName { name });
-        if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-          closure.add_symbol(name)?;
-        };
+        let name_node = ctx.create_node(name, Syntax::ClassOrFunctionName {
+          name: self.string(name),
+        });
         Some(name_node)
       }
       _ => {
@@ -120,13 +113,11 @@ impl<'a> Parser<'a> {
         None
       }
     };
-    let signature = self.parse_signature_function(ctx.with_scope(fn_scope))?;
-    let body = self.parse_stmt_block_with_existing_scope(ctx.with_scope(fn_scope).with_rules(
-      ParsePatternRules {
-        await_allowed: !is_async && ctx.rules.await_allowed,
-        yield_allowed: !generator && ctx.rules.yield_allowed,
-      },
-    ))?;
+    let signature = self.parse_signature_function(ctx)?;
+    let body = self.parse_stmt_block_with_existing_scope(ctx.with_rules(ParsePatternRules {
+      await_allowed: !is_async && ctx.rules.await_allowed,
+      yield_allowed: !generator && ctx.rules.yield_allowed,
+    }))?;
     Ok(ctx.create_node(start + body.loc, Syntax::FunctionDecl {
       export,
       export_default,
@@ -140,10 +131,10 @@ impl<'a> Parser<'a> {
 
   pub fn parse_decl_class(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     export: bool,
     export_default: bool,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordClass)?.loc;
     // Names can be omitted only in default exports.
     let name = match self
@@ -152,9 +143,8 @@ impl<'a> Parser<'a> {
     {
       Some(name) => {
         let name_node = ctx.create_node(name.clone(), Syntax::ClassOrFunctionName {
-          name: name.clone(),
+          name: self.string(name),
         });
-        ctx.scope.add_block_symbol(name.clone())?;
         Some(name_node)
       }
       None => {

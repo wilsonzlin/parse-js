@@ -1,4 +1,4 @@
-use crate::source::SourceRange;
+use crate::loc::Loc;
 use crate::token::TokenType;
 use core::fmt;
 use core::fmt::Debug;
@@ -15,71 +15,56 @@ pub enum SyntaxErrorType {
   ForLoopHeaderHasNoLhs,
   InvalidAssigmentTarget,
   InvalidCharacterEscape,
+  InvalidLiteralBigInt,
+  JsxClosingTagMismatch,
   LineTerminatorAfterArrowFunctionParameters,
   LineTerminatorAfterThrow,
   LineTerminatorAfterYield,
   LineTerminatorInRegex,
   LineTerminatorInString,
   MalformedLiteralNumber,
-  JsxClosingTagMismatch,
   RequiredTokenNotFound(TokenType),
   TryStatementHasNoCatchOrFinally,
   UnexpectedEnd,
 }
 
 #[derive(Clone)]
-pub struct SyntaxError<'a> {
-  pub source: SourceRange<'a>,
+pub struct SyntaxError {
   pub typ: SyntaxErrorType,
+  pub loc: Loc,
   pub actual_token: Option<TokenType>,
 }
 
-impl<'a> SyntaxError<'a> {
-  pub fn new(
-    typ: SyntaxErrorType,
-    source: SourceRange<'a>,
-    actual_token: Option<TokenType>,
-  ) -> SyntaxError<'a> {
+impl SyntaxError {
+  pub fn new(typ: SyntaxErrorType, loc: Loc, actual_token: Option<TokenType>) -> SyntaxError {
     SyntaxError {
       typ,
-      source,
-      actual_token,
-    }
-  }
-
-  pub fn from_loc(
-    loc: SourceRange<'a>,
-    typ: SyntaxErrorType,
-    actual_token: Option<TokenType>,
-  ) -> SyntaxError<'a> {
-    SyntaxError {
-      source: loc,
-      typ,
+      loc,
       actual_token,
     }
   }
 }
 
-impl<'a> Debug for SyntaxError<'a> {
+impl Debug for SyntaxError {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(f, "{} around ```{}```", self, self.source.as_str())
+    write!(f, "{} around loc [{}:{}]", self, self.loc.0, self.loc.1)
   }
 }
 
-impl<'a> Display for SyntaxError<'a> {
+impl Display for SyntaxError {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-    write!(f, "{:?} [token={:?}]", self.typ, self.actual_token,)
+    write!(f, "{:?} [token={:?}]", self.typ, self.actual_token)
   }
 }
 
-impl<'a> Error for SyntaxError<'a> {}
+impl Error for SyntaxError {}
 
-impl<'a> PartialEq for SyntaxError<'a> {
+impl PartialEq for SyntaxError {
   fn eq(&self, other: &Self) -> bool {
     self.typ == other.typ
   }
 }
 
-impl<'a> Eq for SyntaxError<'a> {}
+impl Eq for SyntaxError {}
 
-pub type SyntaxResult<'a, T> = Result<T, SyntaxError<'a>>;
+pub type SyntaxResult<T> = Result<T, SyntaxError>;

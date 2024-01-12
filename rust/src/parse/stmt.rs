@@ -7,30 +7,20 @@ use crate::ast::ExportName;
 use crate::ast::ExportNames;
 use crate::ast::ForInit;
 use crate::ast::Node;
-use crate::ast::NodeFlag;
 use crate::ast::Syntax;
-use crate::ast::VarDeclMode;
-use crate::ast::NODE_FLAG_UNCONDITIONAL_FLOWS;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
-use crate::flag::Flags;
-use crate::parse::pattern::ParsePatternAction;
-use crate::source::SourceRange;
-use crate::symbol::ScopeType;
+use crate::loc::Loc;
 use crate::token::TokenType;
 
-struct BreakOrContinue<'a> {
-  loc: SourceRange<'a>,
-  label: Option<SourceRange<'a>>,
+struct BreakOrContinue {
+  loc: Loc,
+  label: Option<String>,
 }
 
 impl<'a> Parser<'a> {
   // Parses `a`, `a as b`, `default as b`. Creates the symbol if importing.
-  fn parse_import_or_export_name(
-    &mut self,
-    ctx: ParseCtx<'a>,
-    add_to_scope: bool,
-  ) -> SyntaxResult<'a, ExportName<'a>> {
+  fn parse_import_or_export_name(&mut self, ctx: ParseCtx) -> SyntaxResult<ExportName> {
     let (target, alias) = match self.consume_if(TokenType::KeywordDefault)?.match_loc() {
       Some(target) => {
         self.require(TokenType::KeywordAs)?;
@@ -48,18 +38,15 @@ impl<'a> Parser<'a> {
       }
     };
     let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
-      name: alias.clone(),
+      name: self.string(alias),
     });
-    if add_to_scope {
-      ctx.scope.add_symbol(alias.clone())?;
-    };
     Ok(ExportName {
-      target,
+      target: self.string(target),
       alias: alias_node,
     })
   }
 
-  pub fn parse_stmt(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     match self.peek()?.typ {
       TokenType::BraceOpen => self.parse_stmt_block(ctx),
       TokenType::KeywordBreak => self.parse_stmt_break(ctx),
@@ -90,7 +77,7 @@ impl<'a> Parser<'a> {
           let statement = self.parse_stmt(ctx)?;
           Ok(
             ctx.create_node(self.since_checkpoint(checkpoint), Syntax::LabelStmt {
-              name: label_name,
+              name: self.string(label_name),
               statement,
             }),
           )
@@ -103,77 +90,32 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn parse_stmt_empty(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_empty(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc = self.require(TokenType::Semicolon)?.loc;
     Ok(ctx.create_node(loc, Syntax::EmptyStmt {}))
   }
 
   // The scope can be provided when parsing function bodies, as their scope starts at the signature and a new one isn't introduced upon braces.
-  pub fn parse_stmt_block_with_existing_scope(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, Node<'a>> {
-    let mut flags = Flags::new();
+  pub fn parse_stmt_block_with_existing_scope(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::BraceOpen)?;
-    let mut body = ctx.session.new_vec();
-    let mut dead = false;
+    let mut body = Vec::new();
     loop {
       if let Some(end_loc) = self.consume_if(TokenType::BraceClose)?.match_loc() {
-        return Ok(ctx.create_node_with_flags(
-          start.loc + end_loc,
-          Syntax::BlockStmt { body },
-          flags,
-        ));
+        return Ok(ctx.create_node(start.loc + end_loc, Syntax::BlockStmt { body }));
       };
-      let stmt = self.parse_stmt(ctx)?;
-      if dead {
-        stmt.flags |= NodeFlag::Unreachable;
-      };
-      flags |= stmt.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
-      if stmt.flags.has_any(NODE_FLAG_UNCONDITIONAL_FLOWS) {
-        dead = true;
-      };
-      match &stmt.stx {
-        Syntax::ClassDecl { .. } => {
-          flags |= NodeFlag::HasClassDecl;
-        }
-        Syntax::FunctionDecl { .. } => {
-          flags |= NodeFlag::HasFunctionDecl;
-        }
-        Syntax::VarDecl {
-          mode, declarators, ..
-        } => {
-          for decl in declarators {
-            match &decl.pattern.stx {
-              Syntax::IdentifierPattern { .. } => match mode {
-                VarDeclMode::Const => flags |= NodeFlag::HasConstVarDeclWithIdentifierPattern,
-                VarDeclMode::Let => flags |= NodeFlag::HasLetVarDeclWithIdentifierPattern,
-                VarDeclMode::Var => flags |= NodeFlag::HasVarVarDeclWithIdentifierPattern,
-              },
-              _ => match mode {
-                VarDeclMode::Const => flags |= NodeFlag::HasConstVarDeclWithNonIdentifierPattern,
-                VarDeclMode::Let => flags |= NodeFlag::HasLetVarDeclWithNonIdentifierPattern,
-                VarDeclMode::Var => flags |= NodeFlag::HasVarVarDeclWithNonIdentifierPattern,
-              },
-            };
-          }
-        }
-        _ => {}
-      }
-      body.push(stmt);
+      body.push(self.parse_stmt(ctx)?);
     }
   }
 
-  pub fn parse_stmt_block(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let block_scope = ctx.create_child_scope(ScopeType::Block);
-    self.parse_stmt_block_with_existing_scope(ctx.with_scope(block_scope))
+  pub fn parse_stmt_block(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
+    self.parse_stmt_block_with_existing_scope(ctx)
   }
 
   fn parse_stmt_break_or_continue(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     t: TokenType,
-  ) -> SyntaxResult<'a, BreakOrContinue<'a>> {
+  ) -> SyntaxResult<BreakOrContinue> {
     let mut loc = self.require(t)?.loc;
     let next = self.peek()?;
     let label =
@@ -181,7 +123,7 @@ impl<'a> Parser<'a> {
         // Label.
         self.consume_peeked();
         loc.extend(next.loc);
-        Some(next.loc)
+        Some(self.string(next.loc))
       } else if next.typ == TokenType::Semicolon {
         self.consume_peeked();
         None
@@ -194,44 +136,36 @@ impl<'a> Parser<'a> {
     Ok(BreakOrContinue { loc, label })
   }
 
-  pub fn parse_stmt_break(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_break(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordBreak)?;
-    Ok(ctx.create_node_with_flag(
-      stmt.loc,
-      Syntax::BreakStmt { label: stmt.label },
-      NodeFlag::UnconditionallyBreaks,
-    ))
+    Ok(ctx.create_node(stmt.loc, Syntax::BreakStmt { label: stmt.label }))
   }
 
-  pub fn parse_stmt_continue(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_continue(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let stmt = self.parse_stmt_break_or_continue(ctx, TokenType::KeywordContinue)?;
-    Ok(ctx.create_node_with_flag(
-      stmt.loc,
-      Syntax::ContinueStmt { label: stmt.label },
-      NodeFlag::UnconditionallyContinues,
-    ))
+    Ok(ctx.create_node(stmt.loc, Syntax::ContinueStmt { label: stmt.label }))
   }
 
-  pub fn parse_stmt_debugger(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_debugger(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc = self.require(TokenType::KeywordDebugger)?.loc;
     Ok(ctx.create_node(loc, Syntax::DebuggerStmt {}))
   }
 
   // https://tc39.es/ecma262/#sec-exports
   // https://jakearchibald.com/2021/export-default-thing-vs-thing-as-default/
-  pub fn parse_stmt_export(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_export(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     // TODO Ensure top-level.
     let start = self.require(TokenType::KeywordExport)?;
     let cp = self.checkpoint();
     let t = self.next()?;
     Ok(match t.typ {
       TokenType::BraceOpen => {
-        let mut names = ctx.session.new_vec::<ExportName>();
+        let mut names = Vec::<ExportName>::new();
         loop {
           if self.consume_if(TokenType::BraceClose)?.is_match() {
             break;
           };
-          let name = self.parse_import_or_export_name(ctx, false)?;
+          let name = self.parse_import_or_export_name(ctx)?;
           names.push(name);
           if !self.consume_if(TokenType::Comma)?.is_match() {
             self.require(TokenType::BraceClose)?;
@@ -252,7 +186,7 @@ impl<'a> Parser<'a> {
         let alias = if self.consume_if(TokenType::KeywordAs)?.is_match() {
           let alias = self.require(TokenType::Identifier)?.loc;
           let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
-            name: alias.clone(),
+            name: self.string(alias),
           });
           Some(alias_node)
           // We don't need to add the symbol as it's not exposed within the module's scope.
@@ -300,7 +234,7 @@ impl<'a> Parser<'a> {
   }
 
   // WARNING: Do not reuse this functions for other statements, as this will output a statement node, not an expression, which can lead to double semicolons that cause invalid code when outputting.
-  pub fn parse_stmt_expression(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_expression(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let mut asi = Asi::can();
     let expression = self.parse_expr_with_asi(ctx, TokenType::Semicolon, &mut asi)?;
     if !asi.did_end_with_asi {
@@ -309,28 +243,25 @@ impl<'a> Parser<'a> {
     Ok(ctx.create_node(expression.loc, Syntax::ExpressionStmt { expression }))
   }
 
-  pub fn parse_stmt_for(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let for_scope = ctx.create_child_scope(ScopeType::Block);
-    let for_ctx = ctx.with_scope(for_scope);
-
+  pub fn parse_stmt_for(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordFor)?;
     let await_ = self.consume_if(TokenType::KeywordAwait)?;
     self.require(TokenType::ParenthesisOpen)?;
-    enum LhsRaw<'a> {
-      Declaration(Node<'a>),
-      Expression(Node<'a>),
-      Pattern(Node<'a>),
+    enum LhsRaw {
+      Declaration(Node),
+      Expression(Node),
+      Pattern(Node),
       Empty,
     }
     let lhs_raw = match self.peek()?.typ {
       TokenType::KeywordVar | TokenType::KeywordLet | TokenType::KeywordConst => {
-        LhsRaw::Declaration(self.parse_decl_var(for_ctx, VarDeclParseMode::Leftmost, false)?)
+        LhsRaw::Declaration(self.parse_decl_var(ctx, VarDeclParseMode::Leftmost, false)?)
       }
       TokenType::Semicolon => LhsRaw::Empty,
       _ => {
         // A pattern could be reinterpreted as an expression (and vice versa), so we can only try parsing both.
         let checkpoint = self.checkpoint();
-        match if let Ok(node) = self.parse_pattern(for_ctx, ParsePatternAction::None) {
+        match if let Ok(node) = self.parse_pattern(ctx) {
           match self.peek()?.typ {
             TokenType::KeywordIn | TokenType::KeywordOf => Some(LhsRaw::Pattern(node)),
             _ => {
@@ -344,7 +275,7 @@ impl<'a> Parser<'a> {
           Some(p) => p,
           None => {
             self.restore_checkpoint(checkpoint);
-            LhsRaw::Expression(self.parse_expr(for_ctx, TokenType::Semicolon)?)
+            LhsRaw::Expression(self.parse_expr(ctx, TokenType::Semicolon)?)
           }
         }
       }
@@ -365,23 +296,23 @@ impl<'a> Parser<'a> {
         };
         let (decl_mode, pat) = match lhs_raw {
           LhsRaw::Empty => return Err(start.error(SyntaxErrorType::ForLoopHeaderHasNoLhs)),
-          LhsRaw::Declaration(node) => match &mut node.stx {
+          LhsRaw::Declaration(node) => match *node.stx {
             Syntax::VarDecl {
-              declarators,
+              mut declarators,
               mode,
               export,
             } => {
-              if *export {
+              if export {
                 return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs));
               };
               if declarators.len() != 1 {
                 return Err(start.error(SyntaxErrorType::ForLoopHeaderHasMultipleDeclarators));
               }
-              let decl = declarators.first_mut().unwrap();
+              let decl = declarators.pop().unwrap();
               if decl.initializer.is_some() {
                 return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs));
               };
-              (Some(*mode), decl.pattern.take(ctx.session))
+              (Some(mode), decl.pattern)
             }
             _ => unreachable!(),
           },
@@ -390,9 +321,9 @@ impl<'a> Parser<'a> {
             return Err(start.error(SyntaxErrorType::ForLoopHeaderHasInvalidLhs))
           }
         };
-        let rhs = self.parse_expr(for_ctx, TokenType::ParenthesisClose)?;
+        let rhs = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
         self.require(TokenType::ParenthesisClose)?;
-        let body = self.parse_stmt(for_ctx)?;
+        let body = self.parse_stmt(ctx)?;
         if of {
           ctx.create_node(start.loc + body.loc, Syntax::ForOfStmt {
             await_: await_.is_match(),
@@ -439,18 +370,18 @@ impl<'a> Parser<'a> {
         let condition = if self.consume_if(TokenType::Semicolon)?.is_match() {
           None
         } else {
-          let expr = self.parse_expr(for_ctx, TokenType::Semicolon)?;
+          let expr = self.parse_expr(ctx, TokenType::Semicolon)?;
           self.require(TokenType::Semicolon)?;
           Some(expr)
         };
         let post = if self.consume_if(TokenType::ParenthesisClose)?.is_match() {
           None
         } else {
-          let expr = self.parse_expr(for_ctx, TokenType::ParenthesisClose)?;
+          let expr = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
           self.require(TokenType::ParenthesisClose)?;
           Some(expr)
         };
-        let body = self.parse_stmt(for_ctx)?;
+        let body = self.parse_stmt(ctx)?;
         ctx.create_node(start.loc + body.loc, Syntax::ForStmt {
           init,
           condition,
@@ -462,7 +393,7 @@ impl<'a> Parser<'a> {
     Ok(n)
   }
 
-  pub fn parse_stmt_if(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_if(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordIf)?;
     self.require(TokenType::ParenthesisOpen)?;
     let test = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
@@ -475,23 +406,14 @@ impl<'a> Parser<'a> {
     };
     let end = alternate.as_ref().unwrap_or(&consequent);
 
-    let flags = (consequent.flags | end.flags).select(NODE_FLAG_UNCONDITIONAL_FLOWS);
-
-    Ok(ctx.create_node_with_flags(
-      start.loc + end.loc,
-      Syntax::IfStmt {
-        test,
-        consequent,
-        alternate,
-      },
-      flags,
-    ))
+    Ok(ctx.create_node(start.loc + end.loc, Syntax::IfStmt {
+      test,
+      consequent,
+      alternate,
+    }))
   }
 
-  pub fn parse_stmt_import_or_expr_import(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_import_or_expr_import(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let cp = self.checkpoint();
     let start = self.require(TokenType::KeywordImport)?;
     if self.consume_if(TokenType::ParenthesisOpen)?.is_match() {
@@ -504,9 +426,8 @@ impl<'a> Parser<'a> {
     let (default, can_have_names) =
       if let Some(alias) = self.consume_if(TokenType::Identifier)?.match_loc() {
         let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
-          name: alias.clone(),
+          name: self.string(alias),
         });
-        ctx.scope.add_symbol(alias.clone())?;
         (
           Some(alias_node),
           self.consume_if(TokenType::Comma)?.is_match(),
@@ -520,15 +441,14 @@ impl<'a> Parser<'a> {
       self.require(TokenType::KeywordAs)?;
       let alias = self.require(TokenType::Identifier)?.loc;
       let alias_node = ctx.create_node(alias.clone(), Syntax::IdentifierPattern {
-        name: alias.clone(),
+        name: self.string(alias),
       });
-      ctx.scope.add_symbol(alias.clone())?;
       Some(ExportNames::All(Some(alias_node)))
     } else {
       self.require(TokenType::BraceOpen)?;
-      let mut names = ctx.session.new_vec::<ExportName>();
+      let mut names = Vec::<ExportName>::new();
       while !self.consume_if(TokenType::BraceClose)?.is_match() {
-        let name = self.parse_import_or_export_name(ctx, true)?;
+        let name = self.parse_import_or_export_name(ctx)?;
         names.push(name);
         if !self.consume_if(TokenType::Comma)?.is_match() {
           break;
@@ -548,7 +468,7 @@ impl<'a> Parser<'a> {
     }))
   }
 
-  pub fn parse_stmt_return(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_return(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordReturn)?;
     let mut loc = start.loc;
     let value =
@@ -566,14 +486,10 @@ impl<'a> Parser<'a> {
         loc.extend(value.loc);
         Some(value)
       };
-    Ok(ctx.create_node_with_flag(
-      loc,
-      Syntax::ReturnStmt { value },
-      NodeFlag::UnconditionallyReturns,
-    ))
+    Ok(ctx.create_node(loc, Syntax::ReturnStmt { value }))
   }
 
-  pub fn parse_stmt_throw(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_throw(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordThrow)?;
     if self.peek()?.preceded_by_line_terminator {
       // Illegal under Automatic Semicolon Insertion rules.
@@ -584,37 +500,29 @@ impl<'a> Parser<'a> {
     if !asi.did_end_with_asi {
       self.require(TokenType::Semicolon)?;
     };
-    Ok(ctx.create_node_with_flag(
-      start.loc + value.loc,
-      Syntax::ThrowStmt { value },
-      NodeFlag::UnconditionallyThrows,
-    ))
+    Ok(ctx.create_node(start.loc + value.loc, Syntax::ThrowStmt { value }))
   }
 
-  pub fn parse_stmt_try(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_try(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordTry)?;
     let mut loc = start.loc;
     let wrapped = self.parse_stmt_block(ctx)?;
     let catch = if self.consume_if(TokenType::KeywordCatch)?.is_match() {
-      let catch_scope = ctx.create_child_scope(ScopeType::Block);
-      let catch_ctx = ctx.with_scope(catch_scope);
       let parameter = if self.consume_if(TokenType::ParenthesisOpen)?.is_match() {
-        let pattern = self.parse_pattern(catch_ctx, ParsePatternAction::AddToBlockScope)?;
+        let pattern = self.parse_pattern(ctx)?;
         self.require(TokenType::ParenthesisClose)?;
         Some(pattern)
       } else {
         None
       };
-      let body = self.parse_stmt_block(catch_ctx)?;
+      let body = self.parse_stmt_block(ctx)?;
       loc.extend(body.loc);
       Some(ctx.create_node(body.loc, Syntax::CatchBlock { parameter, body }))
     } else {
       None
     };
-    let mut flags = Flags::new();
     let finally = if self.consume_if(TokenType::KeywordFinally)?.is_match() {
       let body = self.parse_stmt_block(ctx)?;
-      flags |= body.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
       loc.extend(body.loc);
       Some(body)
     } else {
@@ -623,18 +531,14 @@ impl<'a> Parser<'a> {
     if catch.is_none() && finally.is_none() {
       return Err(start.error(SyntaxErrorType::TryStatementHasNoCatchOrFinally));
     }
-    Ok(ctx.create_node_with_flags(
-      loc,
-      Syntax::TryStmt {
-        wrapped,
-        catch,
-        finally,
-      },
-      flags,
-    ))
+    Ok(ctx.create_node(loc, Syntax::TryStmt {
+      wrapped,
+      catch,
+      finally,
+    }))
   }
 
-  pub fn parse_stmt_while(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_while(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordWhile)?;
     self.require(TokenType::ParenthesisOpen)?;
     let condition = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
@@ -643,7 +547,7 @@ impl<'a> Parser<'a> {
     Ok(ctx.create_node(start.loc + body.loc, Syntax::WhileStmt { condition, body }))
   }
 
-  pub fn parse_stmt_do_while(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_do_while(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordDo)?;
     let body = self.parse_stmt(ctx)?;
     self.require(TokenType::KeywordWhile)?;
@@ -651,20 +555,16 @@ impl<'a> Parser<'a> {
     let condition = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     let end = self.require(TokenType::ParenthesisClose)?;
     self.consume_if(TokenType::Semicolon)?;
-
-    let mut flags = Flags::new();
-    flags |= body.flags.select(NODE_FLAG_UNCONDITIONAL_FLOWS);
-
     Ok(ctx.create_node(start.loc + end.loc, Syntax::DoWhileStmt { condition, body }))
   }
 
-  pub fn parse_stmt_switch(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_stmt_switch(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordSwitch)?;
     self.require(TokenType::ParenthesisOpen)?;
     let test = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
     self.require(TokenType::ParenthesisClose)?;
     self.require(TokenType::BraceOpen)?;
-    let mut branches = ctx.session.new_vec();
+    let mut branches = Vec::new();
     while self.peek()?.typ != TokenType::BraceClose {
       let mut loc = self.peek()?.loc;
       let case = if self.consume_if(TokenType::KeywordCase)?.is_match() {
@@ -674,7 +574,7 @@ impl<'a> Parser<'a> {
         None
       };
       self.require(TokenType::Colon)?;
-      let mut body = ctx.session.new_vec();
+      let mut body = Vec::new();
       loop {
         match self.peek()?.typ {
           TokenType::KeywordCase | TokenType::KeywordDefault | TokenType::BraceClose => break,

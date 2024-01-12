@@ -11,18 +11,18 @@ use crate::char::WHITESPACE;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
-use crate::source::SourceRange;
+use crate::loc::Loc;
 use crate::token::Token;
 use crate::token::TokenType;
+use ahash::AHashMap;
 use aho_corasick::AhoCorasick;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::MatchKind;
 use core::ops::Index;
-use lazy_static::lazy_static;
 use memchr::memchr;
 use memchr::memchr2;
 use memchr::memchr3;
-use std::collections::HashMap;
+use once_cell::sync::Lazy;
 
 #[cfg(feature = "serialize")]
 mod tests;
@@ -87,27 +87,23 @@ impl<'a> Lexer<'a> {
     self.end() - self.next
   }
 
-  pub fn source_range(&self) -> SourceRange<'a> {
-    SourceRange::new(self.source, 0, self.end())
+  pub fn source_range(&self) -> Loc {
+    Loc(0, self.end())
   }
 
-  fn eof_range(&self) -> SourceRange<'a> {
-    SourceRange::new(self.source, self.end(), self.end())
+  fn eof_range(&self) -> Loc {
+    Loc(self.end(), self.end())
   }
 
-  fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
-    SyntaxError::new(
-      typ,
-      SourceRange::new(self.source, self.next, self.end()),
-      None,
-    )
+  fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
+    Loc(self.next, self.end()).error(typ, None)
   }
 
   fn at_end(&self) -> bool {
     self.next >= self.end()
   }
 
-  fn peek(&self, n: usize) -> SyntaxResult<'a, u8> {
+  fn peek(&self, n: usize) -> SyntaxResult<u8> {
     self
       .peek_or_eof(n)
       .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
@@ -121,15 +117,15 @@ impl<'a> Lexer<'a> {
     LexerCheckpoint { next: self.next }
   }
 
-  pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> SourceRange<'a> {
-    SourceRange::new(self.source, checkpoint.next, self.next)
+  pub fn since_checkpoint(&self, checkpoint: LexerCheckpoint) -> Loc {
+    Loc(checkpoint.next, self.next)
   }
 
   pub fn apply_checkpoint(&mut self, checkpoint: LexerCheckpoint) -> () {
     self.next = checkpoint.next;
   }
 
-  fn n(&self, n: usize) -> SyntaxResult<'a, Match> {
+  fn n(&self, n: usize) -> SyntaxResult<Match> {
     if self.next + n > self.end() {
       return Err(self.error(SyntaxErrorType::UnexpectedEnd));
     };
@@ -150,7 +146,7 @@ impl<'a> Lexer<'a> {
       })
   }
 
-  fn through_char(&self, c: u8) -> SyntaxResult<'a, Match> {
+  fn through_char(&self, c: u8) -> SyntaxResult<Match> {
     memchr(c, &self.source[self.next..])
       .map(|pos| Match { len: pos + 1 })
       .ok_or_else(|| self.error(SyntaxErrorType::UnexpectedEnd))
@@ -182,7 +178,7 @@ impl<'a> Lexer<'a> {
     Match { len }
   }
 
-  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<'a, AhoCorasickMatch> {
+  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
     ac.find(&self.source[self.next..])
       .map(|m| AhoCorasickMatch {
         id: m.pattern(),
@@ -191,8 +187,8 @@ impl<'a> Lexer<'a> {
       .ok_or_else(|| self.error(SyntaxErrorType::ExpectedNotFound))
   }
 
-  fn range(&self, m: Match) -> SourceRange<'a> {
-    SourceRange::new(self.source, self.next, self.next + m.len)
+  fn range(&self, m: Match) -> Loc {
+    Loc(self.next, self.next + m.len)
   }
 
   fn consume(&mut self, m: Match) -> Match {
@@ -200,7 +196,7 @@ impl<'a> Lexer<'a> {
     m
   }
 
-  fn consume_next(&mut self) -> SyntaxResult<'a, u8> {
+  fn consume_next(&mut self) -> SyntaxResult<u8> {
     let c = self.peek(0)?;
     self.next += 1;
     Ok(c)
@@ -212,11 +208,11 @@ impl<'a> Lexer<'a> {
   }
 }
 
-impl<'a> Index<SourceRange<'a>> for Lexer<'a> {
+impl<'a> Index<Loc> for Lexer<'a> {
   type Output = [u8];
 
-  fn index(&self, index: SourceRange<'a>) -> &Self::Output {
-    &self.source[index.start()..index.end()]
+  fn index(&self, index: Loc) -> &Self::Output {
+    &self.source[index.0..index.1]
   }
 }
 
@@ -228,183 +224,186 @@ impl<'a> Index<Match> for Lexer<'a> {
   }
 }
 
-lazy_static! {
-    pub static ref OPERATORS_MAPPING: HashMap<TokenType, &'static [u8]> = {
-        let mut map = HashMap::<TokenType, &'static [u8]>::new();
-        map.insert(TokenType::Ampersand, b"&");
-        map.insert(TokenType::AmpersandAmpersand, b"&&");
-        map.insert(TokenType::AmpersandAmpersandEquals, b"&&=");
-        map.insert(TokenType::AmpersandEquals, b"&=");
-        map.insert(TokenType::Asterisk, b"*");
-        map.insert(TokenType::AsteriskAsterisk, b"**");
-        map.insert(TokenType::AsteriskAsteriskEquals, b"**=");
-        map.insert(TokenType::AsteriskEquals, b"*=");
-        map.insert(TokenType::Bar, b"|");
-        map.insert(TokenType::BarBar, b"||");
-        map.insert(TokenType::BarBarEquals, b"||=");
-        map.insert(TokenType::BarEquals, b"|=");
-        map.insert(TokenType::BraceClose, b"}");
-        map.insert(TokenType::BraceOpen, b"{");
-        map.insert(TokenType::BracketClose, b"]");
-        map.insert(TokenType::BracketOpen, b"[");
-        map.insert(TokenType::Caret, b"^");
-        map.insert(TokenType::CaretEquals, b"^=");
-        map.insert(TokenType::ChevronLeft, b"<");
-        map.insert(TokenType::ChevronLeftChevronLeft, b"<<");
-        map.insert(TokenType::ChevronLeftChevronLeftEquals, b"<<=");
-        map.insert(TokenType::ChevronLeftEquals, b"<=");
-        map.insert(TokenType::ChevronRight, b">");
-        map.insert(TokenType::ChevronRightChevronRight, b">>");
-        map.insert(TokenType::ChevronRightChevronRightChevronRight, b">>>");
-        map.insert(TokenType::ChevronRightChevronRightChevronRightEquals, b">>>=");
-        map.insert(TokenType::ChevronRightChevronRightEquals, b">>=");
-        map.insert(TokenType::ChevronRightEquals, b">=");
-        map.insert(TokenType::Colon, b":");
-        map.insert(TokenType::Comma, b",");
-        map.insert(TokenType::Dot, b".");
-        map.insert(TokenType::DotDotDot, b"...");
-        map.insert(TokenType::Equals, b"=");
-        map.insert(TokenType::EqualsChevronRight, b"=>");
-        map.insert(TokenType::EqualsEquals, b"==");
-        map.insert(TokenType::EqualsEqualsEquals, b"===");
-        map.insert(TokenType::Exclamation, b"!");
-        map.insert(TokenType::ExclamationEquals, b"!=");
-        map.insert(TokenType::ExclamationEqualsEquals, b"!==");
-        map.insert(TokenType::Hyphen, b"-");
-        map.insert(TokenType::HyphenEquals, b"-=");
-        map.insert(TokenType::HyphenHyphen, b"--");
-        map.insert(TokenType::ParenthesisClose, b")");
-        map.insert(TokenType::ParenthesisOpen, b"(");
-        map.insert(TokenType::Percent, b"%");
-        map.insert(TokenType::PercentEquals, b"%=");
-        map.insert(TokenType::Plus, b"+");
-        map.insert(TokenType::PlusEquals, b"+=");
-        map.insert(TokenType::PlusPlus, b"++");
-        map.insert(TokenType::PrivateMember, b"#");
-        map.insert(TokenType::Question, b"?");
-        map.insert(TokenType::QuestionDot, b"?.");
-        map.insert(TokenType::QuestionDotBracketOpen, b"?.[");
-        map.insert(TokenType::QuestionDotParenthesisOpen, b"?.(");
-        map.insert(TokenType::QuestionQuestion, b"??");
-        map.insert(TokenType::QuestionQuestionEquals, b"??=");
-        map.insert(TokenType::Semicolon, b";");
-        map.insert(TokenType::Slash, b"/");
-        map.insert(TokenType::SlashEquals, b"/=");
-        map.insert(TokenType::Tilde, b"~");
-        map
-    };
+#[rustfmt::skip]
+pub static OPERATORS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
+  let mut map = AHashMap::<TokenType, &'static [u8]>::new();
+  map.insert(TokenType::Ampersand, b"&");
+  map.insert(TokenType::AmpersandAmpersand, b"&&");
+  map.insert(TokenType::AmpersandAmpersandEquals, b"&&=");
+  map.insert(TokenType::AmpersandEquals, b"&=");
+  map.insert(TokenType::Asterisk, b"*");
+  map.insert(TokenType::AsteriskAsterisk, b"**");
+  map.insert(TokenType::AsteriskAsteriskEquals, b"**=");
+  map.insert(TokenType::AsteriskEquals, b"*=");
+  map.insert(TokenType::Bar, b"|");
+  map.insert(TokenType::BarBar, b"||");
+  map.insert(TokenType::BarBarEquals, b"||=");
+  map.insert(TokenType::BarEquals, b"|=");
+  map.insert(TokenType::BraceClose, b"}");
+  map.insert(TokenType::BraceOpen, b"{");
+  map.insert(TokenType::BracketClose, b"]");
+  map.insert(TokenType::BracketOpen, b"[");
+  map.insert(TokenType::Caret, b"^");
+  map.insert(TokenType::CaretEquals, b"^=");
+  map.insert(TokenType::ChevronLeft, b"<");
+  map.insert(TokenType::ChevronLeftChevronLeft, b"<<");
+  map.insert(TokenType::ChevronLeftChevronLeftEquals, b"<<=");
+  map.insert(TokenType::ChevronLeftEquals, b"<=");
+  map.insert(TokenType::ChevronRight, b">");
+  map.insert(TokenType::ChevronRightChevronRight, b">>");
+  map.insert(TokenType::ChevronRightChevronRightChevronRight, b">>>");
+  map.insert(TokenType::ChevronRightChevronRightChevronRightEquals, b">>>=");
+  map.insert(TokenType::ChevronRightChevronRightEquals, b">>=");
+  map.insert(TokenType::ChevronRightEquals, b">=");
+  map.insert(TokenType::Colon, b":");
+  map.insert(TokenType::Comma, b",");
+  map.insert(TokenType::Dot, b".");
+  map.insert(TokenType::DotDotDot, b"...");
+  map.insert(TokenType::Equals, b"=");
+  map.insert(TokenType::EqualsChevronRight, b"=>");
+  map.insert(TokenType::EqualsEquals, b"==");
+  map.insert(TokenType::EqualsEqualsEquals, b"===");
+  map.insert(TokenType::Exclamation, b"!");
+  map.insert(TokenType::ExclamationEquals, b"!=");
+  map.insert(TokenType::ExclamationEqualsEquals, b"!==");
+  map.insert(TokenType::Hyphen, b"-");
+  map.insert(TokenType::HyphenEquals, b"-=");
+  map.insert(TokenType::HyphenHyphen, b"--");
+  map.insert(TokenType::ParenthesisClose, b")");
+  map.insert(TokenType::ParenthesisOpen, b"(");
+  map.insert(TokenType::Percent, b"%");
+  map.insert(TokenType::PercentEquals, b"%=");
+  map.insert(TokenType::Plus, b"+");
+  map.insert(TokenType::PlusEquals, b"+=");
+  map.insert(TokenType::PlusPlus, b"++");
+  map.insert(TokenType::PrivateMember, b"#");
+  map.insert(TokenType::Question, b"?");
+  map.insert(TokenType::QuestionDot, b"?.");
+  map.insert(TokenType::QuestionDotBracketOpen, b"?.[");
+  map.insert(TokenType::QuestionDotParenthesisOpen, b"?.(");
+  map.insert(TokenType::QuestionQuestion, b"??");
+  map.insert(TokenType::QuestionQuestionEquals, b"??=");
+  map.insert(TokenType::Semicolon, b";");
+  map.insert(TokenType::Slash, b"/");
+  map.insert(TokenType::SlashEquals, b"/=");
+  map.insert(TokenType::Tilde, b"~");
+  map
+});
 
-    pub static ref KEYWORDS_MAPPING: HashMap<TokenType, &'static [u8]> = {
-        let mut map = HashMap::<TokenType, &'static [u8]>::new();
-        map.insert(TokenType::KeywordAs, b"as");
-        map.insert(TokenType::KeywordAsync, b"async");
-        map.insert(TokenType::KeywordAwait, b"await");
-        map.insert(TokenType::KeywordBreak, b"break");
-        map.insert(TokenType::KeywordCase, b"case");
-        map.insert(TokenType::KeywordCatch, b"catch");
-        map.insert(TokenType::KeywordClass, b"class");
-        map.insert(TokenType::KeywordConst, b"const");
-        map.insert(TokenType::KeywordConstructor, b"constructor");
-        map.insert(TokenType::KeywordContinue, b"continue");
-        map.insert(TokenType::KeywordDebugger, b"debugger");
-        map.insert(TokenType::KeywordDefault, b"default");
-        map.insert(TokenType::KeywordDelete, b"delete");
-        map.insert(TokenType::KeywordDo, b"do");
-        map.insert(TokenType::KeywordElse, b"else");
-        map.insert(TokenType::KeywordEnum, b"enum");
-        map.insert(TokenType::KeywordExport, b"export");
-        map.insert(TokenType::KeywordExtends, b"extends");
-        map.insert(TokenType::KeywordFinally, b"finally");
-        map.insert(TokenType::KeywordFor, b"for");
-        map.insert(TokenType::KeywordFrom, b"from");
-        map.insert(TokenType::KeywordFunction, b"function");
-        map.insert(TokenType::KeywordGet, b"get");
-        map.insert(TokenType::KeywordIf, b"if");
-        map.insert(TokenType::KeywordImport, b"import");
-        map.insert(TokenType::KeywordIn, b"in");
-        map.insert(TokenType::KeywordInstanceof, b"instanceof");
-        map.insert(TokenType::KeywordLet, b"let");
-        map.insert(TokenType::KeywordNew, b"new");
-        map.insert(TokenType::KeywordOf, b"of");
-        map.insert(TokenType::KeywordReturn, b"return");
-        map.insert(TokenType::KeywordSet, b"set");
-        map.insert(TokenType::KeywordStatic, b"static");
-        map.insert(TokenType::KeywordSuper, b"super");
-        map.insert(TokenType::KeywordSwitch, b"switch");
-        map.insert(TokenType::KeywordThis, b"this");
-        map.insert(TokenType::KeywordThrow, b"throw");
-        map.insert(TokenType::KeywordTry, b"try");
-        map.insert(TokenType::KeywordTypeof, b"typeof");
-        map.insert(TokenType::KeywordVar, b"var");
-        map.insert(TokenType::KeywordVoid, b"void");
-        map.insert(TokenType::KeywordWhile, b"while");
-        map.insert(TokenType::KeywordWith, b"with");
-        map.insert(TokenType::KeywordYield, b"yield");
-        map.insert(TokenType::LiteralFalse, b"false");
-        map.insert(TokenType::LiteralNull, b"null");
-        map.insert(TokenType::LiteralTrue, b"true");
-        map
-    };
+pub static KEYWORDS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
+  let mut map = AHashMap::<TokenType, &'static [u8]>::new();
+  map.insert(TokenType::KeywordAs, b"as");
+  map.insert(TokenType::KeywordAsync, b"async");
+  map.insert(TokenType::KeywordAwait, b"await");
+  map.insert(TokenType::KeywordBreak, b"break");
+  map.insert(TokenType::KeywordCase, b"case");
+  map.insert(TokenType::KeywordCatch, b"catch");
+  map.insert(TokenType::KeywordClass, b"class");
+  map.insert(TokenType::KeywordConst, b"const");
+  map.insert(TokenType::KeywordConstructor, b"constructor");
+  map.insert(TokenType::KeywordContinue, b"continue");
+  map.insert(TokenType::KeywordDebugger, b"debugger");
+  map.insert(TokenType::KeywordDefault, b"default");
+  map.insert(TokenType::KeywordDelete, b"delete");
+  map.insert(TokenType::KeywordDo, b"do");
+  map.insert(TokenType::KeywordElse, b"else");
+  map.insert(TokenType::KeywordEnum, b"enum");
+  map.insert(TokenType::KeywordExport, b"export");
+  map.insert(TokenType::KeywordExtends, b"extends");
+  map.insert(TokenType::KeywordFinally, b"finally");
+  map.insert(TokenType::KeywordFor, b"for");
+  map.insert(TokenType::KeywordFrom, b"from");
+  map.insert(TokenType::KeywordFunction, b"function");
+  map.insert(TokenType::KeywordGet, b"get");
+  map.insert(TokenType::KeywordIf, b"if");
+  map.insert(TokenType::KeywordImport, b"import");
+  map.insert(TokenType::KeywordIn, b"in");
+  map.insert(TokenType::KeywordInstanceof, b"instanceof");
+  map.insert(TokenType::KeywordLet, b"let");
+  map.insert(TokenType::KeywordNew, b"new");
+  map.insert(TokenType::KeywordOf, b"of");
+  map.insert(TokenType::KeywordReturn, b"return");
+  map.insert(TokenType::KeywordSet, b"set");
+  map.insert(TokenType::KeywordStatic, b"static");
+  map.insert(TokenType::KeywordSuper, b"super");
+  map.insert(TokenType::KeywordSwitch, b"switch");
+  map.insert(TokenType::KeywordThis, b"this");
+  map.insert(TokenType::KeywordThrow, b"throw");
+  map.insert(TokenType::KeywordTry, b"try");
+  map.insert(TokenType::KeywordTypeof, b"typeof");
+  map.insert(TokenType::KeywordVar, b"var");
+  map.insert(TokenType::KeywordVoid, b"void");
+  map.insert(TokenType::KeywordWhile, b"while");
+  map.insert(TokenType::KeywordWith, b"with");
+  map.insert(TokenType::KeywordYield, b"yield");
+  map.insert(TokenType::LiteralFalse, b"false");
+  map.insert(TokenType::LiteralNull, b"null");
+  map.insert(TokenType::LiteralTrue, b"true");
+  map
+});
 
-    pub static ref KEYWORD_STRS: HashMap<&'static [u8], usize> = {
-        HashMap::<&'static [u8], usize>::from_iter(KEYWORDS_MAPPING.values().enumerate().map(|(i, v)| (*v, i)))
-    };
+pub static KEYWORD_STRS: Lazy<AHashMap<&'static [u8], usize>> = Lazy::new(|| {
+  AHashMap::<&'static [u8], usize>::from_iter(
+    KEYWORDS_MAPPING.values().enumerate().map(|(i, v)| (*v, i)),
+  )
+});
 
-    // This has a specific order so that when we use MATCHER, we can find the corresponding TokenType.
-    static ref PATTERNS: Vec<(TokenType, &'static [u8])> = {
-        let mut patterns: Vec<(TokenType, &'static [u8])> = Vec::new();
-        for (&k, &v) in OPERATORS_MAPPING.iter() {
-            patterns.push((k, v));
-        };
-        for (&k, &v) in KEYWORDS_MAPPING.iter() {
-          patterns.push((k, &v));
-        };
-        patterns.push((TokenType::ChevronLeftSlash, b"</"));
-        patterns.push((TokenType::CommentMultiple, b"/*"));
-        patterns.push((TokenType::CommentSingle, b"//"));
-        for c in ID_START_CHARSTR.chunks(1) {
-            patterns.push((TokenType::Identifier, c));
-        };
-        for c in b"0123456789".chunks(1) {
-            patterns.push((TokenType::LiteralNumber, c));
-        };
-        patterns.push((TokenType::LiteralNumberBin, b"0b"));
-        patterns.push((TokenType::LiteralNumberBin, b"0B"));
-        patterns.push((TokenType::LiteralNumberHex, b"0x"));
-        patterns.push((TokenType::LiteralNumberHex, b"0X"));
-        patterns.push((TokenType::LiteralNumberOct, b"0o"));
-        patterns.push((TokenType::LiteralNumberOct, b"0O"));
-        // Prevent `.` immediately followed by a digit from being recognised as the `.` operator.
-        for c in b".0.1.2.3.4.5.6.7.8.9".chunks(2) {
-            patterns.push((TokenType::LiteralNumber, c));
-        };
-        // Prevent `?` immediately followed by a decimal number from being recognised as the `?.` operator.
-        for c in b"?.0?.1?.2?.3?.4?.5?.6?.7?.8?.9".chunks(3) {
-            patterns.push((TokenType::Question, c));
-        };
-        patterns.push((TokenType::LiteralString, b"\""));
-        patterns.push((TokenType::LiteralString, b"'"));
-        patterns.push((TokenType::LiteralTemplatePartString, b"`"));
-        patterns
-    };
+// This has a specific order so that when we use MATCHER, we can find the corresponding TokenType.
+static PATTERNS: Lazy<Vec<(TokenType, &'static [u8])>> = Lazy::new(|| {
+  let mut patterns: Vec<(TokenType, &'static [u8])> = Vec::new();
+  for (&k, &v) in OPERATORS_MAPPING.iter() {
+    patterns.push((k, v));
+  }
+  for (&k, &v) in KEYWORDS_MAPPING.iter() {
+    patterns.push((k, &v));
+  }
+  patterns.push((TokenType::ChevronLeftSlash, b"</"));
+  patterns.push((TokenType::CommentMultiple, b"/*"));
+  patterns.push((TokenType::CommentSingle, b"//"));
+  for c in ID_START_CHARSTR.chunks(1) {
+    patterns.push((TokenType::Identifier, c));
+  }
+  for c in b"0123456789".chunks(1) {
+    patterns.push((TokenType::LiteralNumber, c));
+  }
+  patterns.push((TokenType::LiteralNumberBin, b"0b"));
+  patterns.push((TokenType::LiteralNumberBin, b"0B"));
+  patterns.push((TokenType::LiteralNumberHex, b"0x"));
+  patterns.push((TokenType::LiteralNumberHex, b"0X"));
+  patterns.push((TokenType::LiteralNumberOct, b"0o"));
+  patterns.push((TokenType::LiteralNumberOct, b"0O"));
+  // Prevent `.` immediately followed by a digit from being recognised as the `.` operator.
+  for c in b".0.1.2.3.4.5.6.7.8.9".chunks(2) {
+    patterns.push((TokenType::LiteralNumber, c));
+  }
+  // Prevent `?` immediately followed by a decimal number from being recognised as the `?.` operator.
+  for c in b"?.0?.1?.2?.3?.4?.5?.6?.7?.8?.9".chunks(3) {
+    patterns.push((TokenType::Question, c));
+  }
+  patterns.push((TokenType::LiteralString, b"\""));
+  patterns.push((TokenType::LiteralString, b"'"));
+  patterns.push((TokenType::LiteralTemplatePartString, b"`"));
+  patterns
+});
 
-    static ref MATCHER: AhoCorasick = AhoCorasickBuilder::new()
-        .anchored(true)
-        .dfa(true)
-        .match_kind(MatchKind::LeftmostLongest)
-        .build(PATTERNS.iter().map(|(_, pat)| pat));
+static MATCHER: Lazy<AhoCorasick> = Lazy::new(|| {
+  AhoCorasickBuilder::new()
+    .anchored(true)
+    .dfa(true)
+    .match_kind(MatchKind::LeftmostLongest)
+    .build(PATTERNS.iter().map(|(_, pat)| pat))
+});
 
-    static ref COMMENT_END: AhoCorasick = AhoCorasick::new(&[b"*/"]);
-}
+static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(&[b"*/"]));
 
-fn lex_multiple_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<'a, ()> {
+fn lex_multiple_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<()> {
   // Consume `/*`.
   lexer.skip_expect(2);
   lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
   Ok(())
 }
 
-fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<'a, ()> {
+fn lex_single_comment<'a>(lexer: &mut Lexer<'a>) -> SyntaxResult<()> {
   // Consume `//`.
   lexer.skip_expect(2);
   // WARNING: Does not consider other line terminators allowed by spec.
@@ -416,7 +415,7 @@ fn lex_identifier<'a>(
   lexer: &mut Lexer<'a>,
   mode: LexMode,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   // Consume starter.
   lexer.skip_expect(1);
@@ -442,7 +441,7 @@ fn lex_identifier<'a>(
 fn lex_bigint_or_number<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   // TODO
   lexer.consume(lexer.while_chars(&DIGIT));
@@ -477,7 +476,7 @@ fn lex_bigint_or_number<'a>(
 fn lex_bigint_or_number_bin<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_BIN));
@@ -498,7 +497,7 @@ fn lex_bigint_or_number_bin<'a>(
 fn lex_bigint_or_number_hex<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_HEX));
@@ -519,7 +518,7 @@ fn lex_bigint_or_number_hex<'a>(
 fn lex_bigint_or_number_oct<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   lexer.skip_expect(2);
   lexer.consume(lexer.while_chars(&DIGIT_OCT));
@@ -540,7 +539,7 @@ fn lex_bigint_or_number_oct<'a>(
 fn lex_private_member<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   // Include the `#` in the token.
   lexer.skip_expect(1);
@@ -565,10 +564,7 @@ fn lex_private_member<'a>(
 }
 
 // TODO Validate regex.
-fn lex_regex<'a>(
-  lexer: &mut Lexer<'a>,
-  preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+fn lex_regex<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   // Consume slash.
   lexer.consume(lexer.n(1)?);
@@ -608,10 +604,7 @@ fn lex_regex<'a>(
 }
 
 // TODO Validate string.
-fn lex_string<'a>(
-  lexer: &mut Lexer<'a>,
-  preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+fn lex_string<'a>(lexer: &mut Lexer<'a>, preceded_by_line_terminator: bool) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   let quote = lexer.peek(0)?;
   lexer.skip_expect(1);
@@ -642,7 +635,7 @@ fn lex_string<'a>(
 pub fn lex_template_string_continue<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   let cp = lexer.checkpoint();
   let mut ended = false;
   let loc = loop {
@@ -684,13 +677,13 @@ pub fn lex_template_string_continue<'a>(
 fn lex_template<'a>(
   lexer: &mut Lexer<'a>,
   preceded_by_line_terminator: bool,
-) -> SyntaxResult<'a, Token<'a>> {
+) -> SyntaxResult<Token> {
   // Consume backtick.
   lexer.skip_expect(1);
   lex_template_string_continue(lexer, preceded_by_line_terminator)
 }
 
-pub fn lex_next<'a>(lexer: &mut Lexer<'a>, mode: LexMode) -> SyntaxResult<'a, Token<'a>> {
+pub fn lex_next<'a>(lexer: &mut Lexer<'a>, mode: LexMode) -> SyntaxResult<Token> {
   let mut preceded_by_line_terminator = false;
   loop {
     if mode == LexMode::JsxTextContent {

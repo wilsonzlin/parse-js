@@ -1,10 +1,10 @@
 use crate::operator::Arity::*;
 use crate::operator::Associativity::*;
 use crate::operator::OperatorName::*;
-use lazy_static::lazy_static;
+use ahash::AHashMap;
+use once_cell::sync::Lazy;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -204,20 +204,18 @@ const PRECEDENCE_LEVELS: &'static [&'static [(OperatorName, Arity, Associativity
   &[(Comma, Binary, Left)],
 ];
 
-lazy_static! {
-  pub static ref OPERATORS: HashMap<OperatorName, Operator> = {
-    let mut map = HashMap::<OperatorName, Operator>::new();
-    for (i, ops) in PRECEDENCE_LEVELS.iter().enumerate() {
-      let precedence = (PRECEDENCE_LEVELS.len() - i) as u8;
-      for &(name, arity, associativity) in ops.iter() {
-        map.insert(name, Operator {
-          name,
-          arity,
-          associativity,
-          precedence,
-        });
-      }
+pub static OPERATORS: Lazy<AHashMap<OperatorName, Operator>> = Lazy::new(|| {
+  let mut map = AHashMap::<OperatorName, Operator>::new();
+  for (i, ops) in PRECEDENCE_LEVELS.iter().enumerate() {
+    let precedence = (PRECEDENCE_LEVELS.len() - i) as u8;
+    for &(name, arity, associativity) in ops.iter() {
+      map.insert(name, Operator {
+        name,
+        arity,
+        associativity,
+        precedence,
+      });
     }
-    map
-  };
-}
+  }
+  map
+});

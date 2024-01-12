@@ -1,22 +1,14 @@
 use self::pattern::ParsePatternRules;
-use crate::ast::new_node;
-use crate::ast::new_node_with_flag;
-use crate::ast::new_node_with_flags;
 use crate::ast::Node;
-use crate::ast::NodeFlag;
 use crate::ast::Syntax;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
-use crate::flag::Flags;
 use crate::lex::lex_next;
 use crate::lex::LexMode;
 use crate::lex::Lexer;
 use crate::lex::LexerCheckpoint;
-use crate::session::Session;
-use crate::source::SourceRange;
-use crate::symbol::Scope;
-use crate::symbol::ScopeType;
+use crate::loc::Loc;
 use crate::token::Token;
 use crate::token::TokenType;
 
@@ -35,81 +27,50 @@ pub mod toplevel;
 // Almost every parse_* function takes these field values as parameters. Instead of having to enumerate them as parameters on every function and ordered unnamed arguments on every call, we simply pass this struct around. Fields are public to allow destructuring, but the value should be immutable; the with_* methods can be used to create an altered copy for passing into other functions, which is useful as most calls simply pass through the values unchanged. This struct should be received as a value, not a reference (i.e. `ctx: ParseCtx` not `ctx: &ParseCtx`) as the latter will require a separate lifetime.
 // All fields except `session` can (although not often) change between calls, so we don't simply put them in Parser, as otherwise we'd have to "unwind" (i.e. reset) those values after each call returns.
 #[derive(Clone, Copy)]
-pub struct ParseCtx<'a> {
-  pub session: &'a Session,
-  pub scope: Scope<'a>,
+pub struct ParseCtx {
   pub rules: ParsePatternRules, // For simplicity, this is a copy, not a non-mutable reference, to avoid having a separate lifetime for it. The value is only two booleans, so a reference is probably slower, and it's supposed to be immutable (i.e. changes come from altered copying, not mutating the original single instance), so there shouldn't be any difference between a reference and a copy.
 }
 
-impl<'a> ParseCtx<'a> {
-  pub fn with_scope(&self, scope: Scope<'a>) -> ParseCtx<'a> {
-    ParseCtx { scope, ..*self }
-  }
-
-  pub fn with_rules(&self, rules: ParsePatternRules) -> ParseCtx<'a> {
+impl ParseCtx {
+  pub fn with_rules(&self, rules: ParsePatternRules) -> ParseCtx {
     ParseCtx { rules, ..*self }
   }
 
-  pub fn create_child_scope(&self, typ: ScopeType) -> Scope<'a> {
-    self.scope.create_child_scope(self.session, typ)
-  }
-
-  /// This node will be created in the current scope.
-  pub fn create_node_with_flags(
-    &self,
-    loc: SourceRange<'a>,
-    stx: Syntax<'a>,
-    flags: Flags<NodeFlag>,
-  ) -> Node<'a> {
-    new_node_with_flags(self.session, self.scope, loc, stx, flags)
-  }
-
-  /// This node will be created in the current scope.
-  pub fn create_node_with_flag(
-    &self,
-    loc: SourceRange<'a>,
-    stx: Syntax<'a>,
-    flag: NodeFlag,
-  ) -> Node<'a> {
-    new_node_with_flag(self.session, self.scope, loc, stx, flag)
-  }
-
-  /// This node will be created in the current scope.
-  pub fn create_node(&self, loc: SourceRange<'a>, stx: Syntax<'a>) -> Node<'a> {
-    new_node(self.session, self.scope, loc, stx)
+  pub fn create_node(&self, loc: Loc, stx: Syntax) -> Node {
+    Node {
+      loc,
+      stx: Box::new(stx),
+    }
   }
 }
 
 #[derive(Debug)]
 #[must_use]
-pub struct MaybeToken<'a> {
+pub struct MaybeToken {
   typ: TokenType,
-  range: SourceRange<'a>,
+  loc: Loc,
   matched: bool,
 }
 
-impl<'a> MaybeToken<'a> {
+impl MaybeToken {
   pub fn is_match(&self) -> bool {
     self.matched
   }
 
-  pub fn match_loc(&self) -> Option<SourceRange<'a>> {
+  pub fn match_loc(&self) -> Option<Loc> {
     if self.matched {
-      Some(self.range)
+      Some(self.loc)
     } else {
       None
     }
   }
 
-  pub fn error(&self, err: SyntaxErrorType) -> SyntaxError<'a> {
+  pub fn error(&self, err: SyntaxErrorType) -> SyntaxError {
     debug_assert!(!self.matched);
-    SyntaxError::from_loc(self.range, err, Some(self.typ))
+    self.loc.error(err, Some(self.typ))
   }
 
-  pub fn and_then<R, F: FnOnce() -> SyntaxResult<'a, R>>(
-    self,
-    f: F,
-  ) -> SyntaxResult<'a, Option<R>> {
+  pub fn and_then<R, F: FnOnce() -> SyntaxResult<R>>(self, f: F) -> SyntaxResult<Option<R>> {
     Ok(if self.matched { Some(f()?) } else { None })
   }
 }
@@ -118,15 +79,15 @@ pub struct ParserCheckpoint {
   checkpoint: LexerCheckpoint,
 }
 
-struct BufferedToken<'a> {
-  token: Token<'a>,
+struct BufferedToken {
+  token: Token,
   lex_mode: LexMode,
   after_checkpoint: LexerCheckpoint,
 }
 
 pub struct Parser<'a> {
   lexer: Lexer<'a>,
-  buffered: Option<BufferedToken<'a>>,
+  buffered: Option<BufferedToken>,
 }
 
 // We extend this struct with added methods in the various submodules, instead of simply using free functions and passing `&mut Parser` around, for several reasons:
@@ -149,8 +110,20 @@ impl<'a> Parser<'a> {
     &mut self.lexer
   }
 
-  pub fn source_range(&self) -> SourceRange<'a> {
+  pub fn source_range(&self) -> Loc {
     self.lexer.source_range()
+  }
+
+  pub fn bytes(&self, loc: Loc) -> &[u8] {
+    &self.lexer[loc]
+  }
+
+  pub fn str(&self, loc: Loc) -> &str {
+    unsafe { std::str::from_utf8_unchecked(self.bytes(loc)) }
+  }
+
+  pub fn string(&self, loc: Loc) -> String {
+    self.str(loc).to_string()
   }
 
   pub fn checkpoint(&self) -> ParserCheckpoint {
@@ -159,7 +132,7 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn since_checkpoint(&self, checkpoint: ParserCheckpoint) -> SourceRange<'a> {
+  pub fn since_checkpoint(&self, checkpoint: ParserCheckpoint) -> Loc {
     self.lexer.since_checkpoint(checkpoint.checkpoint)
   }
 
@@ -177,7 +150,7 @@ impl<'a> Parser<'a> {
     &mut self,
     mode: LexMode,
     keep: K,
-  ) -> SyntaxResult<'a, (bool, Token<'a>)> {
+  ) -> SyntaxResult<(bool, Token)> {
     match self.buffered.as_ref() {
       Some(b) if b.lex_mode == mode => Ok(if keep(&b.token) {
         self.lexer.apply_checkpoint(b.after_checkpoint);
@@ -206,62 +179,54 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn next_with_mode(&mut self, mode: LexMode) -> SyntaxResult<'a, Token<'a>> {
+  pub fn next_with_mode(&mut self, mode: LexMode) -> SyntaxResult<Token> {
     self.forward(mode, |_| true).map(|r| r.1)
   }
 
-  pub fn next(&mut self) -> SyntaxResult<'a, Token<'a>> {
+  pub fn next(&mut self) -> SyntaxResult<Token> {
     self.next_with_mode(LexMode::Standard)
   }
 
-  pub fn peek_with_mode(&mut self, mode: LexMode) -> SyntaxResult<'a, Token<'a>> {
+  pub fn peek_with_mode(&mut self, mode: LexMode) -> SyntaxResult<Token> {
     self.forward(mode, |_| false).map(|r| r.1)
   }
 
-  pub fn peek(&mut self) -> SyntaxResult<'a, Token<'a>> {
+  pub fn peek(&mut self) -> SyntaxResult<Token> {
     self.peek_with_mode(LexMode::Standard)
   }
 
-  pub fn consume_peeked(&mut self) -> Token<'a> {
+  pub fn consume_peeked(&mut self) -> Token {
     let b = self.buffered.take().unwrap();
     self.lexer.apply_checkpoint(b.after_checkpoint);
     b.token
   }
 
-  pub fn maybe_with_mode(
-    &mut self,
-    typ: TokenType,
-    mode: LexMode,
-  ) -> SyntaxResult<'a, MaybeToken<'a>> {
+  pub fn maybe_with_mode(&mut self, typ: TokenType, mode: LexMode) -> SyntaxResult<MaybeToken> {
     let (matched, t) = self.forward(mode, |t| t.typ == typ)?;
     Ok(MaybeToken {
       typ,
       matched,
-      range: t.loc,
+      loc: t.loc,
     })
   }
 
-  pub fn consume_if(&mut self, typ: TokenType) -> SyntaxResult<'a, MaybeToken<'a>> {
+  pub fn consume_if(&mut self, typ: TokenType) -> SyntaxResult<MaybeToken> {
     self.maybe_with_mode(typ, LexMode::Standard)
   }
 
   pub fn consume_if_pred<F: FnOnce(&Token) -> bool>(
     &mut self,
     pred: F,
-  ) -> SyntaxResult<'a, MaybeToken<'a>> {
+  ) -> SyntaxResult<MaybeToken> {
     let (matched, t) = self.forward(LexMode::Standard, pred)?;
     Ok(MaybeToken {
       typ: t.typ,
       matched,
-      range: t.loc,
+      loc: t.loc,
     })
   }
 
-  pub fn require_with_mode(
-    &mut self,
-    typ: TokenType,
-    mode: LexMode,
-  ) -> SyntaxResult<'a, Token<'a>> {
+  pub fn require_with_mode(&mut self, typ: TokenType, mode: LexMode) -> SyntaxResult<Token> {
     let t = self.next_with_mode(mode)?;
     if t.typ != typ {
       Err(t.error(SyntaxErrorType::RequiredTokenNotFound(typ)))
@@ -274,7 +239,7 @@ impl<'a> Parser<'a> {
     &mut self,
     pred: P,
     expected: &'static str,
-  ) -> SyntaxResult<'a, Token<'a>> {
+  ) -> SyntaxResult<Token> {
     let t = self.next_with_mode(LexMode::Standard)?;
     if !pred(t.typ) {
       Err(t.error(SyntaxErrorType::ExpectedSyntax(expected)))
@@ -283,7 +248,7 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn require(&mut self, typ: TokenType) -> SyntaxResult<'a, Token<'a>> {
+  pub fn require(&mut self, typ: TokenType) -> SyntaxResult<Token> {
     self.require_with_mode(typ, LexMode::Standard)
   }
 }

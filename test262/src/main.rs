@@ -1,7 +1,5 @@
 use clap::command;
 use clap::Parser;
-use parse_js::parse::toplevel::TopLevelMode;
-use parse_js::session::Session;
 use rayon::prelude::*;
 use std::fs;
 use std::fs::read_dir;
@@ -24,17 +22,8 @@ fn main() {
     .map(|t| {
       let file_path = t.unwrap();
       let file_name = file_path.file_name().to_str().unwrap().to_string();
-      let mode = if file_name.ends_with(".module.js") {
-        TopLevelMode::Module
-      } else {
-        TopLevelMode::Global
-      };
       let src = fs::read(&file_path.path()).unwrap();
-      // TODO Use Bumpalo threaded pool instead.
-      let session = Session::new();
-      let error = parse_js::parse(&session, &src, mode)
-        .err()
-        .map(|err| format!("{:?}", err));
+      let error = parse_js::parse(&src).err().map(|err| format!("{:?}", err));
       (file_name, error)
     })
     .collect::<Vec<_>>();

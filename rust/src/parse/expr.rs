@@ -12,7 +12,6 @@ use crate::ast::ClassOrObjectMemberKey;
 use crate::ast::ClassOrObjectMemberValue;
 use crate::ast::LiteralTemplatePart;
 use crate::ast::Node;
-use crate::ast::NodeData;
 use crate::ast::ObjectMemberType;
 use crate::ast::Syntax;
 use crate::error::SyntaxErrorType;
@@ -27,9 +26,6 @@ use crate::parse::literal::normalise_literal_number;
 use crate::parse::literal::normalise_literal_string;
 use crate::parse::operator::MULTARY_OPERATOR_MAPPING;
 use crate::parse::operator::UNARY_OPERATOR_MAPPING;
-use crate::session::SessionVec;
-use crate::symbol::ScopeFlag;
-use crate::symbol::ScopeType;
 use crate::token::TokenType;
 
 pub struct Asi {
@@ -53,243 +49,217 @@ impl Asi {
   }
 }
 
-// Trying to check if every object, array, or identifier expression operand is actually an assignment target first is too expensive and wasteful, so simply retroactively transform the LHS of a BinaryExpr with Assignment* operator into a target, raising an error if it can't (and is an invalid assignment target). A valid target is:
-// - A chain of non-optional-chaining member, computed member, and call operators, not ending in a call.
-// - A pattern.
-fn convert_assignment_lhs_to_target<'a>(
-  ctx: ParseCtx<'a>,
-  lhs: Node<'a>,
-  operator_name: OperatorName,
-) -> SyntaxResult<'a, Node<'a>> {
-  match &mut lhs.stx {
-    e @ (Syntax::LiteralArrayExpr { .. }
-    | Syntax::LiteralObjectExpr { .. }
-    | Syntax::IdentifierExpr { .. }) => {
-      if operator_name != OperatorName::Assignment
-        && match e {
-          Syntax::IdentifierExpr { .. } => false,
-          _ => true,
-        }
-      {
-        return Err(lhs.error(SyntaxErrorType::InvalidAssigmentTarget));
-      }
-      // We must transform into a pattern.
-      let root = transform_literal_expr_to_destructuring_pattern(ctx, lhs)?;
-      Ok(root)
-    }
-    Syntax::ComputedMemberExpr {
-      assignment_target,
-      optional_chaining,
-      ..
-    }
-    | Syntax::MemberExpr {
-      assignment_target,
-      optional_chaining,
-      ..
-    } if !*optional_chaining => {
-      debug_assert!(!*assignment_target);
-      *assignment_target = true;
-      // As long as the expression ends with ComputedMemberExpr or MemberExpr, it's valid e.g. `(a, b?.a ?? 3, c = d || {})[1] = x`. Note that this is after parsing, so `a + b.c = 3` is invalid because that parses to `(a + b.c) = 3`, with a LHS of BinaryExpr with Addition operator.
-      // TODO Technically there cannot be any optional chaining in the entire access/call path, not just in the last part (e.g. `a.b?.c.d = e` is invalid).
-      Ok(lhs)
-    }
-    _ => Err(lhs.error(SyntaxErrorType::InvalidAssigmentTarget)),
-  }
-}
-
 fn is_chevron_right_or_slash(typ: TokenType) -> bool {
   typ == TokenType::ChevronRight || typ == TokenType::Slash
 }
 
 fn jsx_tag_names_are_equal(a: Option<&Syntax>, b: Option<&Syntax>) -> bool {
+  let (Some(a), Some(b)) = (a, b) else {
+    return false;
+  };
   match (a, b) {
-    (None, None) => true,
     (
-      Some(Syntax::JsxMemberExpression {
-        base:
-          NodeData {
-            stx: Syntax::IdentifierExpr { name: a_base },
-            ..
-          },
+      Syntax::JsxMemberExpression {
+        base: a_base,
         path: a_path,
-      }),
-      Some(Syntax::JsxMemberExpression {
-        base:
-          NodeData {
-            stx: Syntax::IdentifierExpr { name: b_base },
-            ..
-          },
+      },
+      Syntax::JsxMemberExpression {
+        base: b_base,
         path: b_path,
-      }),
-    ) => a_base == b_base && a_path == b_path,
+      },
+    ) => a_base.as_ident() == b_base.as_ident() && a_path == b_path,
     (
-      Some(Syntax::JsxName {
+      Syntax::JsxName {
         name: a_name,
         namespace: a_ns,
-      }),
-      Some(Syntax::JsxName {
+      },
+      Syntax::JsxName {
         name: b_name,
         namespace: b_ns,
-      }),
+      },
     ) => a_ns == b_ns && a_name == b_name,
-    (
-      Some(Syntax::IdentifierExpr { name: a_name }),
-      Some(Syntax::IdentifierExpr { name: b_name }),
-    ) => a_name == b_name,
+    (Syntax::IdentifierExpr { name: a_name }, Syntax::IdentifierExpr { name: b_name }) => {
+      a_name == b_name
+    }
     _ => false,
   }
 }
 
-/// Reinterprets an expression subtree as an assignment target.
-/// Various parts (field values, entire nodes, etc.) of the input subtree will be moved into the new subtree that is created and returned; it's not safe to continue using any part of the original subtree.
-fn transform_literal_expr_to_destructuring_pattern<'a>(
-  ctx: ParseCtx<'a>,
-  node: Node<'a>,
-) -> SyntaxResult<'a, Node<'a>> {
-  let loc = node.loc;
-  match &mut node.stx {
-    Syntax::LiteralArrayExpr { elements } => {
-      let mut pat_elements = ctx.session.new_vec::<Option<ArrayPatternElement>>();
-      let mut rest = None;
-      for element in elements {
-        if rest.is_some() {
-          return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
-        };
-        match element {
-          ArrayElement::Single(elem) => {
-            // TODO Drop this once Polonius is available.
-            let elem = *elem as *mut NodeData;
-            // TODO Change unsafe block into `&mut elem.stx` once Polonius is available.
-            match unsafe { &mut (&mut *elem).stx } {
-              Syntax::BinaryExpr {
-                parenthesised,
-                operator,
-                left,
-                right,
-              } => {
-                if *parenthesised || *operator != OperatorName::Assignment {
-                  return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
-                };
-                pat_elements.push(Some(ArrayPatternElement {
-                  target: transform_literal_expr_to_destructuring_pattern(ctx, left)?,
-                  default_value: Some(right),
-                }));
-              }
-              _ => pat_elements.push(Some(ArrayPatternElement {
-                // TODO Change unsafe block into `elem` once Polonius is available.
-                target: transform_literal_expr_to_destructuring_pattern(ctx, unsafe {
-                  &mut *elem
-                })?,
-                default_value: None,
-              })),
-            };
-          }
-          ArrayElement::Rest(expr) => {
-            rest = Some(transform_literal_expr_to_destructuring_pattern(ctx, *expr)?);
-          }
-          ArrayElement::Empty => pat_elements.push(None),
-        };
-      }
-      Ok(ctx.create_node(loc, Syntax::ArrayPattern {
-        elements: pat_elements,
-        rest,
-      }))
-    }
-    Syntax::LiteralObjectExpr { members } => {
-      let mut properties = ctx.session.new_vec();
-      let mut rest = None;
-      for member in members {
-        if rest.is_some() {
-          return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
-        };
-        match &mut member.stx {
-          Syntax::ObjectMember { typ } => match typ {
-            ObjectMemberType::Valued { key, value } => {
-              let (target, default_value) = match value {
-                ClassOrObjectMemberValue::Property {
-                  initializer: Some(initializer),
+impl<'a> Parser<'a> {
+  /// Reinterprets an expression subtree as an assignment target.
+  fn transform_literal_expr_to_destructuring_pattern(
+    &self,
+    ctx: ParseCtx,
+    node: Node,
+  ) -> SyntaxResult<Node> {
+    let loc = node.loc;
+    match *node.stx {
+      Syntax::LiteralArrayExpr { elements } => {
+        let mut pat_elements = Vec::<Option<ArrayPatternElement>>::new();
+        let mut rest = None;
+        for element in elements {
+          if rest.is_some() {
+            return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
+          };
+          match element {
+            ArrayElement::Single(elem) => {
+              match *elem.stx {
+                Syntax::BinaryExpr {
+                  parenthesised,
+                  operator,
+                  left,
+                  right,
                 } => {
-                  // TODO Drop this once Polonius is available.
-                  let initializer = *initializer as *mut NodeData;
-                  // TODO Change unsafe block into `&mut initializer.stx` once Polonius is available.
-                  match unsafe { &mut (&mut *initializer).stx } {
+                  if parenthesised || operator != OperatorName::Assignment {
+                    return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
+                  };
+                  pat_elements.push(Some(ArrayPatternElement {
+                    target: self.transform_literal_expr_to_destructuring_pattern(ctx, left)?,
+                    default_value: Some(right),
+                  }));
+                }
+                _ => pat_elements.push(Some(ArrayPatternElement {
+                  target: self.transform_literal_expr_to_destructuring_pattern(ctx, elem)?,
+                  default_value: None,
+                })),
+              };
+            }
+            ArrayElement::Rest(expr) => {
+              rest = Some(self.transform_literal_expr_to_destructuring_pattern(ctx, expr)?);
+            }
+            ArrayElement::Empty => pat_elements.push(None),
+          };
+        }
+        Ok(ctx.create_node(loc, Syntax::ArrayPattern {
+          elements: pat_elements,
+          rest,
+        }))
+      }
+      Syntax::LiteralObjectExpr { members } => {
+        let mut properties = Vec::new();
+        let mut rest = None;
+        for member in members {
+          if rest.is_some() {
+            return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
+          };
+          match *member.stx {
+            Syntax::ObjectMember { typ } => match typ {
+              ObjectMemberType::Valued { key, value } => {
+                let (target, default_value) = match value {
+                  ClassOrObjectMemberValue::Property {
+                    initializer: Some(initializer),
+                  } => match *initializer.stx {
                     Syntax::BinaryExpr {
                       parenthesised,
                       operator,
                       left,
                       right,
                     } => {
-                      if *parenthesised || *operator != OperatorName::Assignment {
+                      if parenthesised || operator != OperatorName::Assignment {
                         return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None));
                       };
                       (
-                        transform_literal_expr_to_destructuring_pattern(ctx, left)?,
+                        self.transform_literal_expr_to_destructuring_pattern(ctx, left)?,
                         Some(right),
                       )
                     }
                     _ => (
-                      // TODO Change unsafe block into `initializer` once Polonius is available.
-                      transform_literal_expr_to_destructuring_pattern(ctx, unsafe {
-                        &mut *initializer
-                      })?,
+                      self.transform_literal_expr_to_destructuring_pattern(ctx, initializer)?,
                       None,
                     ),
-                  }
-                }
-                _ => return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
-              };
-              properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
-                key: key.take(),
-                target,
-                default_value: default_value.map(|n| n.take(ctx.session)),
-                shorthand: true,
-              }));
-            }
-            ObjectMemberType::Shorthand { identifier } => {
-              properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
-                key: ClassOrObjectMemberKey::Direct(identifier.loc),
-                target: ctx.create_node(loc, Syntax::IdentifierPattern {
-                  name: identifier.loc,
-                }),
-                default_value: None,
-                shorthand: true,
-              }));
-            }
-            ObjectMemberType::Rest { value } => {
-              rest = Some(transform_literal_expr_to_destructuring_pattern(ctx, value)?);
-            }
-          },
-          _ => unreachable!(),
-        };
+                  },
+                  _ => return Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
+                };
+                properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
+                  key,
+                  target,
+                  default_value,
+                  shorthand: true,
+                }));
+              }
+              ObjectMemberType::Shorthand { identifier } => {
+                properties.push(ctx.create_node(loc, Syntax::ObjectPatternProperty {
+                  key: ClassOrObjectMemberKey::Direct(self.string(identifier.loc)),
+                  target: ctx.create_node(loc, Syntax::IdentifierPattern {
+                    name: self.string(identifier.loc),
+                  }),
+                  default_value: None,
+                  shorthand: true,
+                }));
+              }
+              ObjectMemberType::Rest { value } => {
+                rest = Some(self.transform_literal_expr_to_destructuring_pattern(ctx, value)?);
+              }
+            },
+            _ => unreachable!(),
+          };
+        }
+        Ok(ctx.create_node(loc, Syntax::ObjectPattern { properties, rest }))
       }
-      Ok(ctx.create_node(loc, Syntax::ObjectPattern { properties, rest }))
+      // It's possible to encounter an IdentifierPattern e.g. `{ a: b = 1 } = x`, where `b = 1` is already parsed as an assignment.
+      Syntax::IdentifierExpr { name } | Syntax::IdentifierPattern { name } => {
+        Ok(ctx.create_node(loc, Syntax::IdentifierPattern { name: name.clone() }))
+      }
+      _ => Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
     }
-    // It's possible to encounter an IdentifierPattern e.g. `{ a: b = 1 } = x`, where `b = 1` is already parsed as an assignment.
-    Syntax::IdentifierExpr { name } | Syntax::IdentifierPattern { name } => {
-      Ok(ctx.create_node(loc, Syntax::IdentifierPattern { name: name.clone() }))
-    }
-    _ => Err(loc.error(SyntaxErrorType::InvalidAssigmentTarget, None)),
   }
-}
 
-impl<'a> Parser<'a> {
-  pub fn parse_jsx_name(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  // Trying to check if every object, array, or identifier expression operand is actually an assignment target first is too expensive and wasteful, so simply retroactively transform the LHS of a BinaryExpr with Assignment* operator into a target, raising an error if it can't (and is an invalid assignment target). A valid target is:
+  // - A chain of non-optional-chaining member, computed member, and call operators, not ending in a call.
+  // - A pattern.
+  fn convert_assignment_lhs_to_target(
+    &self,
+    ctx: ParseCtx,
+    lhs: Node,
+    operator_name: OperatorName,
+  ) -> SyntaxResult<Node> {
+    match lhs.stx.as_ref() {
+      e @ (Syntax::LiteralArrayExpr { .. }
+      | Syntax::LiteralObjectExpr { .. }
+      | Syntax::IdentifierExpr { .. }) => {
+        if operator_name != OperatorName::Assignment
+          && match e {
+            Syntax::IdentifierExpr { .. } => false,
+            _ => true,
+          }
+        {
+          return Err(lhs.error(SyntaxErrorType::InvalidAssigmentTarget));
+        }
+        // We must transform into a pattern.
+        let root = self.transform_literal_expr_to_destructuring_pattern(ctx, lhs)?;
+        Ok(root)
+      }
+      Syntax::ComputedMemberExpr {
+        optional_chaining, ..
+      }
+      | Syntax::MemberExpr {
+        optional_chaining, ..
+      } if !optional_chaining => {
+        // As long as the expression ends with ComputedMemberExpr or MemberExpr, it's valid e.g. `(a, b?.a ?? 3, c = d || {})[1] = x`. Note that this is after parsing, so `a + b.c = 3` is invalid because that parses to `(a + b.c) = 3`, with a LHS of BinaryExpr with Addition operator.
+        // TODO Technically there cannot be any optional chaining in the entire access/call path, not just in the last part (e.g. `a.b?.c.d = e` is invalid).
+        Ok(lhs)
+      }
+      _ => Err(lhs.error(SyntaxErrorType::InvalidAssigmentTarget)),
+    }
+  }
+
+  pub fn parse_jsx_name(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
     Ok(if self.consume_if(TokenType::Colon)?.is_match() {
       let name = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
       ctx.create_node(start.loc + name.loc, Syntax::JsxName {
-        namespace: Some(start.loc),
-        name: name.loc,
+        namespace: Some(self.string(start.loc)),
+        name: self.string(name.loc),
       })
     } else {
       ctx.create_node(start.loc, Syntax::JsxName {
         namespace: None,
-        name: start.loc,
+        name: self.string(start.loc),
       })
     })
   }
 
-  pub fn parse_jsx_tag_name(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Option<Node<'a>>> {
+  pub fn parse_jsx_tag_name(&mut self, ctx: ParseCtx) -> SyntaxResult<Option<Node>> {
     Ok(
       match self
         .maybe_with_mode(TokenType::Identifier, LexMode::JsxTag)?
@@ -302,30 +272,34 @@ impl<'a> Parser<'a> {
             // Namespaced name.
             let name = self.require_with_mode(TokenType::Identifier, LexMode::JsxTag)?;
             ctx.create_node(start + name.loc, Syntax::JsxName {
-              namespace: Some(start.clone()),
-              name: name.loc,
+              namespace: Some(self.string(start)),
+              name: self.string(name.loc),
             })
-          } else if self.peek()?.typ == TokenType::Dot && !start.as_slice().contains(&b'-') {
+          } else if self.peek()?.typ == TokenType::Dot && !self.str(start).contains('-') {
             // Member name.
-            let mut path = ctx.session.new_vec();
+            let mut path = Vec::new();
+            let mut loc = start;
             while self.consume_if(TokenType::Dot)?.is_match() {
-              path.push(self.require(TokenType::Identifier)?.loc);
+              let l = self.require(TokenType::Identifier)?.loc;
+              path.push(self.string(l));
+              loc += l;
             }
-            ctx.create_node(
-              start.add_option(path.last().copied()),
-              Syntax::JsxMemberExpression {
-                base: ctx.create_node(start, Syntax::IdentifierExpr { name: start }),
-                path,
-              },
-            )
-          } else if !start.as_slice()[0].is_ascii_lowercase() {
+            ctx.create_node(loc, Syntax::JsxMemberExpression {
+              base: ctx.create_node(start, Syntax::IdentifierExpr {
+                name: self.string(start),
+              }),
+              path,
+            })
+          } else if !self.bytes(start)[0].is_ascii_lowercase() {
             // User-defined component.
-            ctx.create_node(start, Syntax::IdentifierExpr { name: start })
+            ctx.create_node(start, Syntax::IdentifierExpr {
+              name: self.string(start),
+            })
           } else {
             // Built-in component without namespace.
             ctx.create_node(start, Syntax::JsxName {
               namespace: None,
-              name: start,
+              name: self.string(start),
             })
           }
         }),
@@ -334,12 +308,12 @@ impl<'a> Parser<'a> {
   }
 
   // https://facebook.github.io/jsx/
-  pub fn parse_jsx_element(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_jsx_element(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let tag_start = self.require(TokenType::ChevronLeft)?;
     let tag_name = self.parse_jsx_tag_name(ctx)?;
 
     // Attributes.
-    let mut attributes = ctx.session.new_vec();
+    let mut attributes = Vec::new();
     if tag_name.is_some() {
       loop {
         if is_chevron_right_or_slash(self.peek()?.typ) {
@@ -367,7 +341,9 @@ impl<'a> Parser<'a> {
             expr
           } else {
             let value = self.require(TokenType::LiteralString)?;
-            ctx.create_node(value.loc, Syntax::JsxText { value: value.loc })
+            ctx.create_node(value.loc, Syntax::JsxText {
+              value: self.string(value.loc),
+            })
           })
         };
         attributes.push(ctx.create_node(
@@ -383,13 +359,13 @@ impl<'a> Parser<'a> {
       ctx.create_node(tag_start.loc + end.loc, Syntax::JsxElement {
         name: tag_name,
         attributes,
-        children: ctx.session.new_vec(),
+        children: Vec::new(),
       })
     } else {
       self.require(TokenType::ChevronRight)?;
 
       // Children.
-      let mut children = ctx.session.new_vec();
+      let mut children = Vec::new();
       let close_start = loop {
         match self.peek()? {
           t if t.typ == TokenType::ChevronLeftSlash => {
@@ -402,7 +378,9 @@ impl<'a> Parser<'a> {
         };
         let text = self.require_with_mode(TokenType::JsxTextContent, LexMode::JsxTextContent)?;
         if !text.loc.is_empty() {
-          children.push(ctx.create_node(text.loc, Syntax::JsxText { value: text.loc }));
+          children.push(ctx.create_node(text.loc, Syntax::JsxText {
+            value: self.string(text.loc),
+          }));
         };
         if self.peek()?.typ == TokenType::ChevronLeft {
           children.push(self.parse_jsx_element(ctx)?);
@@ -416,8 +394,8 @@ impl<'a> Parser<'a> {
       };
       let end_name = self.parse_jsx_tag_name(ctx)?;
       if !jsx_tag_names_are_equal(
-        tag_name.as_ref().map(|n| &n.stx),
-        end_name.as_ref().map(|n| &n.stx),
+        tag_name.as_ref().map(|n| n.stx.as_ref()),
+        end_name.as_ref().map(|n| n.stx.as_ref()),
       ) {
         return Err(close_start.error(SyntaxErrorType::JsxClosingTagMismatch));
       };
@@ -430,11 +408,8 @@ impl<'a> Parser<'a> {
     })
   }
 
-  pub fn parse_call_args(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, SessionVec<'a, Node<'a>>> {
-    let mut args = ctx.session.new_vec();
+  pub fn parse_call_args(&mut self, ctx: ParseCtx) -> SyntaxResult<Vec<Node>> {
+    let mut args = Vec::new();
     loop {
       if self.peek()?.typ == TokenType::ParenthesisClose {
         break;
@@ -450,43 +425,39 @@ impl<'a> Parser<'a> {
     Ok(args)
   }
 
-  pub fn parse_expr(
-    &mut self,
-    ctx: ParseCtx<'a>,
-    terminator: TokenType,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_expr(&mut self, ctx: ParseCtx, terminator: TokenType) -> SyntaxResult<Node> {
     self.parse_expr_with_min_prec(ctx, 1, terminator, TokenType::_Dummy, false, &mut Asi::no())
   }
 
   pub fn parse_expr_with_asi(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator: TokenType,
     asi: &mut Asi,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     self.parse_expr_with_min_prec(ctx, 1, terminator, TokenType::_Dummy, false, asi)
   }
 
   pub fn parse_expr_until_either(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator_a: TokenType,
     terminator_b: TokenType,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     self.parse_expr_with_min_prec(ctx, 1, terminator_a, terminator_b, false, &mut Asi::no())
   }
 
   pub fn parse_expr_until_either_with_asi(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator_a: TokenType,
     terminator_b: TokenType,
     asi: &mut Asi,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     self.parse_expr_with_min_prec(ctx, 1, terminator_a, terminator_b, false, asi)
   }
 
-  pub fn parse_grouping(&mut self, ctx: ParseCtx<'a>, asi: &mut Asi) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_grouping(&mut self, ctx: ParseCtx, asi: &mut Asi) -> SyntaxResult<Node> {
     self.require(TokenType::ParenthesisOpen)?;
     let expr = self.parse_expr_with_min_prec(
       ctx,
@@ -500,9 +471,9 @@ impl<'a> Parser<'a> {
     Ok(expr)
   }
 
-  pub fn parse_expr_array(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_expr_array(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc_start = self.require(TokenType::BracketOpen)?.loc;
-    let mut elements = ctx.session.new_vec::<ArrayElement>();
+    let mut elements = Vec::<ArrayElement>::new();
     loop {
       if self.consume_if(TokenType::Comma)?.is_match() {
         elements.push(ArrayElement::Empty);
@@ -527,9 +498,9 @@ impl<'a> Parser<'a> {
     Ok(ctx.create_node(loc_start + loc_end, Syntax::LiteralArrayExpr { elements }))
   }
 
-  pub fn parse_expr_object(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_expr_object(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let loc_start = self.require(TokenType::BraceOpen)?.loc;
-    let mut members = ctx.session.new_vec::<Node<'a>>();
+    let mut members = Vec::<Node>::new();
     loop {
       if self.peek()?.typ == TokenType::BraceClose {
         break;
@@ -543,7 +514,11 @@ impl<'a> Parser<'a> {
         }));
       } else {
         let loc_checkpoint = self.checkpoint();
-        let ParseClassOrObjectMemberResult { key, value } = self.parse_class_or_object_member(
+        let ParseClassOrObjectMemberResult {
+          key,
+          key_loc,
+          value,
+        } = self.parse_class_or_object_member(
           ctx,
           TokenType::Colon,
           TokenType::Comma,
@@ -557,7 +532,7 @@ impl<'a> Parser<'a> {
                 ObjectMemberType::Shorthand {
                   identifier: match key {
                     ClassOrObjectMemberKey::Direct(key) => {
-                      ctx.create_node(key, Syntax::IdentifierExpr { name: key })
+                      ctx.create_node(key_loc, Syntax::IdentifierExpr { name: key })
                     }
                     _ => unreachable!(),
                   },
@@ -579,13 +554,10 @@ impl<'a> Parser<'a> {
 
   pub fn parse_expr_arrow_function(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator_a: TokenType,
     terminator_b: TokenType,
-  ) -> SyntaxResult<'a, Node<'a>> {
-    let fn_scope = ctx.create_child_scope(ScopeType::ArrowFunction);
-    let fn_ctx = ctx.with_scope(fn_scope);
-
+  ) -> SyntaxResult<Node> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
 
     let (signature, arrow) = if !is_async
@@ -597,10 +569,9 @@ impl<'a> Parser<'a> {
       // Parse arrow first for fast fail (and in case we are merely trying to parse as arrow function), before we mutate state by creating nodes and adding symbols.
       let param_name = self.next()?.loc;
       let arrow = self.require(TokenType::EqualsChevronRight)?;
-      let pattern = fn_ctx.create_node(param_name.clone(), Syntax::IdentifierPattern {
-        name: param_name.clone(),
+      let pattern = ctx.create_node(param_name.clone(), Syntax::IdentifierPattern {
+        name: self.string(param_name),
       });
-      fn_scope.add_block_symbol(param_name.clone())?;
       let param = ctx.create_node(param_name.clone(), Syntax::ParamDecl {
         rest: false,
         pattern,
@@ -608,14 +579,14 @@ impl<'a> Parser<'a> {
       });
       let signature = ctx.create_node(param_name.clone(), Syntax::FunctionSignature {
         parameters: {
-          let mut params = ctx.session.new_vec();
+          let mut params = Vec::new();
           params.push(param);
           params
         },
       });
       (signature, arrow)
     } else {
-      let signature = self.parse_signature_function(fn_ctx)?;
+      let signature = self.parse_signature_function(ctx)?;
       let arrow = self.require(TokenType::EqualsChevronRight)?;
       (signature, arrow)
     };
@@ -624,7 +595,7 @@ impl<'a> Parser<'a> {
       // Illegal under Automatic Semicolon Insertion rules.
       return Err(arrow.error(SyntaxErrorType::LineTerminatorAfterArrowFunctionParameters));
     }
-    let fn_body_ctx = fn_ctx.with_rules(ParsePatternRules {
+    let fn_body_ctx = ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       ..ctx.rules
     });
@@ -649,11 +620,11 @@ impl<'a> Parser<'a> {
 
   pub fn parse_expr_arrow_function_or_grouping(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator_a: TokenType,
     terminator_b: TokenType,
     asi: &mut Asi,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     // Try and parse as arrow function signature first.
     // If we fail, backtrack and parse as grouping instead.
     // After we see `=>`, we assume it's definitely an arrow function and do not backtrack.
@@ -678,12 +649,12 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn parse_expr_import(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_expr_import(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordImport)?;
     if self.consume_if(TokenType::Dot)?.is_match() {
       // import.meta
       let prop = self.require(TokenType::Identifier)?;
-      if prop.loc != "meta" {
+      if self.str(prop.loc) != "meta" {
         return Err(prop.error(SyntaxErrorType::ExpectedSyntax("`meta` property")));
       };
       return Ok(ctx.create_node(start.loc + prop.loc, Syntax::ImportMeta {}));
@@ -694,10 +665,7 @@ impl<'a> Parser<'a> {
     Ok(ctx.create_node(start.loc + end.loc, Syntax::ImportExpr { module }))
   }
 
-  pub fn parse_expr_function(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
-    let fn_scope = ctx.create_child_scope(ScopeType::NonArrowFunction);
-    let fn_ctx = ctx.with_scope(fn_scope);
-
+  pub fn parse_expr_function(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
     let start = self.require(TokenType::KeywordFunction)?.loc;
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
@@ -705,14 +673,15 @@ impl<'a> Parser<'a> {
     let name = match self.peek()? {
       t if is_valid_pattern_identifier(t.typ, ctx.rules) => {
         self.consume_peeked();
-        let name_node = fn_ctx.create_node(t.loc, Syntax::ClassOrFunctionName { name: t.loc });
-        fn_scope.add_symbol(t.loc)?;
+        let name_node = ctx.create_node(t.loc, Syntax::ClassOrFunctionName {
+          name: self.string(t.loc),
+        });
         Some(name_node)
       }
       _ => None,
     };
-    let signature = self.parse_signature_function(fn_ctx)?;
-    let fn_body_ctx = fn_ctx.with_rules(ParsePatternRules {
+    let signature = self.parse_signature_function(ctx)?;
+    let fn_body_ctx = ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     });
@@ -727,13 +696,14 @@ impl<'a> Parser<'a> {
     }))
   }
 
-  pub fn parse_expr_class(&mut self, ctx: ParseCtx<'a>) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_expr_class(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordClass)?.loc;
     let name = match self.peek()? {
       t if is_valid_pattern_identifier(t.typ, ctx.rules) => {
         self.consume_peeked();
-        let name_node = ctx.create_node(t.loc, Syntax::ClassOrFunctionName { name: t.loc });
-        ctx.scope.add_symbol(t.loc)?;
+        let name_node = ctx.create_node(t.loc, Syntax::ClassOrFunctionName {
+          name: self.string(t.loc),
+        });
         Some(name_node)
       }
       _ => None,
@@ -755,8 +725,8 @@ impl<'a> Parser<'a> {
   // NOTE: The next token must definitely be LiteralTemplatePartString{,End}.
   fn parse_expr_literal_template_parts(
     &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, SessionVec<'a, LiteralTemplatePart<'a>>> {
+    ctx: ParseCtx,
+  ) -> SyntaxResult<Vec<LiteralTemplatePart>> {
     let t = self.next().unwrap();
     let is_end = match t.typ {
       TokenType::LiteralTemplatePartString => false,
@@ -765,9 +735,9 @@ impl<'a> Parser<'a> {
     };
 
     let mut loc = t.loc;
-    let mut parts = ctx.session.new_vec();
+    let mut parts = Vec::new();
     parts.push(LiteralTemplatePart::String(
-      normalise_literal_string_or_template_inner(ctx, t.loc.as_slice())
+      normalise_literal_string_or_template_inner(ctx, self.bytes(t.loc))
         .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
     ));
     if !is_end {
@@ -778,7 +748,7 @@ impl<'a> Parser<'a> {
         let string = lex_template_string_continue(self.lexer_mut(), false)?;
         loc.extend(string.loc);
         parts.push(LiteralTemplatePart::String(
-          normalise_literal_string_or_template_inner(ctx, string.loc.as_slice()).ok_or_else(
+          normalise_literal_string_or_template_inner(ctx, self.bytes(string.loc)).ok_or_else(
             || {
               string
                 .loc
@@ -799,11 +769,11 @@ impl<'a> Parser<'a> {
 
   fn parse_expr_operand(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     terminator_a: TokenType,
     terminator_b: TokenType,
     asi: &mut Asi,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     let cp = self.checkpoint();
     let t = self.next_with_mode(LexMode::SlashIsRegex)?;
     let operand = match UNARY_OPERATOR_MAPPING.get(&t.typ) {
@@ -865,7 +835,9 @@ impl<'a> Parser<'a> {
               }
               _ => {
                 // `await` is being used as an identifier.
-                ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
+                ctx.create_node(t.loc, Syntax::IdentifierExpr {
+                  name: self.string(t.loc),
+                })
               }
             }
           }
@@ -876,20 +848,9 @@ impl<'a> Parser<'a> {
               self.restore_checkpoint(cp);
               self.parse_expr_arrow_function(ctx, terminator_a, terminator_b)?
             } else {
-              if t.loc == "arguments"
-                && ctx
-                  .scope
-                  .find_symbol_up_to_nearest_scope_of_type(t.loc, ScopeType::NonArrowFunction)
-                  .is_none()
-              {
-                if let Some(closure) = ctx
-                  .scope
-                  .find_self_or_ancestor(|t| t == ScopeType::NonArrowFunction)
-                {
-                  closure.flags_mut().set(ScopeFlag::UsesArguments);
-                };
-              };
-              ctx.create_node(t.loc, Syntax::IdentifierExpr { name: t.loc })
+              ctx.create_node(t.loc, Syntax::IdentifierExpr {
+                name: self.string(t.loc),
+              })
             }
           }
           TokenType::KeywordClass => {
@@ -907,16 +868,11 @@ impl<'a> Parser<'a> {
           TokenType::KeywordSuper => ctx.create_node(t.loc, Syntax::SuperExpr {}),
           TokenType::KeywordThis => {
             let new_node = ctx.create_node(t.loc, Syntax::ThisExpr {});
-            if let Some(closure) = ctx
-              .scope
-              .find_self_or_ancestor(|t| t == ScopeType::Class || t == ScopeType::NonArrowFunction)
-            {
-              closure.flags_mut().set(ScopeFlag::UsesThis);
-            };
             new_node
           }
           TokenType::LiteralBigInt => ctx.create_node(t.loc, Syntax::LiteralBigIntExpr {
-            value: normalise_literal_bigint(ctx, t.loc)?,
+            value: normalise_literal_bigint(ctx, self.str(t.loc))
+              .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidLiteralBigInt, None))?,
           }),
           TokenType::LiteralTrue | TokenType::LiteralFalse => {
             ctx.create_node(t.loc, Syntax::LiteralBooleanExpr {
@@ -925,11 +881,13 @@ impl<'a> Parser<'a> {
           }
           TokenType::LiteralNull => ctx.create_node(t.loc, Syntax::LiteralNull {}),
           TokenType::LiteralNumber => ctx.create_node(t.loc, Syntax::LiteralNumberExpr {
-            value: normalise_literal_number(t.loc)?,
+            value: normalise_literal_number(self.str(t.loc))
+              .ok_or_else(|| t.loc.error(SyntaxErrorType::MalformedLiteralNumber, None))?,
           }),
           TokenType::LiteralRegex => ctx.create_node(t.loc, Syntax::LiteralRegexExpr {}),
           TokenType::LiteralString => ctx.create_node(t.loc, Syntax::LiteralStringExpr {
-            value: normalise_literal_string(ctx, t.loc)?,
+            value: normalise_literal_string(ctx, self.str(t.loc))
+              .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,
           }),
           TokenType::LiteralTemplatePartString | TokenType::LiteralTemplatePartStringEnd => {
             self.restore_checkpoint(cp);
@@ -949,13 +907,13 @@ impl<'a> Parser<'a> {
 
   pub fn parse_expr_with_min_prec(
     &mut self,
-    ctx: ParseCtx<'a>,
+    ctx: ParseCtx,
     min_prec: u8,
     terminator_a: TokenType,
     terminator_b: TokenType,
     parenthesised: bool,
     asi: &mut Asi,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  ) -> SyntaxResult<Node> {
     let mut left = self.parse_expr_operand(ctx, terminator_a, terminator_b, asi)?;
 
     loop {
@@ -1046,7 +1004,6 @@ impl<'a> Parser<'a> {
               let member = self.parse_expr(ctx, TokenType::BracketClose)?;
               let end = self.require(TokenType::BracketClose)?;
               ctx.create_node(left.loc + end.loc, Syntax::ComputedMemberExpr {
-                assignment_target: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingComputedMemberAccess => true,
                   _ => false,
@@ -1087,19 +1044,18 @@ impl<'a> Parser<'a> {
               };
               let right = right_tok.loc;
               ctx.create_node(left.loc + right, Syntax::MemberExpr {
-                assignment_target: false,
                 parenthesised: false,
                 optional_chaining: match operator.name {
                   OperatorName::OptionalChainingMemberAccess => true,
                   _ => false,
                 },
                 left,
-                right,
+                right: self.string(right),
               })
             }
             _ => {
               if operator.name.is_assignment() {
-                left = convert_assignment_lhs_to_target(ctx, left, operator.name)?;
+                left = self.convert_assignment_lhs_to_target(ctx, left, operator.name)?;
               };
               let right = self.parse_expr_with_min_prec(
                 ctx,
@@ -1122,35 +1078,14 @@ impl<'a> Parser<'a> {
     }
 
     if parenthesised {
-      match &mut left.stx {
-        Syntax::ArrowFunctionExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::BinaryExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::CallExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::ConditionalExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::FunctionExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::MemberExpr {
-          ref mut parenthesised,
-          ..
-        }
-        | Syntax::UnaryExpr {
-          ref mut parenthesised,
-          ..
-        } => {
+      match left.stx.as_mut() {
+        Syntax::ArrowFunctionExpr { parenthesised, .. }
+        | Syntax::BinaryExpr { parenthesised, .. }
+        | Syntax::CallExpr { parenthesised, .. }
+        | Syntax::ConditionalExpr { parenthesised, .. }
+        | Syntax::FunctionExpr { parenthesised, .. }
+        | Syntax::MemberExpr { parenthesised, .. }
+        | Syntax::UnaryExpr { parenthesised, .. } => {
           *parenthesised = true;
         }
         _ => {}

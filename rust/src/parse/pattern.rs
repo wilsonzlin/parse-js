@@ -9,14 +9,6 @@ use crate::error::SyntaxResult;
 use crate::token::TokenType;
 use crate::token::UNRESERVED_KEYWORDS;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ParsePatternAction {
-  None,
-  AddToBlockScope,
-  // For var statements. Note that this won't add to the top-level if it's a global and that's the closest, since global declarators cannot be minified.
-  AddToClosureScope,
-}
-
 #[derive(Clone, Copy)]
 pub struct ParsePatternRules {
   // `await` is not allowed as an arrow function parameter or a parameter/variable inside an async function.
@@ -51,11 +43,7 @@ pub fn is_valid_pattern_identifier(typ: TokenType, rules: ParsePatternRules) -> 
 }
 
 impl<'a> Parser<'a> {
-  fn parse_pattern_identifier(
-    &mut self,
-    ctx: ParseCtx<'a>,
-    action: ParsePatternAction,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  fn parse_pattern_identifier(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     if !is_valid_pattern_identifier(self.peek()?.typ, ctx.rules) {
       return Err(
         self
@@ -64,35 +52,22 @@ impl<'a> Parser<'a> {
       );
     }
     let t = self.next()?;
-    let node = ctx.create_node(t.loc, Syntax::IdentifierPattern { name: t.loc });
-    match action {
-      ParsePatternAction::None => {}
-      ParsePatternAction::AddToBlockScope => {
-        ctx.scope.add_block_symbol(t.loc)?;
-      }
-      ParsePatternAction::AddToClosureScope => {
-        if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-          closure.add_symbol(t.loc)?;
-        };
-      }
-    };
+    let node = ctx.create_node(t.loc, Syntax::IdentifierPattern {
+      name: self.string(t.loc),
+    });
     Ok(node)
   }
 
-  pub fn parse_pattern(
-    &mut self,
-    ctx: ParseCtx<'a>,
-    action: ParsePatternAction,
-  ) -> SyntaxResult<'a, Node<'a>> {
+  pub fn parse_pattern(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let checkpoint = self.checkpoint();
     let t = self.next()?;
     Ok(match t.typ {
       t if is_valid_pattern_identifier(t, ctx.rules) => {
         self.restore_checkpoint(checkpoint);
-        self.parse_pattern_identifier(ctx, action)?
+        self.parse_pattern_identifier(ctx)?
       }
       TokenType::BraceOpen => {
-        let mut properties = ctx.session.new_vec();
+        let mut properties = Vec::new();
         let mut rest = None;
         loop {
           if self.peek()?.typ == TokenType::BraceClose {
@@ -101,25 +76,28 @@ impl<'a> Parser<'a> {
           let mut loc = self.peek()?.loc;
           // Check inside loop to ensure that it must come first or after a comma.
           if self.consume_if(TokenType::DotDotDot)?.is_match() {
-            rest = Some(self.parse_pattern_identifier(ctx, action)?);
+            rest = Some(self.parse_pattern_identifier(ctx)?);
             break;
           };
 
-          let key = if self.consume_if(TokenType::BracketOpen)?.is_match() {
+          let (key_loc, key) = if self.consume_if(TokenType::BracketOpen)?.is_match() {
             let expr = self.parse_expr(ctx, TokenType::BracketClose)?;
             self.require(TokenType::BracketClose)?;
-            ClassOrObjectMemberKey::Computed(expr)
+            (expr.loc, ClassOrObjectMemberKey::Computed(expr))
           } else {
             let name = self.next()?;
             if !is_valid_pattern_identifier(name.typ, ctx.rules) {
               return Err(name.error(SyntaxErrorType::ExpectedNotFound));
             };
-            ClassOrObjectMemberKey::Direct(name.loc)
+            (
+              name.loc,
+              ClassOrObjectMemberKey::Direct(self.string(name.loc)),
+            )
           };
           let (shorthand, target) = if self.consume_if(TokenType::Colon)?.is_match() {
-            (false, self.parse_pattern(ctx, action)?)
+            (false, self.parse_pattern(ctx)?)
           } else {
-            match key {
+            match &key {
               ClassOrObjectMemberKey::Computed(name) => {
                 return Err(name.error(SyntaxErrorType::ExpectedSyntax(
                   "object pattern property subpattern",
@@ -127,7 +105,7 @@ impl<'a> Parser<'a> {
               }
               ClassOrObjectMemberKey::Direct(name) => (
                 true,
-                ctx.create_node(name, Syntax::IdentifierPattern { name }),
+                ctx.create_node(key_loc, Syntax::IdentifierPattern { name: name.clone() }),
               ),
             }
           };
@@ -148,17 +126,6 @@ impl<'a> Parser<'a> {
             shorthand,
           });
           properties.push(property);
-          match (direct_key_name, shorthand, action) {
-            (Some(name), true, ParsePatternAction::AddToBlockScope) => {
-              ctx.scope.add_block_symbol(name)?;
-            }
-            (Some(name), true, ParsePatternAction::AddToClosureScope) => {
-              if let Some(closure) = ctx.scope.find_self_or_ancestor(|t| t.is_closure()) {
-                closure.add_symbol(name)?;
-              }
-            }
-            _ => {}
-          };
           // This will break if `}`.
           if !self.consume_if(TokenType::Comma)?.is_match() {
             break;
@@ -171,7 +138,7 @@ impl<'a> Parser<'a> {
         })
       }
       TokenType::BracketOpen => {
-        let mut elements = ctx.session.new_vec::<Option<ArrayPatternElement>>();
+        let mut elements = Vec::<Option<ArrayPatternElement>>::new();
         let mut rest = None;
         loop {
           if self.consume_if(TokenType::BracketClose)?.is_match() {
@@ -179,7 +146,7 @@ impl<'a> Parser<'a> {
           };
           // Check inside loop to ensure that it must come first or after a comma.
           if self.consume_if(TokenType::DotDotDot)?.is_match() {
-            rest = Some(self.parse_pattern(ctx, action)?);
+            rest = Some(self.parse_pattern(ctx)?);
             break;
           };
 
@@ -187,7 +154,7 @@ impl<'a> Parser<'a> {
           if self.consume_if(TokenType::Comma)?.is_match() {
             elements.push(None);
           } else {
-            let target = self.parse_pattern(ctx, action)?;
+            let target = self.parse_pattern(ctx)?;
             let default_value = if self.consume_if(TokenType::Equals)?.is_match() {
               Some(self.parse_expr_until_either(ctx, TokenType::Comma, TokenType::BracketClose)?)
             } else {

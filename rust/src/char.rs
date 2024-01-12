@@ -1,5 +1,5 @@
 use core::ops::RangeInclusive;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 #[derive(Clone)]
 pub struct CharFilter {
@@ -61,74 +61,72 @@ pub const ID_START_CHARSTR: &'static [u8] =
 pub const ID_CONTINUE_CHARSTR: &'static [u8] =
   b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 
-lazy_static! {
-    pub static ref DIGIT: CharFilter = {
-        let mut filter = CharFilter::new();
-        filter.add_chars(b'0'..=b'9');
-        filter
-    };
+pub static DIGIT: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  filter.add_chars(b'0'..=b'9');
+  filter
+});
 
-    pub static ref DIGIT_BIN: CharFilter = {
-        let mut filter = CharFilter::new();
-        filter.add_chars(b'0'..=b'1');
-        filter
-    };
+pub static DIGIT_BIN: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  filter.add_chars(b'0'..=b'1');
+  filter
+});
 
-    pub static ref DIGIT_HEX: CharFilter = {
-        let mut filter = CharFilter::new();
-        filter.add_chars(b'0'..=b'9');
-        filter.add_chars(b'a'..=b'f');
-        filter.add_chars(b'A'..=b'F');
-        filter
-    };
+pub static DIGIT_HEX: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  filter.add_chars(b'0'..=b'9');
+  filter.add_chars(b'a'..=b'f');
+  filter.add_chars(b'A'..=b'F');
+  filter
+});
 
-    pub static ref DIGIT_OCT: CharFilter = {
-        let mut filter = CharFilter::new();
-        filter.add_chars(b'0'..=b'8');
-        filter
-    };
+pub static DIGIT_OCT: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  filter.add_chars(b'0'..=b'8');
+  filter
+});
 
-    pub static ref ID_START: CharFilter = {
-        let mut filter = CharFilter::new();
-        filter.add_chars_from_slice(&ID_START_CHARSTR);
-        filter
-    };
+pub static ID_START: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  filter.add_chars_from_slice(&ID_START_CHARSTR);
+  filter
+});
 
-    pub static ref ID_CONTINUE: CharFilter = {
-        let mut filter = ID_START.clone();
-        // WARNING: Does not consider Unicode characters allowed by spec.
-        filter.add_chars(b'0'..=b'9');
-        filter
-    };
+pub static ID_CONTINUE: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = ID_START.clone();
+  // WARNING: Does not consider Unicode characters allowed by spec.
+  filter.add_chars(b'0'..=b'9');
+  filter
+});
 
-    pub static ref ID_CONTINUE_JSX: CharFilter = {
-        let mut filter = ID_CONTINUE.clone();
-        filter.add_char(b'-');
-        filter
-    };
+pub static ID_CONTINUE_JSX: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = ID_CONTINUE.clone();
+  filter.add_char(b'-');
+  filter
+});
 
-    pub static ref ID_CONTINUE_OR_PARENTHESIS_CLOSE_OR_BRACKET_CLOSE: CharFilter = {
-        let mut filter = ID_CONTINUE.clone();
-        filter.add_char(b')');
-        filter.add_char(b']');
-        filter
-    };
+pub static ID_CONTINUE_OR_PARENTHESIS_CLOSE_OR_BRACKET_CLOSE: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = ID_CONTINUE.clone();
+  filter.add_char(b')');
+  filter.add_char(b']');
+  filter
+});
 
-    pub static ref WHITESPACE: CharFilter = {
-        let mut filter = CharFilter::new();
-        // WARNING: Does not consider Unicode whitespace allowed by spec.
-        // Horizontal tab.
-        filter.add_char(b'\x09');
-        // Line feed.
-        filter.add_char(b'\x0a');
-        // Vertical tab.
-        filter.add_char(b'\x0b');
-        // Form feed.
-        filter.add_char(b'\x0c');
-        // Carriage return.
-        filter.add_char(b'\x0d');
-        // Space.
-        filter.add_char(b'\x20');
-        filter
-    };
-}
+pub static WHITESPACE: Lazy<CharFilter> = Lazy::new(|| {
+  let mut filter = CharFilter::new();
+  // WARNING: Does not consider Unicode whitespace allowed by spec.
+  // Horizontal tab.
+  filter.add_char(b'\x09');
+  // Line feed.
+  filter.add_char(b'\x0a');
+  // Vertical tab.
+  filter.add_char(b'\x0b');
+  // Form feed.
+  filter.add_char(b'\x0c');
+  // Carriage return.
+  filter.add_char(b'\x0d');
+  // Space.
+  filter.add_char(b'\x20');
+  filter
+});

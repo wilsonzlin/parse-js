@@ -1,8 +1,8 @@
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
-use crate::source::SourceRange;
-use lazy_static::lazy_static;
-use std::collections::HashSet;
+use crate::loc::Loc;
+use ahash::AHashSet;
+use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum TokenType {
@@ -136,34 +136,32 @@ pub enum TokenType {
   Tilde,
 }
 
-lazy_static! {
-  // These can be used as parameter and variable names.
-  pub static ref UNRESERVED_KEYWORDS: HashSet<TokenType> = {
-    let mut set = HashSet::<TokenType>::new();
-    set.insert(TokenType::KeywordAs);
-    set.insert(TokenType::KeywordAsync);
-    set.insert(TokenType::KeywordConstructor);
-    set.insert(TokenType::KeywordFrom);
-    set.insert(TokenType::KeywordGet);
-    set.insert(TokenType::KeywordLet);
-    set.insert(TokenType::KeywordOf);
-    set.insert(TokenType::KeywordSet);
-    set.insert(TokenType::KeywordStatic);
-    set
-  };
-}
+// These can be used as parameter and variable names.
+pub static UNRESERVED_KEYWORDS: Lazy<AHashSet<TokenType>> = Lazy::new(|| {
+  let mut set = AHashSet::<TokenType>::new();
+  set.insert(TokenType::KeywordAs);
+  set.insert(TokenType::KeywordAsync);
+  set.insert(TokenType::KeywordConstructor);
+  set.insert(TokenType::KeywordFrom);
+  set.insert(TokenType::KeywordGet);
+  set.insert(TokenType::KeywordLet);
+  set.insert(TokenType::KeywordOf);
+  set.insert(TokenType::KeywordSet);
+  set.insert(TokenType::KeywordStatic);
+  set
+});
 
 #[derive(Clone, Debug)]
-pub struct Token<'a> {
-  pub loc: SourceRange<'a>,
+pub struct Token {
+  pub loc: Loc,
   // Whether one or more whitespace characters appear immediately before this token, and at least
   // one of those whitespace characters is a line terminator.
   pub preceded_by_line_terminator: bool,
   pub typ: TokenType,
 }
 
-impl<'a> Token<'a> {
-  pub fn new(loc: SourceRange<'a>, typ: TokenType, preceded_by_line_terminator: bool) -> Token<'a> {
+impl Token {
+  pub fn new(loc: Loc, typ: TokenType, preceded_by_line_terminator: bool) -> Token {
     Token {
       loc,
       typ,
@@ -171,7 +169,7 @@ impl<'a> Token<'a> {
     }
   }
 
-  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError<'a> {
-    SyntaxError::from_loc(self.loc, typ, Some(self.typ.clone()))
+  pub fn error(&self, typ: SyntaxErrorType) -> SyntaxError {
+    self.loc.error(typ, Some(self.typ))
   }
 }

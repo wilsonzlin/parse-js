@@ -11,11 +11,10 @@ repository = "https://github.com/wilsonzlin/parse-js"
 version = "0.22.0"
 
 [dependencies]
+ahash = "0.8.7"
 aho-corasick = "0.7"
-bumpalo = { version = "3", features = ["collections"] }
-hashbrown = { version = "0.13", features = ["bumpalo"] }
-lazy_static = "1.4"
 memchr = "2"
+once_cell = "1.19.0"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 strum = { version = "0.24", optional = true }

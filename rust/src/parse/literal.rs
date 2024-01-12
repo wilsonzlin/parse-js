@@ -1,11 +1,8 @@
 use super::ParseCtx;
 use super::Parser;
-use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;
 use crate::num::JsNumber;
-use crate::session::SessionString;
-use crate::source::SourceRange;
 use crate::token::TokenType;
 use core::str::FromStr;
 use memchr::memchr;
@@ -18,35 +15,27 @@ fn parse_radix(raw: &str, radix: u32) -> Result<f64, ()> {
     .map(|v| v as f64)
 }
 
-pub fn normalise_literal_number<'a>(raw: SourceRange<'a>) -> SyntaxResult<'a, JsNumber> {
+pub fn normalise_literal_number(raw: &str) -> Option<JsNumber> {
   // TODO We assume that the Rust parser follows ECMAScript spec and that different representations
   // of the same value get parsed into the same f64 value/bit pattern (e.g. `5.1e10` and `0.51e11`).
-  match raw.as_str() {
+  match raw {
     s if s.starts_with("0b") || s.starts_with("0B") => parse_radix(&s[2..], 2),
     s if s.starts_with("0o") || s.starts_with("0o") => parse_radix(&s[2..], 8),
     s if s.starts_with("0x") || s.starts_with("0X") => parse_radix(&s[2..], 16),
     s => f64::from_str(s).map_err(|_| ()),
   }
   .map(|n| JsNumber(n))
-  .map_err(|_| SyntaxError::from_loc(raw, SyntaxErrorType::MalformedLiteralNumber, None))
+  .ok()
 }
 
-pub fn normalise_literal_bigint<'a>(
-  ctx: ParseCtx<'a>,
-  raw: SourceRange<'a>,
-) -> SyntaxResult<'a, SessionString<'a>> {
+pub fn normalise_literal_bigint(ctx: ParseCtx, raw: &str) -> Option<String> {
   // TODO Use custom type like JsNumber.
-  let mut norm = ctx.session.new_string();
   // TODO
-  norm.push_str(raw.as_str());
-  Ok(norm)
+  Some(raw.to_string())
 }
 
-pub fn normalise_literal_string_or_template_inner<'a>(
-  ctx: ParseCtx<'a>,
-  mut raw: &[u8],
-) -> Option<&'a str> {
-  let mut norm = ctx.session.new_vec();
+pub fn normalise_literal_string_or_template_inner(ctx: ParseCtx, mut raw: &[u8]) -> Option<String> {
+  let mut norm = Vec::new();
   while !raw.is_empty() {
     let Some(escape_pos) = memchr(b'\\', raw) else {
       norm.extend_from_slice(raw);
@@ -131,26 +120,18 @@ pub fn normalise_literal_string_or_template_inner<'a>(
     norm.extend_from_slice(add);
     raw = &raw[skip..];
   }
-  // Copy onto arena so we get immutable references that are cheap to copy.
   // We return str instead of [u8] so that serialisation is easy and str methods are available.
-  Some(unsafe { from_utf8_unchecked(ctx.session.get_allocator().alloc_slice_copy(&norm)) })
+  Some(String::from_utf8(norm).unwrap())
 }
 
-pub fn normalise_literal_string<'a>(
-  ctx: ParseCtx<'a>,
-  raw: SourceRange<'a>,
-) -> SyntaxResult<'a, &'a str> {
-  normalise_literal_string_or_template_inner(ctx, &raw.as_slice()[1..raw.len() - 1])
-    .ok_or_else(|| raw.error(SyntaxErrorType::InvalidCharacterEscape, None))
+pub fn normalise_literal_string(ctx: ParseCtx, raw: &str) -> Option<String> {
+  normalise_literal_string_or_template_inner(ctx, &raw.as_bytes()[1..raw.len() - 1])
 }
 
 impl<'a> Parser<'a> {
-  pub fn parse_and_normalise_literal_string(
-    &mut self,
-    ctx: ParseCtx<'a>,
-  ) -> SyntaxResult<'a, &'a str> {
+  pub fn parse_and_normalise_literal_string(&mut self, ctx: ParseCtx) -> SyntaxResult<String> {
     let t = self.require(TokenType::LiteralString)?;
-    let s = normalise_literal_string(ctx, t.loc)?;
-    Ok(s)
+    normalise_literal_string(ctx, self.str(t.loc))
+      .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))
   }
 }
