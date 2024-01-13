@@ -18,6 +18,8 @@
       }
     ]
   },
+  "export": false,
+  "export_default": false,
   "generator": true,
   "name": {
     "$t": "ClassOrFunctionName",

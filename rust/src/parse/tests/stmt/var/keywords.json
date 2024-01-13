@@ -147,7 +147,8 @@
                 }
               ],
               "rest": null
-            }
+            },
+            "shorthand": false
           }
         ],
         "rest": null
@@ -171,5 +172,6 @@
       }
     }
   ],
+  "export": false,
   "mode": "Var"
 }

@@ -1,5 +1,6 @@
 {
   "$t": "VarDecl",
+  "export": false,
   "mode": "Let",
   "declarators": [
     {
