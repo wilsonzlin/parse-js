@@ -34,244 +34,247 @@
     {
       "initializer": {
         "$t": "ArrowFunctionExpr",
-        "parenthesised": false,
-        "async_": false,
-        "body": {
-          "$t": "BlockStmt",
-          "body": [
-            {
-              "$t": "VarDecl",
-              "declarators": [
-                {
-                  "initializer": {
+        "function": {
+          "$t": "Function",
+          "async_": false,
+          "body": {
+            "$t": "BlockStmt",
+            "body": [
+              {
+                "$t": "VarDecl",
+                "declarators": [
+                  {
+                    "initializer": {
+                      "$t": "CallExpr",
+                      "arguments": [
+                        {
+                          "$t": "CallArg",
+                          "spread": false,
+                          "value": {
+                            "$t": "CallExpr",
+                            "arguments": [],
+                            "callee": {
+                              "$t": "MemberExpr",
+                              "left": {
+                                "$t": "IdentifierExpr",
+                                "name": "t"
+                              },
+                              "optional_chaining": false,
+                              "parenthesised": false,
+                              "right": "current"
+                            },
+                            "optional_chaining": false,
+                            "parenthesised": false
+                          }
+                        }
+                      ],
+                      "callee": {
+                        "$t": "IdentifierExpr",
+                        "name": "p"
+                      },
+                      "optional_chaining": false,
+                      "parenthesised": false
+                    },
+                    "pattern": {
+                      "$t": "ArrayPattern",
+                      "elements": [
+                        {
+                          "default_value": null,
+                          "target": {
+                            "$t": "IdentifierPattern",
+                            "name": "e"
+                          }
+                        },
+                        {
+                          "default_value": null,
+                          "target": {
+                            "$t": "IdentifierPattern",
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "rest": null
+                    }
+                  }
+                ],
+                "export": false,
+                "mode": "Const"
+              },
+              {
+                "$t": "ReturnStmt",
+                "value": {
+                  "$t": "BinaryExpr",
+                  "left": {
                     "$t": "CallExpr",
                     "arguments": [
                       {
                         "$t": "CallArg",
                         "spread": false,
                         "value": {
-                          "$t": "CallExpr",
-                          "arguments": [],
-                          "callee": {
-                            "$t": "MemberExpr",
-                            "left": {
-                              "$t": "IdentifierExpr",
-                              "name": "t"
-                            },
-                            "optional_chaining": false,
-                            "parenthesised": false,
-                            "right": "current"
-                          },
-                          "optional_chaining": false,
-                          "parenthesised": false
-                        }
-                      }
-                    ],
-                    "callee": {
-                      "$t": "IdentifierExpr",
-                      "name": "p"
-                    },
-                    "optional_chaining": false,
-                    "parenthesised": false
-                  },
-                  "pattern": {
-                    "$t": "ArrayPattern",
-                    "elements": [
-                      {
-                        "default_value": null,
-                        "target": {
-                          "$t": "IdentifierPattern",
-                          "name": "e"
-                        }
-                      },
-                      {
-                        "default_value": null,
-                        "target": {
-                          "$t": "IdentifierPattern",
-                          "name": "n"
-                        }
-                      }
-                    ],
-                    "rest": null
-                  }
-                }
-              ],
-              "export": false,
-              "mode": "Const"
-            },
-            {
-              "$t": "ReturnStmt",
-              "value": {
-                "$t": "BinaryExpr",
-                "left": {
-                  "$t": "CallExpr",
-                  "arguments": [
-                    {
-                      "$t": "CallArg",
-                      "spread": false,
-                      "value": {
-                        "$t": "ArrowFunctionExpr",
-                        "parenthesised": false,
-                        "async_": false,
-                        "body": {
-                          "$t": "BlockStmt",
-                          "body": [
-                            {
-                              "$t": "VarDecl",
-                              "declarators": [
+                          "$t": "ArrowFunctionExpr",
+                          "function": {
+                            "$t": "Function",
+                            "async_": false,
+                            "body": {
+                              "$t": "BlockStmt",
+                              "body": [
                                 {
-                                  "initializer": {
-                                    "$t": "ArrowFunctionExpr",
-                                    "parenthesised": false,
-                                    "async_": false,
-                                    "body": {
+                                  "$t": "VarDecl",
+                                  "declarators": [
+                                    {
+                                      "initializer": {
+                                        "$t": "ArrowFunctionExpr",
+                                        "function": {
+                                          "$t": "Function",
+                                          "async_": false,
+                                          "body": {
+                                            "$t": "CallExpr",
+                                            "arguments": [
+                                              {
+                                                "$t": "CallArg",
+                                                "spread": false,
+                                                "value": {
+                                                  "$t": "CallExpr",
+                                                  "arguments": [],
+                                                  "callee": {
+                                                    "$t": "MemberExpr",
+                                                    "left": {
+                                                      "$t": "IdentifierExpr",
+                                                      "name": "t"
+                                                    },
+                                                    "optional_chaining": false,
+                                                    "parenthesised": false,
+                                                    "right": "current"
+                                                  },
+                                                  "optional_chaining": false,
+                                                  "parenthesised": false
+                                                }
+                                              }
+                                            ],
+                                            "callee": {
+                                              "$t": "IdentifierExpr",
+                                              "name": "n"
+                                            },
+                                            "optional_chaining": false,
+                                            "parenthesised": false
+                                          },
+                                          "generator": false,
+                                          "parameters": []
+                                        },
+                                        "parenthesised": false
+                                      },
+                                      "pattern": {
+                                        "$t": "IdentifierPattern",
+                                        "name": "r"
+                                      }
+                                    }
+                                  ],
+                                  "export": false,
+                                  "mode": "Const"
+                                },
+                                {
+                                  "$t": "ReturnStmt",
+                                  "value": {
+                                    "$t": "BinaryExpr",
+                                    "left": {
                                       "$t": "CallExpr",
                                       "arguments": [
                                         {
                                           "$t": "CallArg",
                                           "spread": false,
                                           "value": {
-                                            "$t": "CallExpr",
-                                            "arguments": [],
-                                            "callee": {
-                                              "$t": "MemberExpr",
-                                              "left": {
-                                                "$t": "IdentifierExpr",
-                                                "name": "t"
-                                              },
-                                              "optional_chaining": false,
-                                              "parenthesised": false,
-                                              "right": "current"
-                                            },
-                                            "optional_chaining": false,
-                                            "parenthesised": false
+                                            "$t": "IdentifierExpr",
+                                            "name": "r"
                                           }
                                         }
                                       ],
                                       "callee": {
-                                        "$t": "IdentifierExpr",
-                                        "name": "n"
+                                        "$t": "MemberExpr",
+                                        "left": {
+                                          "$t": "IdentifierExpr",
+                                          "name": "t"
+                                        },
+                                        "optional_chaining": false,
+                                        "parenthesised": false,
+                                        "right": "addListener"
                                       },
                                       "optional_chaining": false,
                                       "parenthesised": false
                                     },
-                                    "signature": {
-                                      "$t": "FunctionSignature",
-                                      "parameters": []
-                                    }
-                                  },
-                                  "pattern": {
-                                    "$t": "IdentifierPattern",
-                                    "name": "r"
-                                  }
-                                }
-                              ],
-                              "export": false,
-                              "mode": "Const"
-                            },
-                            {
-                              "$t": "ReturnStmt",
-                              "value": {
-                                "$t": "BinaryExpr",
-                                "left": {
-                                  "$t": "CallExpr",
-                                  "arguments": [
-                                    {
-                                      "$t": "CallArg",
-                                      "spread": false,
-                                      "value": {
-                                        "$t": "IdentifierExpr",
-                                        "name": "r"
-                                      }
-                                    }
-                                  ],
-                                  "callee": {
-                                    "$t": "MemberExpr",
-                                    "left": {
-                                      "$t": "IdentifierExpr",
-                                      "name": "t"
-                                    },
-                                    "optional_chaining": false,
+                                    "operator": "Comma",
                                     "parenthesised": false,
-                                    "right": "addListener"
-                                  },
-                                  "optional_chaining": false,
-                                  "parenthesised": false
-                                },
-                                "operator": "Comma",
-                                "parenthesised": false,
-                                "right": {
-                                  "$t": "ArrowFunctionExpr",
-                                  "parenthesised": false,
-                                  "async_": false,
-                                  "body": {
-                                    "$t": "CallExpr",
-                                    "arguments": [
-                                      {
-                                        "$t": "CallArg",
-                                        "spread": false,
-                                        "value": {
-                                          "$t": "IdentifierExpr",
-                                          "name": "r"
-                                        }
-                                      }
-                                    ],
-                                    "callee": {
-                                      "$t": "MemberExpr",
-                                      "left": {
-                                        "$t": "IdentifierExpr",
-                                        "name": "t"
+                                    "right": {
+                                      "$t": "ArrowFunctionExpr",
+                                      "function": {
+                                        "$t": "Function",
+                                        "async_": false,
+                                        "body": {
+                                          "$t": "CallExpr",
+                                          "arguments": [
+                                            {
+                                              "$t": "CallArg",
+                                              "spread": false,
+                                              "value": {
+                                                "$t": "IdentifierExpr",
+                                                "name": "r"
+                                              }
+                                            }
+                                          ],
+                                          "callee": {
+                                            "$t": "MemberExpr",
+                                            "left": {
+                                              "$t": "IdentifierExpr",
+                                              "name": "t"
+                                            },
+                                            "optional_chaining": false,
+                                            "parenthesised": false,
+                                            "right": "removeListener"
+                                          },
+                                          "optional_chaining": false,
+                                          "parenthesised": false
+                                        },
+                                        "generator": false,
+                                        "parameters": []
                                       },
-                                      "optional_chaining": false,
-                                      "parenthesised": false,
-                                      "right": "removeListener"
-                                    },
-                                    "optional_chaining": false,
-                                    "parenthesised": false
-                                  },
-                                  "signature": {
-                                    "$t": "FunctionSignature",
-                                    "parameters": []
+                                      "parenthesised": false
+                                    }
                                   }
                                 }
-                              }
-                            }
-                          ]
-                        },
-                        "signature": {
-                          "$t": "FunctionSignature",
-                          "parameters": []
+                              ]
+                            },
+                            "generator": false,
+                            "parameters": []
+                          },
+                          "parenthesised": false
+                        }
+                      },
+                      {
+                        "$t": "CallArg",
+                        "spread": false,
+                        "value": {
+                          "$t": "LiteralArrayExpr",
+                          "elements": []
                         }
                       }
+                    ],
+                    "callee": {
+                      "$t": "IdentifierExpr",
+                      "name": "h"
                     },
-                    {
-                      "$t": "CallArg",
-                      "spread": false,
-                      "value": {
-                        "$t": "LiteralArrayExpr",
-                        "elements": []
-                      }
-                    }
-                  ],
-                  "callee": {
-                    "$t": "IdentifierExpr",
-                    "name": "h"
+                    "optional_chaining": false,
+                    "parenthesised": false
                   },
-                  "optional_chaining": false,
-                  "parenthesised": false
-                },
-                "operator": "Comma",
-                "parenthesised": false,
-                "right": {
-                  "$t": "IdentifierExpr",
-                  "name": "e"
+                  "operator": "Comma",
+                  "parenthesised": false,
+                  "right": {
+                    "$t": "IdentifierExpr",
+                    "name": "e"
+                  }
                 }
               }
-            }
-          ]
-        },
-        "signature": {
-          "$t": "FunctionSignature",
+            ]
+          },
+          "generator": false,
           "parameters": [
             {
               "$t": "ParamDecl",
@@ -283,7 +286,8 @@
               "rest": false
             }
           ]
-        }
+        },
+        "parenthesised": false
       },
       "pattern": {
         "$t": "IdentifierPattern",

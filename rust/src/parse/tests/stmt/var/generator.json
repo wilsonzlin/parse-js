@@ -1,32 +1,32 @@
 {
   "$t": "FunctionDecl",
-  "async_": false,
-  "body": {
-    "$t": "BlockStmt",
-    "body": [
-      {
-        "$t": "ExpressionStmt",
-        "expression": {
-          "$t": "UnaryExpr",
-          "argument": {
-            "$t": "LiteralNumberExpr",
-            "value": 1.0
-          },
-          "operator": "Yield",
-          "parenthesised": false
-        }
-      }
-    ]
-  },
   "export": false,
   "export_default": false,
-  "generator": true,
+  "function": {
+    "$t": "Function",
+    "async_": false,
+    "body": {
+      "$t": "BlockStmt",
+      "body": [
+        {
+          "$t": "ExpressionStmt",
+          "expression": {
+            "$t": "UnaryExpr",
+            "argument": {
+              "$t": "LiteralNumberExpr",
+              "value": 1.0
+            },
+            "operator": "Yield",
+            "parenthesised": false
+          }
+        }
+      ]
+    },
+    "generator": true,
+    "parameters": []
+  },
   "name": {
     "$t": "ClassOrFunctionName",
     "name": "a"
-  },
-  "signature": {
-    "$t": "FunctionSignature",
-    "parameters": []
   }
 }

@@ -2,14 +2,14 @@
   "$t": "BinaryExpr",
   "left": {
     "$t": "ArrowFunctionExpr",
-    "parenthesised": false,
-    "async_": false,
-    "body": {
-      "$t": "BlockStmt",
-      "body": []
-    },
-    "signature": {
-      "$t": "FunctionSignature",
+    "function": {
+      "$t": "Function",
+      "async_": false,
+      "body": {
+        "$t": "BlockStmt",
+        "body": []
+      },
+      "generator": false,
       "parameters": [
         {
           "$t": "ParamDecl",
@@ -22,74 +22,76 @@
           "rest": false
         }
       ]
-    }
+    },
+    "parenthesised": false
   },
   "operator": "Comma",
   "parenthesised": false,
   "right": {
     "$t": "ArrowFunctionExpr",
-    "parenthesised": false,
-    "async_": false,
-    "body": {
-      "$t": "BinaryExpr",
-      "left": {
-        "$t": "LiteralNumberExpr",
-        "value": 1.0
-      },
-      "operator": "Comma",
-      "parenthesised": false,
-      "right": {
-        "$t": "ArrowFunctionExpr",
-        "parenthesised": false,
-        "async_": false,
-        "body": {
-          "$t": "LiteralArrayExpr",
-          "elements": []
+    "function": {
+      "$t": "Function",
+      "async_": false,
+      "body": {
+        "$t": "BinaryExpr",
+        "left": {
+          "$t": "LiteralNumberExpr",
+          "value": 1.0
         },
-        "signature": {
-          "$t": "FunctionSignature",
-          "parameters": [
-            {
-              "$t": "ParamDecl",
-              "default_value": null,
-              "pattern": {
-                "$t": "ObjectPattern",
-                "properties": [
-                  {
-                    "$t": "ObjectPatternProperty",
-                    "default_value": null,
-                    "key": {
-                      "Direct": "a"
+        "operator": "Comma",
+        "parenthesised": false,
+        "right": {
+          "$t": "ArrowFunctionExpr",
+          "function": {
+            "$t": "Function",
+            "async_": false,
+            "body": {
+              "$t": "LiteralArrayExpr",
+              "elements": []
+            },
+            "generator": false,
+            "parameters": [
+              {
+                "$t": "ParamDecl",
+                "default_value": null,
+                "pattern": {
+                  "$t": "ObjectPattern",
+                  "properties": [
+                    {
+                      "$t": "ObjectPatternProperty",
+                      "default_value": null,
+                      "key": {
+                        "Direct": "a"
+                      },
+                      "shorthand": true,
+                      "target": {
+                        "$t": "IdentifierPattern",
+                        "name": "a"
+                      }
                     },
-                    "target": {
-                      "$t": "IdentifierPattern",
-                      "name": "a"
-                    },
-                    "shorthand": true
-                  },
-                  {
-                    "$t": "ObjectPatternProperty",
-                    "default_value": null,
-                    "key": {
-                      "Direct": "b"
-                    },
-                    "target": {
-                      "$t": "IdentifierPattern",
-                      "name": "b"
-                    },
-                    "shorthand": true
-                  }
-                ],
-                "rest": null
-              },
-              "rest": false
-            }
-          ]
+                    {
+                      "$t": "ObjectPatternProperty",
+                      "default_value": null,
+                      "key": {
+                        "Direct": "b"
+                      },
+                      "shorthand": true,
+                      "target": {
+                        "$t": "IdentifierPattern",
+                        "name": "b"
+                      }
+                    }
+                  ],
+                  "rest": null
+                },
+                "rest": false
+              }
+            ]
+          },
+          "parenthesised": false
         }
-      }
-    },
-    "signature": {
-      "$t": "FunctionSignature",
+      },
+      "generator": false,
       "parameters": [
         {
           "$t": "ParamDecl",
@@ -103,11 +105,11 @@
                 "key": {
                   "Direct": "a"
                 },
+                "shorthand": true,
                 "target": {
                   "$t": "IdentifierPattern",
                   "name": "a"
-                },
-                "shorthand": true
+                }
               }
             ],
             "rest": null
@@ -115,6 +117,7 @@
           "rest": false
         }
       ]
-    }
+    },
+    "parenthesised": false
   }
 }

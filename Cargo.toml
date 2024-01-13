@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "cli",
-    "rust",
-    "test262",
+  "cli",
+  "rust",
+  "test262",
 ]

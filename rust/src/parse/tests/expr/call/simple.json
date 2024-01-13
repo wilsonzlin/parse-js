@@ -1,11 +1,5 @@
 {
   "$t": "CallExpr",
-  "optional_chaining": false,
-  "parenthesised": false,
-  "callee": {
-    "$t": "IdentifierExpr",
-    "name": "ab"
-  },
   "arguments": [
     {
       "$t": "CallArg",
@@ -31,5 +25,11 @@
         "value": 3.0
       }
     }
-  ]
+  ],
+  "callee": {
+    "$t": "IdentifierExpr",
+    "name": "ab"
+  },
+  "optional_chaining": false,
+  "parenthesised": false
 }

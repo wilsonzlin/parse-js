@@ -1,49 +1,49 @@
 {
   "$t": "BinaryExpr",
-  "parenthesised": false,
-  "operator": "Comma",
-  "right": {
-    "$t": "IdentifierExpr",
-    "name": "f"
-  },
   "left": {
     "$t": "BinaryExpr",
-    "parenthesised": false,
-    "operator": "Comma",
-    "right": {
-      "$t": "IdentifierExpr",
-      "name": "e"
-    },
     "left": {
       "$t": "BinaryExpr",
-      "parenthesised": false,
+      "left": {
+        "$t": "BinaryExpr",
+        "left": {
+          "$t": "IdentifierExpr",
+          "name": "a"
+        },
+        "operator": "Comma",
+        "parenthesised": false,
+        "right": {
+          "$t": "IdentifierExpr",
+          "name": "b"
+        }
+      },
       "operator": "Comma",
+      "parenthesised": false,
       "right": {
         "$t": "BinaryExpr",
-        "parenthesised": false,
-        "operator": "LogicalAnd",
         "left": {
           "$t": "IdentifierExpr",
           "name": "c"
         },
+        "operator": "LogicalAnd",
+        "parenthesised": false,
         "right": {
           "$t": "IdentifierExpr",
           "name": "d"
         }
-      },
-      "left": {
-        "$t": "BinaryExpr",
-        "parenthesised": false,
-        "operator": "Comma",
-        "right": {
-          "$t": "IdentifierExpr",
-          "name": "b"
-        },
-        "left": {
-          "$t": "IdentifierExpr",
-          "name": "a"
-        }
       }
+    },
+    "operator": "Comma",
+    "parenthesised": false,
+    "right": {
+      "$t": "IdentifierExpr",
+      "name": "e"
     }
+  },
+  "operator": "Comma",
+  "parenthesised": false,
+  "right": {
+    "$t": "IdentifierExpr",
+    "name": "f"
   }
 }

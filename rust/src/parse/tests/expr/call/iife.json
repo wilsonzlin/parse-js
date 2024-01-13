@@ -7,18 +7,18 @@
       "arguments": [],
       "callee": {
         "$t": "FunctionExpr",
-        "async_": false,
-        "body": {
-          "$t": "BlockStmt",
-          "body": []
-        },
-        "generator": false,
-        "name": null,
-        "parenthesised": true,
-        "signature": {
-          "$t": "FunctionSignature",
+        "function": {
+          "$t": "Function",
+          "async_": false,
+          "body": {
+            "$t": "BlockStmt",
+            "body": []
+          },
+          "generator": false,
           "parameters": []
-        }
+        },
+        "name": null,
+        "parenthesised": true
       },
       "optional_chaining": false,
       "parenthesised": false
@@ -30,16 +30,17 @@
       "arguments": [],
       "callee": {
         "$t": "ArrowFunctionExpr",
-        "parenthesised": true,
-        "async_": false,
-        "body": {
-          "$t": "BlockStmt",
-          "body": []
-        },
-        "signature": {
-          "$t": "FunctionSignature",
+        "function": {
+          "$t": "Function",
+          "async_": false,
+          "body": {
+            "$t": "BlockStmt",
+            "body": []
+          },
+          "generator": false,
           "parameters": []
-        }
+        },
+        "parenthesised": true
       },
       "optional_chaining": false,
       "parenthesised": false
@@ -52,16 +53,17 @@
     "arguments": [],
     "callee": {
       "$t": "ArrowFunctionExpr",
-      "parenthesised": true,
-      "async_": true,
-      "body": {
-        "$t": "BlockStmt",
-        "body": []
-      },
-      "signature": {
-        "$t": "FunctionSignature",
+      "function": {
+        "$t": "Function",
+        "async_": true,
+        "body": {
+          "$t": "BlockStmt",
+          "body": []
+        },
+        "generator": false,
         "parameters": []
-      }
+      },
+      "parenthesised": true
     },
     "optional_chaining": false,
     "parenthesised": false

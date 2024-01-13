@@ -1,109 +1,112 @@
 {
   "$t": "ArrowFunctionExpr",
-  "parenthesised": false,
-  "async_": false,
-  "signature": {
-    "$t": "FunctionSignature",
+  "function": {
+    "$t": "Function",
+    "async_": false,
+    "body": {
+      "$t": "ArrowFunctionExpr",
+      "function": {
+        "$t": "Function",
+        "async_": false,
+        "body": {
+          "$t": "ConditionalExpr",
+          "alternate": {
+            "$t": "LiteralNumberExpr",
+            "value": 5.0
+          },
+          "consequent": {
+            "$t": "ConditionalExpr",
+            "alternate": {
+              "$t": "LiteralNumberExpr",
+              "value": 4.0
+            },
+            "consequent": {
+              "$t": "LiteralNumberExpr",
+              "value": 3.0
+            },
+            "parenthesised": false,
+            "test": {
+              "$t": "CallExpr",
+              "arguments": [],
+              "callee": {
+                "$t": "ArrowFunctionExpr",
+                "function": {
+                  "$t": "Function",
+                  "async_": false,
+                  "body": {
+                    "$t": "LiteralNumberExpr",
+                    "value": 2.0
+                  },
+                  "generator": false,
+                  "parameters": [
+                    {
+                      "$t": "ParamDecl",
+                      "default_value": null,
+                      "pattern": {
+                        "$t": "IdentifierPattern",
+                        "name": "y"
+                      },
+                      "rest": false
+                    }
+                  ]
+                },
+                "parenthesised": true
+              },
+              "optional_chaining": false,
+              "parenthesised": false
+            }
+          },
+          "parenthesised": false,
+          "test": {
+            "$t": "LiteralNumberExpr",
+            "value": 1.0
+          }
+        },
+        "generator": false,
+        "parameters": [
+          {
+            "$t": "ParamDecl",
+            "default_value": null,
+            "pattern": {
+              "$t": "IdentifierPattern",
+              "name": "x"
+            },
+            "rest": false
+          }
+        ]
+      },
+      "parenthesised": false
+    },
+    "generator": false,
     "parameters": [
       {
         "$t": "ParamDecl",
-        "rest": false,
+        "default_value": null,
         "pattern": {
           "$t": "IdentifierPattern",
           "name": "a"
         },
-        "default_value": null
+        "rest": false
       },
       {
         "$t": "ParamDecl",
-        "rest": false,
+        "default_value": null,
         "pattern": {
           "$t": "IdentifierPattern",
           "name": "b"
         },
-        "default_value": null
+        "rest": false
       },
       {
         "$t": "ParamDecl",
-        "rest": false,
+        "default_value": null,
         "pattern": {
           "$t": "IdentifierPattern",
           "name": "c"
         },
-        "default_value": null
+        "rest": false
       }
     ]
   },
-  "body": {
-    "$t": "ArrowFunctionExpr",
-    "parenthesised": false,
-    "async_": false,
-    "signature": {
-      "$t": "FunctionSignature",
-      "parameters": [
-        {
-          "$t": "ParamDecl",
-          "rest": false,
-          "pattern": {
-            "$t": "IdentifierPattern",
-            "name": "x"
-          },
-          "default_value": null
-        }
-      ]
-    },
-    "body": {
-      "$t": "ConditionalExpr",
-      "parenthesised": false,
-      "test": {
-        "$t": "LiteralNumberExpr",
-        "value": 1.0
-      },
-      "consequent": {
-        "$t": "ConditionalExpr",
-        "parenthesised": false,
-        "test": {
-          "$t": "CallExpr",
-          "optional_chaining": false,
-          "parenthesised": false,
-          "callee": {
-            "$t": "ArrowFunctionExpr",
-            "parenthesised": true,
-            "async_": false,
-            "signature": {
-              "$t": "FunctionSignature",
-              "parameters": [
-                {
-                  "$t": "ParamDecl",
-                  "rest": false,
-                  "pattern": {
-                    "$t": "IdentifierPattern",
-                    "name": "y"
-                  },
-                  "default_value": null
-                }
-              ]
-            },
-            "body": {
-              "$t": "LiteralNumberExpr",
-              "value": 2.0
-            }
-          },
-          "arguments": []
-        },
-        "consequent": {
-          "$t": "LiteralNumberExpr",
-          "value": 3.0
-        },
-        "alternate": {
-          "$t": "LiteralNumberExpr",
-          "value": 4.0
-        }
-      },
-      "alternate": {
-        "$t": "LiteralNumberExpr",
-        "value": 5.0
-      }
-    }
-  }
+  "parenthesised": false
 }

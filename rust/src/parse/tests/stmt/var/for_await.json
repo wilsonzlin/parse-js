@@ -1,15 +1,15 @@
 {
   "$t": "ForOfStmt",
+  "await_": true,
   "body": {
     "$t": "BlockStmt",
     "body": []
   },
-  "await_": true,
+  "decl_mode": "Const",
   "pat": {
     "$t": "IdentifierPattern",
     "name": "s"
   },
-  "decl_mode": "Const",
   "rhs": {
     "$t": "IdentifierExpr",
     "name": "expr"

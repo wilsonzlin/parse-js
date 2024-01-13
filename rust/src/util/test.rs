@@ -1,7 +1,10 @@
 use serde_json::to_string_pretty;
+use serde_json::to_writer_pretty;
 use serde_json::Value;
 use similar::ChangeTag;
 use similar::TextDiff;
+use std::env;
+use std::env::var;
 use std::fs::read_dir;
 use std::fs::File;
 use std::io::Read;
@@ -23,25 +26,28 @@ pub fn evaluate_test_input_files<T: Fn(Vec<u8>) -> Value>(dir_in_src: &str, test
             .unwrap();
           println!("Testing {}/{}...", typ, name);
           let actual = tester(input);
-          let expected: Value = serde_json::from_reader(
-            File::open(format!("{}/{}/{}on", base_dir, typ, name)).unwrap(),
-          )
-          .unwrap();
+          let json_out_path = format!("{}/{}/{}on", base_dir, typ, name);
+          let expected: Value =
+            serde_json::from_reader(File::open(&json_out_path).unwrap()).unwrap();
           if actual != expected {
-            let expected_fmt = to_string_pretty(&expected).unwrap();
-            let actual_fmt = to_string_pretty(&actual).unwrap();
-            let mut msg = format!("Failed {}/{}, got:\n", typ, name);
-            let diff = TextDiff::from_lines(&expected_fmt, &actual_fmt);
-            for change in diff.iter_all_changes() {
-              let sign = match change.tag() {
-                ChangeTag::Delete => "-",
-                ChangeTag::Insert => "+",
-                ChangeTag::Equal => " ",
-              };
-              msg.push_str(sign);
-              msg.push_str(change.as_str().unwrap());
-            }
-            panic!("{}", msg);
+            if var("PARSEJS_REGENERATE_TEST_JSON_OUTPUTS").is_ok_and(|v| v == "1") {
+              to_writer_pretty(File::create(&json_out_path).unwrap(), &actual).unwrap();
+            } else {
+              let expected_fmt = to_string_pretty(&expected).unwrap();
+              let actual_fmt = to_string_pretty(&actual).unwrap();
+              let mut msg = format!("Failed {}/{}, got:\n", typ, name);
+              let diff = TextDiff::from_lines(&expected_fmt, &actual_fmt);
+              for change in diff.iter_all_changes() {
+                let sign = match change.tag() {
+                  ChangeTag::Delete => "-",
+                  ChangeTag::Insert => "+",
+                  ChangeTag::Equal => " ",
+                };
+                msg.push_str(sign);
+                msg.push_str(change.as_str().unwrap());
+              }
+              panic!("{}", msg);
+            };
           }
         }
       }

@@ -1,56 +1,57 @@
 {
   "$t": "BinaryExpr",
-  "parenthesised": false,
-  "operator": "Assignment",
   "left": {
     "$t": "IdentifierPattern",
     "name": "x"
   },
+  "operator": "Assignment",
+  "parenthesised": false,
   "right": {
     "$t": "ConditionalExpr",
-    "parenthesised": false,
-    "test": {
-      "$t": "LiteralBooleanExpr",
-      "value": true
+    "alternate": {
+      "$t": "LiteralNumberExpr",
+      "value": 5.0
     },
     "consequent": {
       "$t": "ArrowFunctionExpr",
-      "parenthesised": false,
-      "async_": false,
-      "signature": {
-        "$t": "FunctionSignature",
+      "function": {
+        "$t": "Function",
+        "async_": false,
+        "body": {
+          "$t": "ConditionalExpr",
+          "alternate": {
+            "$t": "IdentifierExpr",
+            "name": "x"
+          },
+          "consequent": {
+            "$t": "IdentifierExpr",
+            "name": "x"
+          },
+          "parenthesised": false,
+          "test": {
+            "$t": "IdentifierExpr",
+            "name": "x"
+          }
+        },
+        "generator": false,
         "parameters": [
           {
             "$t": "ParamDecl",
-            "rest": false,
+            "default_value": null,
             "pattern": {
               "$t": "IdentifierPattern",
               "name": "x"
             },
-            "default_value": null
+            "rest": false
           }
         ]
       },
-      "body": {
-        "$t": "ConditionalExpr",
-        "parenthesised": false,
-        "test": {
-          "$t": "IdentifierExpr",
-          "name": "x"
-        },
-        "consequent": {
-          "$t": "IdentifierExpr",
-          "name": "x"
-        },
-        "alternate": {
-          "$t": "IdentifierExpr",
-          "name": "x"
-        }
-      }
+      "parenthesised": false
     },
-    "alternate": {
-      "$t": "LiteralNumberExpr",
-      "value": 5.0
+    "parenthesised": false,
+    "test": {
+      "$t": "LiteralBooleanExpr",
+      "value": true
     }
   }
 }

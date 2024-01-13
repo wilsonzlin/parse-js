@@ -104,11 +104,11 @@
             "key": {
               "Direct": "get"
             },
+            "shorthand": true,
             "target": {
               "$t": "IdentifierPattern",
               "name": "get"
-            },
-            "shorthand": true
+            }
           },
           {
             "$t": "ObjectPatternProperty",
@@ -116,11 +116,11 @@
             "key": {
               "Direct": "set"
             },
+            "shorthand": true,
             "target": {
               "$t": "IdentifierPattern",
               "name": "set"
-            },
-            "shorthand": true
+            }
           },
           {
             "$t": "ObjectPatternProperty",
@@ -128,6 +128,7 @@
             "key": {
               "Direct": "yield"
             },
+            "shorthand": false,
             "target": {
               "$t": "ArrayPattern",
               "elements": [
@@ -147,8 +148,7 @@
                 }
               ],
               "rest": null
-            },
-            "shorthand": false
+            }
           }
         ],
         "rest": null

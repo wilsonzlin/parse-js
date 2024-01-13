@@ -4,14 +4,14 @@
     {
       "initializer": {
         "$t": "ArrowFunctionExpr",
-        "parenthesised": false,
-        "async_": false,
-        "body": {
-          "$t": "BlockStmt",
-          "body": []
-        },
-        "signature": {
-          "$t": "FunctionSignature",
+        "function": {
+          "$t": "Function",
+          "async_": false,
+          "body": {
+            "$t": "BlockStmt",
+            "body": []
+          },
+          "generator": false,
           "parameters": [
             {
               "$t": "ParamDecl",
@@ -24,7 +24,8 @@
               "rest": false
             }
           ]
-        }
+        },
+        "parenthesised": false
       },
       "pattern": {
         "$t": "IdentifierPattern",
