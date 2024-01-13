@@ -20,19 +20,20 @@ impl JourneyControls {
 
 // Don't use `Node<'a>` as that requires reference to live for entire `'a`.
 // Nodes must be visited in execution order. This is helpful for many uses.
+// TODO Implement VisitorMut, VisitorOwned.
 pub trait Visitor {
-  fn on_syntax_down(&mut self, node: &mut Node, ctl: &mut JourneyControls) {}
+  fn on_syntax_down(&mut self, node: &Node, ctl: &mut JourneyControls) {}
 
-  fn on_syntax_up(&mut self, node: &mut Node) {}
+  fn on_syntax_up(&mut self, node: &Node) {}
 
-  fn visit_class_or_object_key(&mut self, key: &mut ClassOrObjectMemberKey) {
+  fn visit_class_or_object_key(&mut self, key: &ClassOrObjectMemberKey) {
     match key {
       ClassOrObjectMemberKey::Direct(_) => {}
       ClassOrObjectMemberKey::Computed(key) => self.visit(key),
     };
   }
 
-  fn visit_class_or_object_value(&mut self, value: &mut ClassOrObjectMemberValue) {
+  fn visit_class_or_object_value(&mut self, value: &ClassOrObjectMemberValue) {
     match value {
       ClassOrObjectMemberValue::Getter { body } => self.visit(body),
       ClassOrObjectMemberValue::Method {
@@ -53,7 +54,7 @@ pub trait Visitor {
     }
   }
 
-  fn visit(&mut self, n: &mut Node) {
+  fn visit(&mut self, n: &Node) {
     let mut cur_stx_type = core::mem::discriminant(n.stx.as_ref());
     loop {
       let mut ctl = JourneyControls { skip: false };
@@ -68,7 +69,7 @@ pub trait Visitor {
       cur_stx_type = new_stx_type;
     }
 
-    match n.stx.as_mut() {
+    match n.stx.as_ref() {
       Syntax::TopLevel { body } => {
         for stmt in body {
           self.visit(stmt);
@@ -92,7 +93,7 @@ pub trait Visitor {
       Syntax::ArrayPattern { elements, rest } => {
         for elem in elements {
           if let Some(elem) = elem {
-            self.visit(&mut elem.target);
+            self.visit(&elem.target);
           };
         }
         if let Some(rest) = rest {
@@ -112,7 +113,7 @@ pub trait Visitor {
         ..
       } => {
         if operator.is_assignment()
-          && match left.stx.as_mut() {
+          && match left.stx.as_ref() {
             Syntax::ArrayPattern { .. }
             | Syntax::ObjectPattern { .. }
             | Syntax::IdentifierPattern { .. } => true,
@@ -212,7 +213,7 @@ pub trait Visitor {
         }
         ExportNames::Specific(imports) => {
           for imp in imports {
-            self.visit(&mut imp.alias);
+            self.visit(&imp.alias);
           }
         }
       },
@@ -291,7 +292,7 @@ pub trait Visitor {
             }
             ExportNames::Specific(names) => {
               for name in names {
-                self.visit(&mut name.alias);
+                self.visit(&name.alias);
               }
             }
           }
@@ -443,8 +444,8 @@ pub trait Visitor {
       }
       Syntax::VarDecl { declarators, .. } => {
         for decl in declarators {
-          self.visit(&mut decl.pattern);
-          if let Some(init) = &mut decl.initializer {
+          self.visit(&decl.pattern);
+          if let Some(init) = &decl.initializer {
             self.visit(init);
           }
         }
