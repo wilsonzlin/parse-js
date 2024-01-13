@@ -7,7 +7,7 @@
       "arguments": [],
       "callee": {
         "$t": "FunctionExpr",
-        "is_async": false,
+        "async_": false,
         "body": {
           "$t": "BlockStmt",
           "body": []
@@ -31,7 +31,7 @@
       "callee": {
         "$t": "ArrowFunctionExpr",
         "parenthesised": true,
-        "is_async": false,
+        "async_": false,
         "body": {
           "$t": "BlockStmt",
           "body": []
@@ -53,7 +53,7 @@
     "callee": {
       "$t": "ArrowFunctionExpr",
       "parenthesised": true,
-      "is_async": true,
+      "async_": true,
       "body": {
         "$t": "BlockStmt",
         "body": []

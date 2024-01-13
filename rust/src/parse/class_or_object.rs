@@ -127,7 +127,7 @@ impl<'a> Parser<'a> {
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?;
         (signature.loc + body.loc, ClassOrObjectMemberValue::Method {
-          is_async,
+          async_: is_async,
           generator: is_generator,
           signature,
           body,

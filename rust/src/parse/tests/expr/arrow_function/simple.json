@@ -1,7 +1,7 @@
 {
   "$t": "ArrowFunctionExpr",
   "parenthesised": false,
-  "is_async": false,
+  "async_": false,
   "signature": {
     "$t": "FunctionSignature",
     "parameters": [

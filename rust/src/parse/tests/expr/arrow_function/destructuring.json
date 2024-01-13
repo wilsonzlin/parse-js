@@ -3,7 +3,7 @@
   "left": {
     "$t": "ArrowFunctionExpr",
     "parenthesised": false,
-    "is_async": false,
+    "async_": false,
     "body": {
       "$t": "BlockStmt",
       "body": []
@@ -29,7 +29,7 @@
   "right": {
     "$t": "ArrowFunctionExpr",
     "parenthesised": false,
-    "is_async": false,
+    "async_": false,
     "body": {
       "$t": "BinaryExpr",
       "left": {
@@ -41,7 +41,7 @@
       "right": {
         "$t": "ArrowFunctionExpr",
         "parenthesised": false,
-        "is_async": false,
+        "async_": false,
         "body": {
           "$t": "LiteralArrayExpr",
           "elements": []

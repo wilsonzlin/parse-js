@@ -116,7 +116,7 @@ impl<'a> Parser<'a> {
     Ok(Node::new(start + body.loc, Syntax::FunctionDecl {
       export,
       export_default,
-      is_async,
+      async_: is_async,
       generator,
       name,
       signature,

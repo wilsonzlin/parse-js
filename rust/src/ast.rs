@@ -119,7 +119,7 @@ pub enum ClassOrObjectMemberValue {
     body: Statement,
   },
   Method {
-    is_async: bool,
+    async_: bool,
     generator: bool,
     signature: Node,
     body: Statement,
@@ -238,7 +238,7 @@ pub enum Syntax {
     export: bool,
     export_default: bool,
     generator: bool,
-    is_async: bool,
+    async_: bool,
     name: Option<Node>, // Always ClassOrFunctionName. Name can only be omitted in a default export, although a default export function can still have a name.
     signature: Node,
     body: Statement,
@@ -257,7 +257,7 @@ pub enum Syntax {
   // Expressions.
   ArrowFunctionExpr {
     parenthesised: bool,
-    is_async: bool,
+    async_: bool,
     signature: Node,
     body: Node,
   },
@@ -292,7 +292,7 @@ pub enum Syntax {
   },
   FunctionExpr {
     parenthesised: bool,
-    is_async: bool,
+    async_: bool,
     generator: bool,
     name: Option<Node>,
     signature: Node,

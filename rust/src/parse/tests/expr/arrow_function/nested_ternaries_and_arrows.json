@@ -1,7 +1,7 @@
 {
   "$t": "ArrowFunctionExpr",
   "parenthesised": false,
-  "is_async": false,
+  "async_": false,
   "signature": {
     "$t": "FunctionSignature",
     "parameters": [
@@ -37,7 +37,7 @@
   "body": {
     "$t": "ArrowFunctionExpr",
     "parenthesised": false,
-    "is_async": false,
+    "async_": false,
     "signature": {
       "$t": "FunctionSignature",
       "parameters": [
@@ -69,7 +69,7 @@
           "callee": {
             "$t": "ArrowFunctionExpr",
             "parenthesised": true,
-            "is_async": false,
+            "async_": false,
             "signature": {
               "$t": "FunctionSignature",
               "parameters": [

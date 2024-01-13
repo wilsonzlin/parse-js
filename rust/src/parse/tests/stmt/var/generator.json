@@ -1,6 +1,6 @@
 {
   "$t": "FunctionDecl",
-  "is_async": false,
+  "async_": false,
   "body": {
     "$t": "BlockStmt",
     "body": [

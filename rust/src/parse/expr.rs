@@ -622,7 +622,7 @@ impl<'a> Parser<'a> {
       signature.loc + body.loc,
       Syntax::ArrowFunctionExpr {
         parenthesised: false,
-        is_async,
+        async_: is_async,
         signature,
         body,
       },
@@ -699,7 +699,7 @@ impl<'a> Parser<'a> {
     let body = self.parse_stmt_block(fn_body_ctx)?;
     Ok(Node::new(start + body.loc, Syntax::FunctionExpr {
       parenthesised: false,
-      is_async,
+      async_: is_async,
       generator,
       name,
       signature,
