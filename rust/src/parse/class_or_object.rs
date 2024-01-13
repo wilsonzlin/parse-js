@@ -121,32 +121,49 @@ impl<'a> Parser<'a> {
     // Check is_generator/is_async first so that we don't have to check that they're false in every other branch.
     let (value_loc, value) =
       if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
-        let signature = self.parse_signature_function(ctx)?;
+        let parameters = self.parse_function_parameters(ctx)?;
         let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?;
-        (signature.loc + body.loc, ClassOrObjectMemberValue::Method {
-          async_: is_async,
-          generator: is_generator,
-          signature,
-          body,
+        (body.loc, ClassOrObjectMemberValue::Method {
+          function: Node::new(body.loc, Syntax::Function {
+            async_: is_async,
+            generator: is_generator,
+            parameters,
+            body,
+          }),
         })
       } else if is_getter {
-        let loc_start = self.require(TokenType::ParenthesisOpen)?.loc;
+        let mut loc = self.require(TokenType::ParenthesisOpen)?.loc;
         self.require(TokenType::ParenthesisClose)?;
         let body = self.parse_stmt_block(ctx)?;
-        (loc_start + body.loc, ClassOrObjectMemberValue::Getter {
-          body,
+        loc += body.loc;
+        (loc, ClassOrObjectMemberValue::Getter {
+          function: Node::new(loc, Syntax::Function {
+            async_: false,
+            body,
+            generator: false,
+            parameters: Vec::new(),
+          }),
         })
       } else if is_setter {
-        let loc_start = self.require(TokenType::ParenthesisOpen)?.loc;
-        let parameter = self.parse_pattern(ctx)?;
+        let mut loc = self.require(TokenType::ParenthesisOpen)?.loc;
+        let param = self.parse_pattern(ctx)?;
         self.require(TokenType::ParenthesisClose)?;
         let body = self.parse_stmt_block(ctx)?;
-        (loc_start + body.loc, ClassOrObjectMemberValue::Setter {
-          parameter,
-          body,
+        loc += body.loc;
+        (loc, ClassOrObjectMemberValue::Setter {
+          function: Node::new(loc, Syntax::Function {
+            async_: false,
+            generator: false,
+            body,
+            parameters: vec![Node::new(param.loc, Syntax::ParamDecl {
+              rest: false,
+              pattern: param,
+              default_value: None,
+            })],
+          }),
         })
       } else if match key {
         ClassOrObjectMemberKey::Direct(_) => match self.peek()? {

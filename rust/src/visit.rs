@@ -34,21 +34,17 @@ pub trait Visitor {
 
   fn visit_class_or_object_value(&mut self, value: &ClassOrObjectMemberValue) {
     match value {
-      ClassOrObjectMemberValue::Getter { body } => self.visit(body),
-      ClassOrObjectMemberValue::Method {
-        signature, body, ..
-      } => {
-        self.visit(signature);
-        self.visit(body);
+      ClassOrObjectMemberValue::Getter { function } => self.visit(function),
+      ClassOrObjectMemberValue::Method { function, .. } => {
+        self.visit(function);
       }
       ClassOrObjectMemberValue::Property { initializer } => {
         if let Some(initializer) = initializer {
           self.visit(initializer);
         };
       }
-      ClassOrObjectMemberValue::Setter { body, parameter } => {
-        self.visit(parameter);
-        self.visit(body);
+      ClassOrObjectMemberValue::Setter { function } => {
+        self.visit(function);
       }
     }
   }
@@ -66,17 +62,11 @@ pub trait Visitor {
           self.visit(stmt);
         }
       }
-      Syntax::FunctionExpr {
-        name,
-        signature,
-        body,
-        ..
-      } => {
+      Syntax::FunctionExpr { name, function, .. } => {
         if let Some(name) = name {
           self.visit(name);
         };
-        self.visit(signature);
-        self.visit(body);
+        self.visit(function);
       }
       Syntax::IdentifierPattern { .. }
       | Syntax::IdentifierExpr { .. }
@@ -91,11 +81,8 @@ pub trait Visitor {
           self.visit(rest);
         };
       }
-      Syntax::ArrowFunctionExpr {
-        signature, body, ..
-      } => {
-        self.visit(signature);
-        self.visit(body);
+      Syntax::ArrowFunctionExpr { function, .. } => {
+        self.visit(function);
       }
       Syntax::BinaryExpr {
         left,
@@ -240,22 +227,19 @@ pub trait Visitor {
         self.visit(rhs);
         self.visit(body);
       }
-      Syntax::FunctionDecl {
-        name,
-        signature,
-        body,
-        ..
+      Syntax::Function {
+        parameters, body, ..
       } => {
-        if let Some(name) = name {
-          self.visit(name);
-        }
-        self.visit(signature);
-        self.visit(body);
-      }
-      Syntax::FunctionSignature { parameters } => {
         for param in parameters {
           self.visit(param);
         }
+        self.visit(body);
+      }
+      Syntax::FunctionDecl { name, function, .. } => {
+        if let Some(name) = name {
+          self.visit(name);
+        }
+        self.visit(function);
       }
       Syntax::IfStmt {
         test,
@@ -487,21 +471,17 @@ pub trait VisitorMut {
 
   fn visit_class_or_object_value(&mut self, value: &mut ClassOrObjectMemberValue) {
     match value {
-      ClassOrObjectMemberValue::Getter { body } => self.visit(body),
-      ClassOrObjectMemberValue::Method {
-        signature, body, ..
-      } => {
-        self.visit(signature);
-        self.visit(body);
+      ClassOrObjectMemberValue::Getter { function } => self.visit(function),
+      ClassOrObjectMemberValue::Method { function, .. } => {
+        self.visit(function);
       }
       ClassOrObjectMemberValue::Property { initializer } => {
         if let Some(initializer) = initializer {
           self.visit(initializer);
         };
       }
-      ClassOrObjectMemberValue::Setter { body, parameter } => {
-        self.visit(parameter);
-        self.visit(body);
+      ClassOrObjectMemberValue::Setter { function } => {
+        self.visit(function);
       }
     }
   }
@@ -527,17 +507,11 @@ pub trait VisitorMut {
           self.visit(stmt);
         }
       }
-      Syntax::FunctionExpr {
-        name,
-        signature,
-        body,
-        ..
-      } => {
+      Syntax::FunctionExpr { name, function, .. } => {
         if let Some(name) = name {
           self.visit(name);
         };
-        self.visit(signature);
-        self.visit(body);
+        self.visit(function);
       }
       Syntax::IdentifierPattern { .. }
       | Syntax::IdentifierExpr { .. }
@@ -552,11 +526,8 @@ pub trait VisitorMut {
           self.visit(rest);
         };
       }
-      Syntax::ArrowFunctionExpr {
-        signature, body, ..
-      } => {
-        self.visit(signature);
-        self.visit(body);
+      Syntax::ArrowFunctionExpr { function, .. } => {
+        self.visit(function);
       }
       Syntax::BinaryExpr {
         left,
@@ -701,22 +672,19 @@ pub trait VisitorMut {
         self.visit(rhs);
         self.visit(body);
       }
-      Syntax::FunctionDecl {
-        name,
-        signature,
-        body,
-        ..
+      Syntax::Function {
+        parameters, body, ..
       } => {
-        if let Some(name) = name {
-          self.visit(name);
-        }
-        self.visit(signature);
-        self.visit(body);
-      }
-      Syntax::FunctionSignature { parameters } => {
         for param in parameters {
           self.visit(param);
         }
+        self.visit(body);
+      }
+      Syntax::FunctionDecl { name, function, .. } => {
+        if let Some(name) = name {
+          self.visit(name);
+        }
+        self.visit(function);
       }
       Syntax::IfStmt {
         test,

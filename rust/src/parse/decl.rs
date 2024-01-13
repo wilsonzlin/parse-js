@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
         None
       }
     };
-    let signature = self.parse_signature_function(ctx)?;
+    let parameters = self.parse_function_parameters(ctx)?;
     let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
@@ -116,11 +116,13 @@ impl<'a> Parser<'a> {
     Ok(Node::new(start + body.loc, Syntax::FunctionDecl {
       export,
       export_default,
-      async_: is_async,
-      generator,
       name,
-      signature,
-      body,
+      function: Node::new(start + body.loc, Syntax::Function {
+        async_: is_async,
+        generator,
+        parameters,
+        body,
+      }),
     }))
   }
 

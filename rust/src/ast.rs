@@ -116,21 +116,17 @@ pub enum ClassOrObjectMemberKey {
 #[derive(Debug, Serialize)]
 pub enum ClassOrObjectMemberValue {
   Getter {
-    body: Statement,
+    function: Node, // Always Function. `params` is empty.
   },
   Method {
-    async_: bool,
-    generator: bool,
-    signature: Node,
-    body: Statement,
+    function: Node, // Always Function.
   },
   Property {
     // Must be Some if object, as shorthands are covered by ObjectMemberType::Shorthand (and are initialised).
     initializer: Option<Expression>,
   },
   Setter {
-    body: Statement,
-    parameter: Pattern,
+    function: Node, // Always Function. `params` contains exactly one ParamDecl with no `default_value` or `rest`.
   },
 }
 
@@ -221,9 +217,13 @@ pub enum Syntax {
     name: String,
   },
 
-  // Signatures.
-  FunctionSignature {
-    parameters: Vec<Declaration>,
+  // Functions.
+  // This common type exists for better downstream usage, as one type is easier to match on and wrangle than many different types (ArrowFunctionExpr, ClassMember::Method, FunctionDecl, etc.).
+  Function {
+    async_: bool,
+    generator: bool,
+    parameters: Vec<Declaration>, // Always ParamDecl.
+    body: Node,                   // Could be Expression if arrow function.
   },
 
   // Declarations.
@@ -237,11 +237,8 @@ pub enum Syntax {
   FunctionDecl {
     export: bool,
     export_default: bool,
-    generator: bool,
-    async_: bool,
     name: Option<Node>, // Always ClassOrFunctionName. Name can only be omitted in a default export, although a default export function can still have a name.
-    signature: Node,
-    body: Statement,
+    function: Node,     // Always Function.
   },
   ParamDecl {
     rest: bool,
@@ -257,9 +254,7 @@ pub enum Syntax {
   // Expressions.
   ArrowFunctionExpr {
     parenthesised: bool,
-    async_: bool,
-    signature: Node,
-    body: Node,
+    function: Node, // Always Function.
   },
   BinaryExpr {
     parenthesised: bool,
@@ -292,11 +287,8 @@ pub enum Syntax {
   },
   FunctionExpr {
     parenthesised: bool,
-    async_: bool,
-    generator: bool,
     name: Option<Node>,
-    signature: Node,
-    body: Statement,
+    function: Node,
   },
   IdentifierExpr {
     name: String,

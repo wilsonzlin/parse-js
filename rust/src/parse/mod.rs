@@ -13,10 +13,10 @@ use crate::token::TokenType;
 pub mod class_or_object;
 pub mod decl;
 pub mod expr;
+pub mod function;
 pub mod literal;
 pub mod operator;
 pub mod pattern;
-pub mod signature;
 pub mod stmt;
 #[cfg(test)]
 mod tests;

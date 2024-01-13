@@ -570,7 +570,7 @@ impl<'a> Parser<'a> {
   ) -> SyntaxResult<Node> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
 
-    let (signature, arrow) = if !is_async
+    let (parameters, arrow) = if !is_async
       && is_valid_pattern_identifier(self.peek()?.typ, ParsePatternRules {
         await_allowed: false,
         yield_allowed: ctx.rules.yield_allowed,
@@ -587,18 +587,11 @@ impl<'a> Parser<'a> {
         pattern,
         default_value: None,
       });
-      let signature = Node::new(param_name, Syntax::FunctionSignature {
-        parameters: {
-          let mut params = Vec::new();
-          params.push(param);
-          params
-        },
-      });
-      (signature, arrow)
+      (vec![param], arrow)
     } else {
-      let signature = self.parse_signature_function(ctx)?;
+      let params = self.parse_function_parameters(ctx)?;
       let arrow = self.require(TokenType::EqualsChevronRight)?;
-      (signature, arrow)
+      (params, arrow)
     };
 
     if arrow.preceded_by_line_terminator {
@@ -618,15 +611,15 @@ impl<'a> Parser<'a> {
         &mut Asi::can(),
       )?,
     };
-    Ok(Node::new(
-      signature.loc + body.loc,
-      Syntax::ArrowFunctionExpr {
-        parenthesised: false,
+    Ok(Node::new(body.loc, Syntax::ArrowFunctionExpr {
+      parenthesised: false,
+      function: Node::new(body.loc, Syntax::Function {
         async_: is_async,
-        signature,
+        generator: false,
+        parameters,
         body,
-      },
-    ))
+      }),
+    }))
   }
 
   pub fn parse_expr_arrow_function_or_grouping(
@@ -691,7 +684,7 @@ impl<'a> Parser<'a> {
       }
       _ => None,
     };
-    let signature = self.parse_signature_function(ctx)?;
+    let parameters = self.parse_function_parameters(ctx)?;
     let fn_body_ctx = ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
@@ -699,11 +692,13 @@ impl<'a> Parser<'a> {
     let body = self.parse_stmt_block(fn_body_ctx)?;
     Ok(Node::new(start + body.loc, Syntax::FunctionExpr {
       parenthesised: false,
-      async_: is_async,
-      generator,
       name,
-      signature,
-      body,
+      function: Node::new(start + body.loc, Syntax::Function {
+        async_: is_async,
+        generator,
+        parameters,
+        body,
+      }),
     }))
   }
 

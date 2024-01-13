@@ -7,7 +7,7 @@ use crate::token::TokenType;
 
 impl<'a> Parser<'a> {
   // `scope` should be a newly created closure scope for this function.
-  pub fn parse_signature_function(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
+  pub fn parse_function_parameters(&mut self, ctx: ParseCtx) -> SyntaxResult<Vec<Node>> {
     let start_pos = self.checkpoint();
 
     let mut parameters = Vec::new();
@@ -36,9 +36,6 @@ impl<'a> Parser<'a> {
       };
     }
 
-    Ok(Node::new(
-      self.since_checkpoint(start_pos),
-      Syntax::FunctionSignature { parameters },
-    ))
+    Ok(parameters)
   }
 }
