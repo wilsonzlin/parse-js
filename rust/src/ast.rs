@@ -352,7 +352,9 @@ pub enum Syntax {
     // List of ObjectMember nodes.
     members: Vec<Node>,
   },
-  LiteralRegexExpr {},
+  LiteralRegexExpr {
+    value: String, // Including delimiter slashes and any flags.
+  },
   LiteralStringExpr {
     value: String,
   },

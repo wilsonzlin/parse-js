@@ -890,7 +890,9 @@ impl<'a> Parser<'a> {
             value: normalise_literal_number(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::MalformedLiteralNumber, None))?,
           }),
-          TokenType::LiteralRegex => Node::new(t.loc, Syntax::LiteralRegexExpr {}),
+          TokenType::LiteralRegex => Node::new(t.loc, Syntax::LiteralRegexExpr {
+            value: self.string(t.loc),
+          }),
           TokenType::LiteralString => Node::new(t.loc, Syntax::LiteralStringExpr {
             value: normalise_literal_string(self.str(t.loc))
               .ok_or_else(|| t.loc.error(SyntaxErrorType::InvalidCharacterEscape, None))?,

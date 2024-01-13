@@ -339,7 +339,7 @@ pub trait Visitor {
           self.visit(member);
         }
       }
-      Syntax::LiteralRegexExpr {} => {}
+      Syntax::LiteralRegexExpr { .. } => {}
       Syntax::LiteralStringExpr { .. } => {}
       Syntax::LiteralTemplateExpr { parts } => {
         for part in parts {
@@ -800,7 +800,7 @@ pub trait VisitorMut {
           self.visit(member);
         }
       }
-      Syntax::LiteralRegexExpr {} => {}
+      Syntax::LiteralRegexExpr { .. } => {}
       Syntax::LiteralStringExpr { .. } => {}
       Syntax::LiteralTemplateExpr { parts } => {
         for part in parts {
