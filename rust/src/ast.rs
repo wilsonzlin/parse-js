@@ -109,14 +109,6 @@ pub enum ClassOrObjectMemberValue {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-pub struct ClassMember {
-  pub key: ClassOrObjectMemberKey,
-  pub static_: bool,
-  pub value: ClassOrObjectMemberValue,
-}
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum ObjectMemberType {
   Valued {
     key: ClassOrObjectMemberKey,
@@ -229,9 +221,9 @@ pub enum Syntax {
       serde(skip_serializing_if = "core::ops::Not::not")
     )]
     export_default: bool,
-    name: Option<Node>, // Name can only be omitted in a default export, although a default export class can still have a name.
+    name: Option<Node>, // Always ClassOrFunctionName. Name can only be omitted in a default export, although a default export class can still have a name.
     extends: Option<Expression>,
-    members: Vec<ClassMember>,
+    members: Vec<Node>, // Always ClassMember.
   },
   FunctionDecl {
     #[cfg_attr(feature = "serialize", serde(default))]
@@ -248,7 +240,7 @@ pub enum Syntax {
     export_default: bool,
     generator: bool,
     is_async: bool,
-    name: Option<Node>, // Name can only be omitted in a default export, although a default export function can still have a name.
+    name: Option<Node>, // Always ClassOrFunctionName. Name can only be omitted in a default export, although a default export function can still have a name.
     signature: Node,
     body: Statement,
   },
@@ -291,7 +283,7 @@ pub enum Syntax {
     parenthesised: bool,
     name: Option<Node>,
     extends: Option<Expression>,
-    members: Vec<ClassMember>,
+    members: Vec<Node>, // Always ClassMember.
   },
   ConditionalExpr {
     parenthesised: bool,
@@ -492,6 +484,11 @@ pub enum Syntax {
   CatchBlock {
     parameter: Option<Pattern>,
     body: Statement,
+  },
+  ClassMember {
+    key: ClassOrObjectMemberKey,
+    static_: bool,
+    value: ClassOrObjectMemberValue,
   },
   // This is a node instead of an enum so that we can replace it when minifying e.g. expanding shorthand to `key: value`.
   ObjectMember {

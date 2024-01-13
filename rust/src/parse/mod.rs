@@ -1,6 +1,4 @@
 use self::pattern::ParsePatternRules;
-use crate::ast::Node;
-use crate::ast::Syntax;
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::error::SyntaxResult;

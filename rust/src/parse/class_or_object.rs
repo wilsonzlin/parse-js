@@ -3,16 +3,17 @@ use super::pattern::is_valid_pattern_identifier;
 use super::pattern::ParsePatternRules;
 use super::ParseCtx;
 use super::Parser;
-use crate::ast::ClassMember;
 use crate::ast::ClassOrObjectMemberKey;
 use crate::ast::ClassOrObjectMemberValue;
+use crate::ast::Node;
+use crate::ast::Syntax;
 use crate::error::SyntaxResult;
 use crate::lex::KEYWORDS_MAPPING;
 use crate::loc::Loc;
 use crate::token::TokenType;
 
 pub struct ParseClassBodyResult {
-  pub members: Vec<ClassMember>,
+  pub members: Vec<Node>, // Always ClassMember.
   pub end: Loc,
 }
 
@@ -20,6 +21,7 @@ pub struct ParseClassOrObjectMemberResult {
   pub key: ClassOrObjectMemberKey,
   pub key_loc: Loc,
   pub value: ClassOrObjectMemberValue,
+  pub value_loc: Loc,
 }
 
 impl<'a> Parser<'a> {
@@ -28,19 +30,27 @@ impl<'a> Parser<'a> {
     let mut members = Vec::new();
     while self.peek()?.typ != TokenType::BraceClose {
       // `static` must always come first if present.
-      let static_ = self.consume_if(TokenType::KeywordStatic)?.is_match();
-      let ParseClassOrObjectMemberResult { key, value, .. } = self.parse_class_or_object_member(
+      let static_ = self.consume_if(TokenType::KeywordStatic)?.match_loc();
+      let ParseClassOrObjectMemberResult {
+        key,
+        key_loc,
+        value,
+        value_loc,
+      } = self.parse_class_or_object_member(
         ctx,
         TokenType::Equals,
         TokenType::Semicolon,
         &mut Asi::can(),
       )?;
       self.consume_if(TokenType::Semicolon)?;
-      members.push(ClassMember {
-        key,
-        static_,
-        value,
-      });
+      members.push(Node::new(
+        key_loc.add_option(static_) + value_loc,
+        Syntax::ClassMember {
+          key,
+          static_: static_.is_some(),
+          value,
+        },
+      ));
     }
     let end = self.require(TokenType::BraceClose)?.loc;
     Ok(ParseClassBodyResult { members, end })
@@ -109,60 +119,67 @@ impl<'a> Parser<'a> {
       (loc, ClassOrObjectMemberKey::Direct(self.string(loc)))
     };
     // Check is_generator/is_async first so that we don't have to check that they're false in every other branch.
-    let value = if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
-      let signature = self.parse_signature_function(ctx)?;
-      ClassOrObjectMemberValue::Method {
-        is_async,
-        generator: is_generator,
-        signature,
-        body: self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
+    let (value_loc, value) =
+      if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
+        let signature = self.parse_signature_function(ctx)?;
+        let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
-        }))?,
-      }
-    } else if is_getter {
-      self.require(TokenType::ParenthesisOpen)?;
-      self.require(TokenType::ParenthesisClose)?;
-      ClassOrObjectMemberValue::Getter {
-        body: self.parse_stmt_block(ctx)?,
-      }
-    } else if is_setter {
-      self.require(TokenType::ParenthesisOpen)?;
-      let parameter = self.parse_pattern(ctx)?;
-      self.require(TokenType::ParenthesisClose)?;
-      ClassOrObjectMemberValue::Setter {
-        parameter,
-        body: self.parse_stmt_block(ctx)?,
-      }
-    } else if match key {
-      ClassOrObjectMemberKey::Direct(_) => match self.peek()? {
-        // Given `class A {1}`, `"1" in new A`.
-        t if t.typ == TokenType::BraceClose => true,
-        // Given `class A {1;}`, `"1" in new A`.
-        t if t.typ == statement_delimiter => true,
-        // Given `class A {1\n2}`, `"2" in new A`.
-        t if property_initialiser_asi.can_end_with_asi && t.preceded_by_line_terminator => true,
+        }))?;
+        (signature.loc + body.loc, ClassOrObjectMemberValue::Method {
+          is_async,
+          generator: is_generator,
+          signature,
+          body,
+        })
+      } else if is_getter {
+        let loc_start = self.require(TokenType::ParenthesisOpen)?.loc;
+        self.require(TokenType::ParenthesisClose)?;
+        let body = self.parse_stmt_block(ctx)?;
+        (loc_start + body.loc, ClassOrObjectMemberValue::Getter {
+          body,
+        })
+      } else if is_setter {
+        let loc_start = self.require(TokenType::ParenthesisOpen)?.loc;
+        let parameter = self.parse_pattern(ctx)?;
+        self.require(TokenType::ParenthesisClose)?;
+        let body = self.parse_stmt_block(ctx)?;
+        (loc_start + body.loc, ClassOrObjectMemberValue::Setter {
+          parameter,
+          body,
+        })
+      } else if match key {
+        ClassOrObjectMemberKey::Direct(_) => match self.peek()? {
+          // Given `class A {1}`, `"1" in new A`.
+          t if t.typ == TokenType::BraceClose => true,
+          // Given `class A {1;}`, `"1" in new A`.
+          t if t.typ == statement_delimiter => true,
+          // Given `class A {1\n2}`, `"2" in new A`.
+          t if property_initialiser_asi.can_end_with_asi && t.preceded_by_line_terminator => true,
+          _ => false,
+        },
         _ => false,
-      },
-      _ => false,
-    } {
-      ClassOrObjectMemberValue::Property { initializer: None }
-    } else {
-      self.require(value_delimiter)?;
-      let value = self.parse_expr_until_either_with_asi(
-        ctx,
-        statement_delimiter,
-        TokenType::BraceClose,
-        property_initialiser_asi,
-      )?;
-      ClassOrObjectMemberValue::Property {
-        initializer: Some(value),
-      }
-    };
+      } {
+        (key_loc, ClassOrObjectMemberValue::Property {
+          initializer: None,
+        })
+      } else {
+        let loc_start = self.require(value_delimiter)?.loc;
+        let value = self.parse_expr_until_either_with_asi(
+          ctx,
+          statement_delimiter,
+          TokenType::BraceClose,
+          property_initialiser_asi,
+        )?;
+        (loc_start + value.loc, ClassOrObjectMemberValue::Property {
+          initializer: Some(value),
+        })
+      };
     Ok(ParseClassOrObjectMemberResult {
       key,
       key_loc,
       value,
+      value_loc,
     })
   }
 }

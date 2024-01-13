@@ -159,8 +159,7 @@ pub trait Visitor {
           self.visit(extends);
         };
         for member in members {
-          self.visit_class_or_object_key(&mut member.key);
-          self.visit_class_or_object_value(&mut member.value);
+          self.visit(member);
         }
       }
       Syntax::ClassExpr {
@@ -176,9 +175,12 @@ pub trait Visitor {
           self.visit(extends);
         };
         for member in members {
-          self.visit_class_or_object_key(&mut member.key);
-          self.visit_class_or_object_value(&mut member.value);
+          self.visit(member);
         }
+      }
+      Syntax::ClassMember { key, value, .. } => {
+        self.visit_class_or_object_key(key);
+        self.visit_class_or_object_value(value);
       }
       Syntax::ComputedMemberExpr { object, member, .. } => {
         self.visit(object);

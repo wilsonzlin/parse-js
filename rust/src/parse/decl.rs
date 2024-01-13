@@ -93,19 +93,14 @@ impl<'a> Parser<'a> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
     let start = self.require(TokenType::KeywordFunction)?.loc;
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
-    // WARNING: The name belongs in the containing scope, not the function's scope.
-    // For example, `function a() { let a = 1; }` is legal.
     // The name can only be omitted in default exports.
     let name = match self
       .consume_if_pred(|t| is_valid_pattern_identifier(t.typ, ctx.rules))?
       .match_loc()
     {
-      Some(name) => {
-        let name_node = Node::new(name, Syntax::ClassOrFunctionName {
-          name: self.string(name),
-        });
-        Some(name_node)
-      }
+      Some(name) => Some(Node::new(name, Syntax::ClassOrFunctionName {
+        name: self.string(name),
+      })),
       _ => {
         if !export_default {
           return Err(start.error(SyntaxErrorType::ExpectedSyntax("function name"), None));

@@ -525,6 +525,7 @@ impl<'a> Parser<'a> {
           key,
           key_loc,
           value,
+          ..
         } = self.parse_class_or_object_member(
           ctx,
           TokenType::Colon,
@@ -681,14 +682,12 @@ impl<'a> Parser<'a> {
     let is_async = self.consume_if(TokenType::KeywordAsync)?.is_match();
     let start = self.require(TokenType::KeywordFunction)?.loc;
     let generator = self.consume_if(TokenType::Asterisk)?.is_match();
-    // WARNING: Unlike function declarations, function expressions are not declared within their current closure or block. However, their names cannot be assigned to within the function (it has no effect) and they can be "redeclared" e.g. `(function a() { let a = 1; })()`.
     let name = match self.peek()? {
       t if is_valid_pattern_identifier(t.typ, ctx.rules) => {
         self.consume_peeked();
-        let name_node = Node::new(t.loc, Syntax::ClassOrFunctionName {
+        Some(Node::new(t.loc, Syntax::ClassOrFunctionName {
           name: self.string(t.loc),
-        });
-        Some(name_node)
+        }))
       }
       _ => None,
     };
