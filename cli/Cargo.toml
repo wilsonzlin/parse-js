@@ -5,6 +5,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.1", features = ["derive"] }
-parse-js = { path = "../rust", features = ["serialize"] }
+parse-js = { path = "../rust" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }

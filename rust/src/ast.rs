@@ -3,20 +3,51 @@ use crate::error::SyntaxErrorType;
 use crate::loc::Loc;
 use crate::num::JsNumber;
 use crate::operator::OperatorName;
+use ahash::AHashMap;
 use core::fmt::Debug;
+use serde::Serialize;
+use serde::Serializer;
+use std::any::Any;
+use std::any::TypeId;
 use std::fmt;
 use std::fmt::Formatter;
 
-// To prevent ambiguity and confusion, don't derive Eq, as there are multiple meanings of "equality" for nodes:
-// - Exact identical instances, so two different nodes with the same syntax, location, and scope would still be different.
-// - Same syntax, location, and scope.
-// - Same syntax and location, but scope can be different.
-// - Same syntax, but location and scope can be different.
-#[derive(Clone)]
+#[derive(Default)]
+pub struct NodeAssocData {
+  map: AHashMap<TypeId, Box<dyn Any>>,
+}
+
+impl NodeAssocData {
+  pub fn get<T: Any>(&self) -> Option<&T> {
+    let t = TypeId::of::<T>();
+    self.map.get(&t).map(|v| v.downcast_ref().unwrap())
+  }
+
+  pub fn set<T: Any>(&mut self, v: T) {
+    let t = TypeId::of::<T>();
+    self.map.insert(t, Box::from(v));
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::ast::NodeAssocData;
+
+  #[test]
+  fn test_node_assoc_data() {
+    struct MyType(u32);
+    let mut assoc = NodeAssocData::default();
+    assoc.set(MyType(32));
+    let v = assoc.get::<MyType>().unwrap();
+    assert_eq!(v.0, 32);
+  }
+}
+
 pub struct Node {
   // A location is not a SourceRange; consider that after some transformations, it's possible to create entirely new nodes that don't exist at all in the source code. Also, sometimes we cannot be bothered to set a location, or can only provide an approximate/best-effort location.
   pub loc: Loc,
   pub stx: Box<Syntax>,
+  pub assoc: NodeAssocData,
 }
 
 impl Node {
@@ -24,6 +55,7 @@ impl Node {
     Node {
       loc,
       stx: Box::new(stx),
+      assoc: NodeAssocData::default(),
     }
   }
 
@@ -46,9 +78,8 @@ impl Debug for Node {
   }
 }
 
-#[cfg(feature = "serialize")]
-impl serde::Serialize for Node {
-  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl Serialize for Node {
+  fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
     self.stx.serialize(serializer)
   }
 }
@@ -59,16 +90,14 @@ type Expression = Node;
 type Pattern = Node;
 type Statement = Node;
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize)]
 pub enum VarDeclMode {
   Const,
   Let,
   Var,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ArrayElement {
   Single(Expression),
   Rest(Expression),
@@ -76,8 +105,7 @@ pub enum ArrayElement {
 }
 
 // WARNING: This enum must exist, and the two variants cannot be merged by representing Direct with an IdentifierExpr, as it's not a usage of a variable!
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ClassOrObjectMemberKey {
   // Identifier, keyword, string, or number.
   // NOTE: This isn't used by ObjectMemberType::Shorthand.
@@ -85,8 +113,7 @@ pub enum ClassOrObjectMemberKey {
   Computed(Expression),
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ClassOrObjectMemberValue {
   Getter {
     body: Statement,
@@ -107,8 +134,7 @@ pub enum ClassOrObjectMemberValue {
   },
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ObjectMemberType {
   Valued {
     key: ClassOrObjectMemberKey,
@@ -122,15 +148,13 @@ pub enum ObjectMemberType {
   },
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub struct ArrayPatternElement {
   pub target: Pattern,
   pub default_value: Option<Expression>,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub struct ExportName {
   // For simplicity, we always set both fields; for shorthands, both nodes are identical.
   pub target: String,
@@ -138,8 +162,7 @@ pub struct ExportName {
   pub alias: Pattern,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ExportNames {
   // `import * as name`
   // `export * from "module"`
@@ -153,31 +176,27 @@ pub enum ExportNames {
   Specific(Vec<ExportName>),
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub struct VariableDeclarator {
   pub pattern: Pattern,
   pub initializer: Option<Expression>,
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum ForInit {
   None,
   Expression(Expression),
   Declaration(Declaration),
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Serialize)]
 pub enum LiteralTemplatePart {
   Substitution(Expression),
   String(String),
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, strum_macros::Display))]
-#[cfg_attr(feature = "serialize", serde(tag = "$t"))]
+#[derive(Debug, Serialize)]
+#[serde(tag = "$t")]
 pub enum Syntax {
   // Patterns.
   IdentifierPattern {
@@ -209,34 +228,14 @@ pub enum Syntax {
 
   // Declarations.
   ClassDecl {
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     export: bool,
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     export_default: bool,
     name: Option<Node>, // Always ClassOrFunctionName. Name can only be omitted in a default export, although a default export class can still have a name.
     extends: Option<Expression>,
     members: Vec<Node>, // Always ClassMember.
   },
   FunctionDecl {
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     export: bool,
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     export_default: bool,
     generator: bool,
     is_async: bool,
@@ -250,11 +249,6 @@ pub enum Syntax {
     default_value: Option<Expression>,
   },
   VarDecl {
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     export: bool,
     mode: VarDeclMode,
     declarators: Vec<VariableDeclarator>,
@@ -440,7 +434,6 @@ pub enum Syntax {
     body: Statement,
   },
   ForOfStmt {
-    #[cfg_attr(feature = "serialize", serde(default))]
     await_: bool,
     // See comment in ForInStmt.
     decl_mode: Option<VarDeclMode>,
@@ -498,11 +491,6 @@ pub enum Syntax {
     key: ClassOrObjectMemberKey,
     // If `shorthand`, `key` is Direct and `target` is IdentifierPattern of same name. This way, there is always an IdentifierPattern that exists and can be visited, instead of also having to consider ClassOrObjectMemberKey::Direct as identifier if shorthand.
     target: Pattern,
-    #[cfg_attr(feature = "serialize", serde(default))]
-    #[cfg_attr(
-      feature = "serialize",
-      serde(skip_serializing_if = "core::ops::Not::not")
-    )]
     shorthand: bool,
     default_value: Option<Expression>,
   },

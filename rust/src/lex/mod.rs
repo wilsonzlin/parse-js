@@ -24,7 +24,6 @@ use memchr::memchr2;
 use memchr::memchr3;
 use once_cell::sync::Lazy;
 
-#[cfg(feature = "serialize")]
 mod tests;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
