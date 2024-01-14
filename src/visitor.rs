@@ -1,6 +1,5 @@
 use crate::symbol::Scope;
 use crate::symbol::ScopeType;
-use parse_js::ast::ClassOrObjectMemberValue;
 use parse_js::ast::Node;
 use parse_js::ast::Syntax;
 use parse_js::ast::VarDeclMode;
@@ -69,11 +68,7 @@ impl DeclVisitor {
 impl VisitorMut for DeclVisitor {
   fn on_syntax_down(&mut self, node: &mut Node, _ctl: &mut JourneyControls) {
     match node.stx.as_ref() {
-      Syntax::ArrowFunctionExpr { .. } => {
-        self.new_scope(ScopeType::ArrowFunction);
-      }
       Syntax::BlockStmt { .. } => {
-        // TODO Is creating a new block safe if the block is for a function body? A `let` at a function's top level should not go to a Block, but to a closure. Also, this creates an incorrect additional scope for ForStmt, CatchBlock, etc.
         self.new_scope(ScopeType::Block);
       }
       Syntax::CatchBlock { .. } => {
@@ -100,41 +95,39 @@ impl VisitorMut for DeclVisitor {
           self.add_to_scope(name.clone(), AddToScope::IfNotGlobal);
         };
       }
-      Syntax::ClassMember { value, .. } => match value {
-        ClassOrObjectMemberValue::Getter { .. }
-        | ClassOrObjectMemberValue::Method { .. }
-        | ClassOrObjectMemberValue::Setter { .. } => {
-          self.new_scope(ScopeType::NonArrowFunction);
-        }
-        ClassOrObjectMemberValue::Property { .. } => {}
-      },
       Syntax::ForInStmt { .. } | Syntax::ForOfStmt { .. } | Syntax::ForStmt { .. } => {
         // For any declarators in the initialiser.
         self.new_scope(ScopeType::Block);
       }
+      Syntax::Function { arrow, .. } => {
+        if *arrow {
+          self.new_scope(ScopeType::ArrowFunction);
+        } else {
+          self.new_scope(ScopeType::NonArrowFunction);
+        }
+        // For the parameters.
+        self.new_pattern_action(AddToScope::NearestClosure);
+      }
       Syntax::FunctionDecl { name, .. } => {
         // WARNING: The name belongs in the containing scope, not the function's scope.
-        // For example, `function a() { let a = 1; }` is legal.
+        // See examples/function.js.
         if let Some(name) = name {
           let Syntax::ClassOrFunctionName { name } = name.stx.as_ref() else {
             unreachable!();
           };
           self.add_to_scope(name.clone(), AddToScope::NearestClosure);
         };
-        self.new_scope(ScopeType::NonArrowFunction);
       }
       Syntax::FunctionExpr { name, .. } => {
+        // We need to create a new scope just for the name itself. Unlike function declarations, function expressions are not declared within their current closure or block. However, their names cannot be assigned to within the function (it has no effect in non-strict mode) and they can be "redeclared" e.g. `(function a() { let a = 1; })()`. See examples/function.js.
+        // TODO Is NonArrowFunction the best choice?
         self.new_scope(ScopeType::NonArrowFunction);
-        // WARNING: Unlike function declarations, function expressions are not declared within their current closure or block. However, their names cannot be assigned to within the function (it has no effect) and they can be "redeclared" e.g. `(function a() { let a = 1; })()`.
         if let Some(name) = name {
           let Syntax::ClassOrFunctionName { name } = name.stx.as_ref() else {
             unreachable!();
           };
           self.add_to_scope(name.clone(), AddToScope::IfNotGlobal);
         };
-      }
-      Syntax::FunctionSignature { .. } => {
-        self.new_pattern_action(AddToScope::NearestClosure);
       }
       Syntax::IdentifierPattern { name } => {
         self.add_to_scope(name.clone(), self.pattern_action.unwrap());
@@ -156,22 +149,14 @@ impl VisitorMut for DeclVisitor {
 
   fn on_syntax_up(&mut self, node: &mut Node) {
     match node.stx.as_ref() {
-      Syntax::ArrowFunctionExpr { .. }
-      | Syntax::BlockStmt { .. }
+      Syntax::BlockStmt { .. }
       | Syntax::CatchBlock { .. }
       | Syntax::ClassDecl { .. }
       | Syntax::ClassExpr { .. }
-      | Syntax::ClassMember {
-        value:
-          ClassOrObjectMemberValue::Getter { .. }
-          | ClassOrObjectMemberValue::Method { .. }
-          | ClassOrObjectMemberValue::Setter { .. },
-        ..
-      }
       | Syntax::ForStmt { .. }
       | Syntax::ForInStmt { .. }
       | Syntax::ForOfStmt { .. }
-      | Syntax::FunctionDecl { .. }
+      | Syntax::Function { .. }
       | Syntax::FunctionExpr { .. } => {
         self.restore_scope();
       }
@@ -179,7 +164,7 @@ impl VisitorMut for DeclVisitor {
     };
     match node.stx.as_ref() {
       Syntax::CatchBlock { .. }
-      | Syntax::FunctionSignature { .. }
+      | Syntax::Function { .. }
       | Syntax::ImportStmt { .. }
       | Syntax::VarDecl { .. } => {
         self.restore_pattern_action();
