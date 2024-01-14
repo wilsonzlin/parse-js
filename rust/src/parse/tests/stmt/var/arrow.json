@@ -6,6 +6,7 @@
         "$t": "ArrowFunctionExpr",
         "function": {
           "$t": "Function",
+          "arrow": true,
           "async_": false,
           "body": {
             "$t": "FunctionBody",

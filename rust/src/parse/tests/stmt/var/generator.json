@@ -4,6 +4,7 @@
   "export_default": false,
   "function": {
     "$t": "Function",
+    "arrow": false,
     "async_": false,
     "body": {
       "$t": "FunctionBody",

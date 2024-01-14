@@ -614,6 +614,7 @@ impl<'a> Parser<'a> {
     Ok(Node::new(body.loc, Syntax::ArrowFunctionExpr {
       parenthesised: false,
       function: Node::new(body.loc, Syntax::Function {
+        arrow: true,
         async_: is_async,
         generator: false,
         parameters,
@@ -694,6 +695,7 @@ impl<'a> Parser<'a> {
       parenthesised: false,
       name,
       function: Node::new(start + body.loc, Syntax::Function {
+        arrow: false,
         async_: is_async,
         generator,
         parameters,

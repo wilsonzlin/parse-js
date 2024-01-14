@@ -2,11 +2,13 @@
   "$t": "ArrowFunctionExpr",
   "function": {
     "$t": "Function",
+    "arrow": true,
     "async_": false,
     "body": {
       "$t": "ArrowFunctionExpr",
       "function": {
         "$t": "Function",
+        "arrow": true,
         "async_": false,
         "body": {
           "$t": "ConditionalExpr",
@@ -32,6 +34,7 @@
                 "$t": "ArrowFunctionExpr",
                 "function": {
                   "$t": "Function",
+                  "arrow": true,
                   "async_": false,
                   "body": {
                     "$t": "LiteralNumberExpr",

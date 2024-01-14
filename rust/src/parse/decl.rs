@@ -118,6 +118,7 @@ impl<'a> Parser<'a> {
       export_default,
       name,
       function: Node::new(start + body.loc, Syntax::Function {
+        arrow: false,
         async_: is_async,
         generator,
         parameters,

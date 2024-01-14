@@ -9,6 +9,7 @@
         "$t": "FunctionExpr",
         "function": {
           "$t": "Function",
+          "arrow": false,
           "async_": false,
           "body": {
             "$t": "FunctionBody",
@@ -32,6 +33,7 @@
         "$t": "ArrowFunctionExpr",
         "function": {
           "$t": "Function",
+          "arrow": true,
           "async_": false,
           "body": {
             "$t": "FunctionBody",
@@ -55,6 +57,7 @@
       "$t": "ArrowFunctionExpr",
       "function": {
         "$t": "Function",
+        "arrow": true,
         "async_": true,
         "body": {
           "$t": "FunctionBody",

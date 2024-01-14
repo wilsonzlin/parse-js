@@ -220,6 +220,7 @@ pub enum Syntax {
   // Functions.
   // This common type exists for better downstream usage, as one type is easier to match on and wrangle than many different types (ArrowFunctionExpr, ClassMember::Method, FunctionDecl, etc.).
   Function {
+    arrow: bool,
     async_: bool,
     generator: bool,
     parameters: Vec<Declaration>, // Always ParamDecl.

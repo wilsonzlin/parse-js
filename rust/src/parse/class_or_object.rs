@@ -128,6 +128,7 @@ impl<'a> Parser<'a> {
         }))?;
         (body.loc, ClassOrObjectMemberValue::Method {
           function: Node::new(body.loc, Syntax::Function {
+            arrow: false,
             async_: is_async,
             generator: is_generator,
             parameters,
@@ -141,6 +142,7 @@ impl<'a> Parser<'a> {
         loc += body.loc;
         (loc, ClassOrObjectMemberValue::Getter {
           function: Node::new(loc, Syntax::Function {
+            arrow: false,
             async_: false,
             body,
             generator: false,
@@ -155,6 +157,7 @@ impl<'a> Parser<'a> {
         loc += body.loc;
         (loc, ClassOrObjectMemberValue::Setter {
           function: Node::new(loc, Syntax::Function {
+            arrow: false,
             async_: false,
             generator: false,
             body,
