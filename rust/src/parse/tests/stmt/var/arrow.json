@@ -8,7 +8,7 @@
           "$t": "Function",
           "async_": false,
           "body": {
-            "$t": "BlockStmt",
+            "$t": "FunctionBody",
             "body": []
           },
           "generator": false,

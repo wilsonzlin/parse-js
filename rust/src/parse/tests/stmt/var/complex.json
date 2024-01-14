@@ -38,7 +38,7 @@
           "$t": "Function",
           "async_": false,
           "body": {
-            "$t": "BlockStmt",
+            "$t": "FunctionBody",
             "body": [
               {
                 "$t": "VarDecl",
@@ -116,7 +116,7 @@
                             "$t": "Function",
                             "async_": false,
                             "body": {
-                              "$t": "BlockStmt",
+                              "$t": "FunctionBody",
                               "body": [
                                 {
                                   "$t": "VarDecl",

@@ -603,7 +603,7 @@ impl<'a> Parser<'a> {
       ..ctx.rules
     });
     let body = match self.peek()?.typ {
-      TokenType::BraceOpen => self.parse_stmt_block(fn_body_ctx)?,
+      TokenType::BraceOpen => self.parse_function_body(fn_body_ctx)?,
       _ => self.parse_expr_until_either_with_asi(
         fn_body_ctx,
         terminator_a,
@@ -689,7 +689,7 @@ impl<'a> Parser<'a> {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     });
-    let body = self.parse_stmt_block(fn_body_ctx)?;
+    let body = self.parse_function_body(fn_body_ctx)?;
     Ok(Node::new(start + body.loc, Syntax::FunctionExpr {
       parenthesised: false,
       name,

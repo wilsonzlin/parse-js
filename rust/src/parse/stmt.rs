@@ -46,6 +46,14 @@ impl<'a> Parser<'a> {
     })
   }
 
+  pub fn parse_stmts(&mut self, ctx: ParseCtx, end: TokenType) -> SyntaxResult<Vec<Node>> {
+    let mut body = Vec::new();
+    while self.peek()?.typ != end {
+      body.push(self.parse_stmt(ctx)?);
+    }
+    Ok(body)
+  }
+
   pub fn parse_stmt(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     match self.peek()?.typ {
       TokenType::BraceOpen => self.parse_stmt_block(ctx),
@@ -98,13 +106,9 @@ impl<'a> Parser<'a> {
 
   pub fn parse_stmt_block(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::BraceOpen)?;
-    let mut body = Vec::new();
-    loop {
-      if let Some(end_loc) = self.consume_if(TokenType::BraceClose)?.match_loc() {
-        return Ok(Node::new(start.loc + end_loc, Syntax::BlockStmt { body }));
-      };
-      body.push(self.parse_stmt(ctx)?);
-    }
+    let body = self.parse_stmts(ctx, TokenType::BraceClose)?;
+    let end = self.require(TokenType::BraceClose)?;
+    Ok(Node::new(start.loc + end.loc, Syntax::BlockStmt { body }))
   }
 
   fn parse_stmt_break_or_continue(
@@ -243,6 +247,17 @@ impl<'a> Parser<'a> {
     }))
   }
 
+  fn parse_stmt_for_body(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
+    if self.peek()?.typ == TokenType::BraceOpen {
+      let start = self.require(TokenType::BraceOpen)?;
+      let body = self.parse_stmts(ctx, TokenType::BraceClose)?;
+      let end = self.require(TokenType::BraceClose)?;
+      Ok(Node::new(start.loc + end.loc, Syntax::ForBody { body }))
+    } else {
+      self.parse_stmt(ctx)
+    }
+  }
+
   pub fn parse_stmt_for(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
     let start = self.require(TokenType::KeywordFor)?;
     let await_ = self.consume_if(TokenType::KeywordAwait)?;
@@ -323,7 +338,7 @@ impl<'a> Parser<'a> {
         };
         let rhs = self.parse_expr(ctx, TokenType::ParenthesisClose)?;
         self.require(TokenType::ParenthesisClose)?;
-        let body = self.parse_stmt(ctx)?;
+        let body = self.parse_stmt_for_body(ctx)?;
         if of {
           Node::new(start.loc + body.loc, Syntax::ForOfStmt {
             await_: await_.is_match(),
@@ -381,7 +396,7 @@ impl<'a> Parser<'a> {
           self.require(TokenType::ParenthesisClose)?;
           Some(expr)
         };
-        let body = self.parse_stmt(ctx)?;
+        let body = self.parse_stmt_for_body(ctx)?;
         Node::new(start.loc + body.loc, Syntax::ForStmt {
           init,
           condition,
@@ -517,9 +532,14 @@ impl<'a> Parser<'a> {
       } else {
         None
       };
-      let body = self.parse_stmt_block(ctx)?;
-      loc.extend(body.loc);
-      Some(Node::new(body.loc, Syntax::CatchBlock { parameter, body }))
+      let start = self.require(TokenType::BraceOpen)?;
+      let body = self.parse_stmts(ctx, TokenType::BraceClose)?;
+      let end = self.require(TokenType::BraceClose)?;
+      loc += end.loc;
+      Some(Node::new(start.loc + end.loc, Syntax::CatchBlock {
+        parameter,
+        body,
+      }))
     } else {
       None
     };

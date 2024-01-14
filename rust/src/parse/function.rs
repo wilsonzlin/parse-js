@@ -8,8 +8,6 @@ use crate::token::TokenType;
 impl<'a> Parser<'a> {
   // `scope` should be a newly created closure scope for this function.
   pub fn parse_function_parameters(&mut self, ctx: ParseCtx) -> SyntaxResult<Vec<Node>> {
-    let start_pos = self.checkpoint();
-
     let mut parameters = Vec::new();
     self.require(TokenType::ParenthesisOpen)?;
     loop {
@@ -35,7 +33,15 @@ impl<'a> Parser<'a> {
         break;
       };
     }
-
     Ok(parameters)
+  }
+
+  pub fn parse_function_body(&mut self, ctx: ParseCtx) -> SyntaxResult<Node> {
+    let start = self.require(TokenType::BraceOpen)?;
+    let body = self.parse_stmts(ctx, TokenType::BraceClose)?;
+    let end = self.require(TokenType::BraceClose)?;
+    Ok(Node::new(start.loc + end.loc, Syntax::FunctionBody {
+      body,
+    }))
   }
 }

@@ -223,7 +223,11 @@ pub enum Syntax {
     async_: bool,
     generator: bool,
     parameters: Vec<Declaration>, // Always ParamDecl.
-    body: Node,                   // Could be Expression if arrow function.
+    body: Node, // Could be Expression if arrow function. Otherwise, it's FunctionBody.
+  },
+  // A function body is different from a block statement, as the scopes are different. This doesn't mean much at the parser level, but helps with downstream usages.
+  FunctionBody {
+    body: Vec<Statement>,
   },
 
   // Declarations.
@@ -418,14 +422,14 @@ pub enum Syntax {
     init: ForInit,
     condition: Option<Expression>,
     post: Option<Expression>,
-    body: Statement,
+    body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
   ForInStmt {
     // for-in and for-of statements can have `x`/`[x]`/`{x:a}`/etc. on the lhs or `var x`/`var [x]`/etc. on the lhs. But for the latter, while it's technically a Decl, it's always a VarDecl with exactly one declaration that has no initialiser. If you strip down VarDecl to this, it's basically just a VarDeclMode and a Pattern. Therefore, we can represent both a destructuring expr or a decl on the lhs with an Option<VarDeclMode> and a Pattern.
     decl_mode: Option<VarDeclMode>,
     pat: Pattern,
     rhs: Expression,
-    body: Statement,
+    body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
   ForOfStmt {
     await_: bool,
@@ -433,7 +437,7 @@ pub enum Syntax {
     decl_mode: Option<VarDeclMode>,
     pat: Pattern,
     rhs: Expression,
-    body: Statement,
+    body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
   LabelStmt {
     name: String,
@@ -470,12 +474,16 @@ pub enum Syntax {
   },
   CatchBlock {
     parameter: Option<Pattern>,
-    body: Statement,
+    body: Vec<Statement>, // We don't want to use BlockStmt as the new block scope starts with the parameter, not the braces. This differentiation ensures BlockStmt specifically means a new scope, helpful for downstream usages. See also: FunctionBody.
   },
   ClassMember {
     key: ClassOrObjectMemberKey,
     static_: bool,
     value: ClassOrObjectMemberValue,
+  },
+  // Similar purpose to CatchBlock and FunctionBody. (The scope for a `for` statement starts before the braces, so don't mix with BlockStmt.)
+  ForBody {
+    body: Vec<Statement>,
   },
   // This is a node instead of an enum so that we can replace it when minifying e.g. expanding shorthand to `key: value`.
   ObjectMember {

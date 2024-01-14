@@ -123,7 +123,9 @@ pub trait Visitor {
         if let Some(param) = parameter {
           self.visit(param);
         }
-        self.visit(body);
+        for stmt in body {
+          self.visit(stmt);
+        }
       }
       Syntax::ClassDecl {
         name,
@@ -198,6 +200,11 @@ pub trait Visitor {
       Syntax::ExpressionStmt { expression } => {
         self.visit(expression);
       }
+      Syntax::ForBody { body } => {
+        for stmt in body {
+          self.visit(stmt);
+        }
+      }
       Syntax::ForStmt {
         body,
         condition,
@@ -234,6 +241,11 @@ pub trait Visitor {
           self.visit(param);
         }
         self.visit(body);
+      }
+      Syntax::FunctionBody { body } => {
+        for stmt in body {
+          self.visit(stmt);
+        }
       }
       Syntax::FunctionDecl { name, function, .. } => {
         if let Some(name) = name {
@@ -568,7 +580,9 @@ pub trait VisitorMut {
         if let Some(param) = parameter {
           self.visit(param);
         }
-        self.visit(body);
+        for stmt in body {
+          self.visit(stmt);
+        }
       }
       Syntax::ClassDecl {
         name,
@@ -643,6 +657,11 @@ pub trait VisitorMut {
       Syntax::ExpressionStmt { expression } => {
         self.visit(expression);
       }
+      Syntax::ForBody { body } => {
+        for stmt in body {
+          self.visit(stmt);
+        }
+      }
       Syntax::ForStmt {
         body,
         condition,
@@ -679,6 +698,11 @@ pub trait VisitorMut {
           self.visit(param);
         }
         self.visit(body);
+      }
+      Syntax::FunctionBody { body } => {
+        for stmt in body {
+          self.visit(stmt);
+        }
       }
       Syntax::FunctionDecl { name, function, .. } => {
         if let Some(name) = name {

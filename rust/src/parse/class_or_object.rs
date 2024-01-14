@@ -122,7 +122,7 @@ impl<'a> Parser<'a> {
     let (value_loc, value) =
       if is_generator || is_async || self.peek()?.typ == TokenType::ParenthesisOpen {
         let parameters = self.parse_function_parameters(ctx)?;
-        let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
+        let body = self.parse_function_body(ctx.with_rules(ParsePatternRules {
           await_allowed: !is_async && ctx.rules.await_allowed,
           yield_allowed: !is_generator && ctx.rules.yield_allowed,
         }))?;
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
       } else if is_getter {
         let mut loc = self.require(TokenType::ParenthesisOpen)?.loc;
         self.require(TokenType::ParenthesisClose)?;
-        let body = self.parse_stmt_block(ctx)?;
+        let body = self.parse_function_body(ctx)?;
         loc += body.loc;
         (loc, ClassOrObjectMemberValue::Getter {
           function: Node::new(loc, Syntax::Function {
@@ -151,7 +151,7 @@ impl<'a> Parser<'a> {
         let mut loc = self.require(TokenType::ParenthesisOpen)?.loc;
         let param = self.parse_pattern(ctx)?;
         self.require(TokenType::ParenthesisClose)?;
-        let body = self.parse_stmt_block(ctx)?;
+        let body = self.parse_function_body(ctx)?;
         loc += body.loc;
         (loc, ClassOrObjectMemberValue::Setter {
           function: Node::new(loc, Syntax::Function {

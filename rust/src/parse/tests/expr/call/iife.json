@@ -11,7 +11,7 @@
           "$t": "Function",
           "async_": false,
           "body": {
-            "$t": "BlockStmt",
+            "$t": "FunctionBody",
             "body": []
           },
           "generator": false,
@@ -34,7 +34,7 @@
           "$t": "Function",
           "async_": false,
           "body": {
-            "$t": "BlockStmt",
+            "$t": "FunctionBody",
             "body": []
           },
           "generator": false,
@@ -57,7 +57,7 @@
         "$t": "Function",
         "async_": true,
         "body": {
-          "$t": "BlockStmt",
+          "$t": "FunctionBody",
           "body": []
         },
         "generator": false,

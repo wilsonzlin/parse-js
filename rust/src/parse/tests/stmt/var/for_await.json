@@ -2,7 +2,7 @@
   "$t": "ForOfStmt",
   "await_": true,
   "body": {
-    "$t": "BlockStmt",
+    "$t": "ForBody",
     "body": []
   },
   "decl_mode": "Const",

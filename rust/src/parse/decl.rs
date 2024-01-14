@@ -109,7 +109,7 @@ impl<'a> Parser<'a> {
       }
     };
     let parameters = self.parse_function_parameters(ctx)?;
-    let body = self.parse_stmt_block(ctx.with_rules(ParsePatternRules {
+    let body = self.parse_function_body(ctx.with_rules(ParsePatternRules {
       await_allowed: !is_async && ctx.rules.await_allowed,
       yield_allowed: !generator && ctx.rules.yield_allowed,
     }))?;

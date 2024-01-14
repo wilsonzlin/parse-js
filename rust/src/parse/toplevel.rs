@@ -14,10 +14,8 @@ impl<'a> Parser<'a> {
         yield_allowed: true,
       },
     };
-    let mut body = Vec::new();
-    while !self.consume_if(TokenType::EOF)?.is_match() {
-      body.push(self.parse_stmt(ctx)?);
-    }
+    let body = self.parse_stmts(ctx, TokenType::EOF)?;
+    self.require(TokenType::EOF)?;
     let top_level_node = Node::new(self.source_range(), Syntax::TopLevel { body });
     Ok(top_level_node)
   }
