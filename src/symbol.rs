@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 pub type Identifier = String;
 
-// We don't store the associated Scope anymore as we want to allow easy moving of symbols between scopes (the parser doesn't do this, but library consumers might), which allows for easy migration of usages without having to rename every one of them. Since we don't have anything else to store, we can't use a reference due to potential zero-sized allocation issues, so we just use a unique sequence number instead.
+// We don't store the associated Scope anymore as we want to allow easy moving of symbols between scopes (the parse-js parser doesn't do this, but library consumers might), which allows for easy migration of usages without having to rename every one of them. Since we don't have anything else to store, we can't use a reference due to potential zero-sized allocation issues, so we just use a unique sequence number instead.
 // To attach additional custom state to a Symbol, use a HashMap. We prefer this instead of adding an extra generic state field on Symbol, as that would require propagating the generic type everywhere.
 // Cloning means to cheaply clone the reference to this unique symbol, not create a duplicate symbol. This is useful for sharing a reference to a symbol, including uses in data structures like HashMap.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -36,12 +36,12 @@ impl SymbolGenerator {
 pub enum ScopeType {
   Global,
   Module,
-  // Closure with `this` (property initialisers have access to it) but not `arguments`.
+  // Closure with `this` (property initialisers have access to it) but not `arguments`. See examples/es6-class.md.
   Class,
   // Functions with `this` and `arguments`.
   NonArrowFunction,
   // Functions with neither `this` nor `arguments`.
-  // NOTE: Arrow function class properties are not on the prototype and simply have access to the class's `this` like other initialisers; it doesn't have a special `this` binding and inherits it like any other arrow function.
+  // NOTE: Arrow function class properties are not on the prototype and simply have access to the class's `this` like other initialisers; it doesn't have a special `this` binding and inherits it like any other arrow function. See examples/es6-class.md.
   ArrowFunction,
   Block,
 }
@@ -118,8 +118,8 @@ impl ScopeData {
     };
   }
 
-  pub fn get_symbol(&self, identifier: Identifier) -> Option<Symbol> {
-    self.symbols.get(&identifier).cloned()
+  pub fn get_symbol(&self, identifier: &str) -> Option<Symbol> {
+    self.symbols.get(identifier).cloned()
   }
 
   pub fn symbol_count(&self) -> usize {
