@@ -35,9 +35,9 @@ enum VarType {
 
 impl VarType {
   pub fn from_scope_name(scope: &Scope, name: String) -> VarType {
-    match scope.find_symbol_up_to(name, |s| s.is_closure()) {
+    match scope.find_symbol_up_to(name.clone(), |s| s.is_closure()) {
       Some(local) => VarType::Local(local),
-      None => match scope.find_symbol(name) {
+      None => match scope.find_symbol(name.clone()) {
         Some(foreign) => VarType::Foreign(foreign),
         None => match BUILTINS.get(name.as_str()) {
           Some(_) => VarType::Builtin(name),
@@ -732,13 +732,10 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
 }
 
 pub(crate) fn translate_source_to_inst(
-  top_level: &Node,
+  stmts: &[Node],
   c_label: &mut Counter,
   c_temp: &mut Counter,
 ) -> Vec<Inst> {
-  let Syntax::TopLevel { body } = top_level.stx.as_ref() else {
-    panic!("not top level node");
-  };
   let mut compiler = SourceToInst {
     c_label,
     c_temp,
@@ -746,8 +743,8 @@ pub(crate) fn translate_source_to_inst(
     symbol_to_temp: AHashMap::new(),
     break_stack: Vec::new(),
   };
-  for stmt in body {
-    compiler.compile_stmt(&stmt)
+  for stmt in stmts {
+    compiler.compile_stmt(stmt);
   }
   compiler.out
 }

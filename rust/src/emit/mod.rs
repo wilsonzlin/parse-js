@@ -123,16 +123,18 @@ fn emit_class_or_object_member(
       };
     }
     ClassOrObjectMemberValue::Method {
-      is_async,
-      generator,
+      function,
       ..
     } => {
-      if *is_async {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
+      if *async_ {
         out.extend_from_slice(b"async");
       }
       if *generator {
         out.extend_from_slice(b"*");
-      } else if *is_async {
+      } else if *async_ {
         out.extend_from_slice(b" ");
       }
     }
@@ -149,15 +151,21 @@ fn emit_class_or_object_member(
     }
   };
   match value {
-    ClassOrObjectMemberValue::Getter { body } => {
+    ClassOrObjectMemberValue::Getter { function } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       out.extend_from_slice(b"()");
       emit_js(out, body);
     }
     ClassOrObjectMemberValue::Method {
-      signature, body, ..
+      function, ..
     } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       out.extend_from_slice(b"(");
-      emit_js(out, signature);
+      emit_function_parameters(out, parameters.as_slice());
       out.extend_from_slice(b")");
       emit_js(out, body);
     }
@@ -174,9 +182,12 @@ fn emit_class_or_object_member(
         };
       };
     }
-    ClassOrObjectMemberValue::Setter { body, parameter } => {
+    ClassOrObjectMemberValue::Setter {  function } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       out.extend_from_slice(b"(");
-      emit_js(out, parameter);
+      emit_js(out, &parameters[0]);
       out.extend_from_slice(b")");
       emit_js(out, body);
     }
@@ -256,6 +267,15 @@ fn emit_import_or_export_statement_trailer(
     // TODO Escape?
     out.extend_from_slice(from.as_bytes());
     out.extend_from_slice(b"\"");
+  };
+}
+
+fn emit_function_parameters(out: &mut Vec<u8>, params: &[Node]) {
+  for (i, p) in params.iter().enumerate() {
+    if i > 0 {
+      out.extend_from_slice(b",");
+    };
+    emit_js(out, p);
   };
 }
 
@@ -492,14 +512,6 @@ fn emit_js_under_operator(
     Syntax::ClassOrFunctionName { name } => {
       out.extend_from_slice(name.as_bytes());
     }
-    Syntax::FunctionSignature { parameters } => {
-      for (i, p) in parameters.iter().enumerate() {
-        if i > 0 {
-          out.extend_from_slice(b",");
-        };
-        emit_js(out, p);
-      }
-    }
     Syntax::ClassDecl {
       export,
       export_default,
@@ -518,19 +530,19 @@ fn emit_js_under_operator(
     Syntax::FunctionDecl {
       export,
       export_default,
-      is_async,
-      generator,
+      function,
       name,
-      signature,
-      body,
     } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       // We split all `export class/function` into a declaration and an export at the end, so drop the `export`.
       // The exception is for unnamed functions and classes.
       if *export && name.is_none() {
         debug_assert!(*export_default);
         out.extend_from_slice(b"export default ");
       }
-      if *is_async {
+      if *async_ {
         out.extend_from_slice(b"async ");
       }
       out.extend_from_slice(b"function");
@@ -543,7 +555,7 @@ fn emit_js_under_operator(
         emit_js(out, name);
       }
       out.extend_from_slice(b"(");
-      emit_js(out, signature);
+      emit_function_parameters(out, parameters.as_slice());
       out.extend_from_slice(b")");
       emit_js(out, body);
     }
@@ -563,20 +575,21 @@ fn emit_js_under_operator(
     }
     Syntax::ArrowFunctionExpr {
       parenthesised,
-      is_async,
-      signature,
-      body,
+      function,
     } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       // See FunctionExpr.
       // TODO Omit parentheses if possible.
       if *parenthesised {
         out.extend_from_slice(b"(");
       }
-      if *is_async {
+      if *async_ {
         out.extend_from_slice(b"async");
       }
-      let can_omit_parentheses = if let Syntax::FunctionSignature { parameters } = signature.stx.as_ref() {
-        !is_async
+      let can_omit_parentheses =
+        !async_
           && parameters.len() == 1
           && match parameters[0].stx.as_ref() {
             Syntax::ParamDecl {
@@ -592,14 +605,11 @@ fn emit_js_under_operator(
                 }
             }
             _ => false,
-          }
-      } else {
-        false
-      };
+          };
       if !can_omit_parentheses {
         out.extend_from_slice(b"(");
       };
-      emit_js(out, signature);
+      emit_function_parameters(out, parameters.as_slice());
       if !can_omit_parentheses {
         out.extend_from_slice(b")");
       };
@@ -724,18 +734,18 @@ fn emit_js_under_operator(
     }
     Syntax::FunctionExpr {
       parenthesised,
-      is_async,
-      generator,
       name,
-      signature,
-      body,
+      function,
     } => {
+      let Syntax::Function { arrow, async_, generator, parameters, body } = function.stx.as_ref() else {
+        unreachable!();
+      };
       // We need to keep parentheses to prevent function expressions from being misinterpreted as a function declaration, which cannot be part of an expression e.g. IIFE.
       // TODO Omit parentheses if possible.
       if *parenthesised {
         out.extend_from_slice(b"(");
       }
-      if *is_async {
+      if *async_ {
         out.extend_from_slice(b"async ");
       }
       out.extend_from_slice(b"function");
@@ -749,7 +759,7 @@ fn emit_js_under_operator(
         emit_js(out, name);
       };
       out.extend_from_slice(b"(");
-      emit_js(out, signature);
+      emit_function_parameters(out, parameters.as_slice());
       out.extend_from_slice(b")");
       emit_js(out, body);
       // TODO Omit parentheses if possible.
@@ -1125,7 +1135,9 @@ fn emit_js_under_operator(
         emit_js(out, p);
         out.extend_from_slice(b")");
       }
-      emit_js(out, body);
+      for stmt in body {
+        emit_js(out, stmt);
+      }
     }
     Syntax::SwitchBranch { case, body } => {
       match case {
@@ -1244,5 +1256,6 @@ fn emit_js_under_operator(
     Syntax::SuperExpr {} => {
       out.extend_from_slice(b"super");
     }
+    _ => todo!()
   };
 }

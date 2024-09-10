@@ -3,18 +3,15 @@ use crate::minify::minify_js;
 use crate::TopLevelMode;
 use parse_js::lex::Lexer;
 use parse_js::parse::Parser;
-use parse_js::session::Session;
-use parse_js::symbol::SymbolGenerator;
 
 fn check(top_level_mode: TopLevelMode, src: &str, expected: &str) -> () {
-  let session = Session::new();
   let mut parser = Parser::new(Lexer::new(src.as_bytes()));
   let node = parser
-    .parse_top_level(&session, SymbolGenerator::new(), top_level_mode)
+    .parse_top_level()
     .unwrap();
   let mut out = Vec::new();
-  minify_js(&session, node);
-  emit_js(&mut out, node);
+  minify_js(&node);
+  emit_js(&mut out, &node);
   assert_eq!(
     unsafe { std::str::from_utf8_unchecked(out.as_slice()) },
     expected

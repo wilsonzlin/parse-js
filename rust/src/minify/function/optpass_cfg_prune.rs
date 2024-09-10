@@ -22,10 +22,6 @@ pub(crate) fn optpass_cfg_prune(
       if label == 0 {
         continue;
       };
-      // Always have an exit node.
-      if label == u32::MAX {
-        continue;
-      };
       let Ok(parent) = cfg_parents[&label].iter().exactly_one() else {
         continue;
       };

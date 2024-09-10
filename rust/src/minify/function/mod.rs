@@ -1,31 +1,32 @@
-mod backedge;
-mod bblock;
-mod builtin;
-mod cfg;
-mod consteval;
-mod counter;
-mod deconstruct_ssa;
-mod defs;
-mod domfront;
-mod dominators;
-mod domtree;
-mod dot;
-mod inst;
-mod interference;
-mod liveness;
-mod optpass_cfg_prune;
-mod optpass_dvn;
-mod optpass_impossible_branches;
-mod optpass_redundant_assigns;
-mod optpass_trivial_dce;
-mod postorder;
-mod register_alloc;
-mod single_use_insts;
-mod source_to_inst;
-mod ssi_insert_phis;
-mod ssi_rename;
-mod visit;
-mod reconstruct_source;
+pub(crate) mod backedge;
+pub(crate) mod bblock;
+pub(crate) mod builtin;
+pub(crate) mod cfg;
+pub(crate) mod consteval;
+pub(crate) mod counter;
+pub(crate) mod deconstruct_ssa;
+pub(crate) mod defs;
+pub(crate) mod domfront;
+pub(crate) mod dominators;
+pub(crate) mod domtree;
+pub(crate) mod dot;
+pub(crate) mod inst;
+pub(crate) mod interference;
+pub(crate) mod liveness;
+pub(crate) mod optpass_cfg_prune;
+pub(crate) mod optpass_dvn;
+pub(crate) mod optpass_impossible_branches;
+pub(crate) mod optpass_redundant_assigns;
+pub(crate) mod optpass_trivial_dce;
+pub(crate) mod postorder;
+pub(crate) mod register_alloc;
+pub(crate) mod single_use_insts;
+pub(crate) mod source_to_inst;
+pub(crate) mod ssi_insert_phis;
+pub(crate) mod ssi_rename;
+pub(crate) mod visit;
+pub(crate) mod reconstruct_source;
+pub(crate) mod find_loops;
 
 use bblock::convert_insts_to_bblocks;
 use cfg::calculate_cfg;
@@ -42,7 +43,7 @@ use postorder::calculate_postorder;
 use source_to_inst::translate_source_to_inst;
 use ssi_insert_phis::insert_phis_for_ssi_construction;
 use ssi_rename::rename_targets_for_ssi_construction;
-use backedge::find_backedges;
+use backedge::{find_backedges_and_junctions};
 use deconstruct_ssa::deconstruct_ssa;
 use interference::calculate_interference_graph;
 use liveness::calculate_live_ins;
@@ -50,13 +51,13 @@ use optpass_cfg_prune::optpass_cfg_prune;
 use register_alloc::allocate_registers;
 use single_use_insts::analyse_single_use_defs;
 
-pub(crate) fn minify_js_function(
-  body_node: &Node,
+pub(crate) fn minify_js_statements(
+  statements: &[Node],
 ) {
   // Label 0 is for entry.
   let mut c_label = Counter::new(1);
   let mut c_temp = Counter::new(0);
-  let insts = translate_source_to_inst(body_node, &mut c_label, &mut c_temp);
+  let insts = translate_source_to_inst(statements, &mut c_label, &mut c_temp);
   let (mut bblocks, bblock_order) = convert_insts_to_bblocks(insts, &mut c_label);
   let (mut cfg_parents, mut cfg_children) = calculate_cfg(&mut bblocks, bblock_order);
 
@@ -69,7 +70,7 @@ pub(crate) fn minify_js_function(
   insert_phis_for_ssi_construction(&mut defs, &mut bblocks, &domfront);
   rename_targets_for_ssi_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
 
-  // Optimisation passes.
+  // Optimisation passes:
   // - Dominator-based value numbering.
   // - Trivial dead code elimination.
   // Drop defs as it likely will be invalid after even one pass.
@@ -127,7 +128,7 @@ pub(crate) fn minify_js_function(
     let (rpo, rpo_label) = calculate_postorder(&cfg_parents, u32::MAX);
     calculate_domtree(&cfg_children, &rpo, &rpo_label, u32::MAX).0
   };
-  let backedges = find_backedges(&cfg_children);
+  let backedges = find_backedges_and_junctions(&cfg_children);
 
   // TODO Reconstruct source.
   todo!();

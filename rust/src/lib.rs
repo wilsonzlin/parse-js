@@ -1,10 +1,12 @@
 use emit::emit_js;
+use err::MinifyError;
 use minify::minify_js;
 use parse_js::ast::Node;
 use parse_js::parse;
 
 mod emit;
 mod minify;
+mod err;
 
 pub use symbol_js::TopLevelMode;
 use symbol_js::compute_symbols;
@@ -42,10 +44,10 @@ pub fn minify(
   top_level_mode: TopLevelMode,
   source: &[u8],
   output: &mut Vec<u8>,
-) -> Result<(), SyntaxError> {
-  let mut parsed = parse(source)?;
+) -> Result<(), MinifyError> {
+  let mut parsed = parse(source).map_err(MinifyError::Syntax)?;
   compute_symbols(&mut parsed, top_level_mode);
-  let minified = minify_js(&parsed);
+  let minified = minify_js(&parsed)?;
   emit(&minified, output);
   Ok(())
 }

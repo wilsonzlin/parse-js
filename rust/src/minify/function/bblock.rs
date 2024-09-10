@@ -28,7 +28,5 @@ pub(crate) fn convert_insts_to_bblocks(
       }
     };
   }
-  assert!(bblocks.insert(u32::MAX, Vec::new()).is_none());
-  bblock_order.push(u32::MAX);
   (bblocks, bblock_order)
 }
