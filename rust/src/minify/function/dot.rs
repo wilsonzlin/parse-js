@@ -8,6 +8,7 @@ use std::process::Stdio;
 
 pub(crate) fn render_cfg(
   out: &str,
+  title: &str,
   bblock_order: &[u32],
   bblocks: &AHashMap<u32, Vec<Inst>>,
   cfg_children: &AHashMap<u32, Bitmap>,
@@ -15,6 +16,10 @@ pub(crate) fn render_cfg(
   let mut dot = String::new();
 
   writeln!(&mut dot, "digraph g {{").unwrap();
+  writeln!(&mut dot, r#"fontname = "Arial";"#).unwrap();
+  writeln!(&mut dot, r#"label = <Result after <B>{title}</B>>;"#).unwrap();
+  writeln!(&mut dot, r#"labelloc = "t";"#).unwrap();
+  writeln!(&mut dot, r#"labeljust = "c";"#).unwrap();
   writeln!(&mut dot, "graph [").unwrap();
   writeln!(&mut dot, r#"rankdir = "LR""#).unwrap();
   writeln!(&mut dot, "]").unwrap();

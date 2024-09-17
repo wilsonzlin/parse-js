@@ -1,4 +1,5 @@
 use ahash::{AHashMap, AHashSet};
+use function::minify_js_statements;
 use parse_js::{
   ast::{ClassOrObjectMemberValue, Node, Syntax},
   loc::Loc,
@@ -82,6 +83,10 @@ pub(crate) fn minify_js(top_level_node: &Node) -> Result<Node, MinifyError> {
   if let Some((_, loc)) = use_before_decl.iter().next() {
     return Err(MinifyError::UseBeforeDecl(*loc));
   };
+  let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
+    panic!();
+  };
+  minify_js_statements(&body);
   todo!()
 }
 

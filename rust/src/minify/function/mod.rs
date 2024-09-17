@@ -28,12 +28,19 @@ pub(crate) mod visit;
 pub(crate) mod reconstruct_source;
 pub(crate) mod find_loops;
 
+use std::env::var;
+
+use ahash::{AHashMap, AHashSet};
 use bblock::convert_insts_to_bblocks;
 use cfg::calculate_cfg;
 use counter::Counter;
+use croaring::Bitmap;
 use defs::calculate_defs;
 use domfront::calculate_domfront;
 use domtree::calculate_domtree;
+use dot::render_cfg;
+use inst::Inst;
+use once_cell::sync::Lazy;
 use optpass_dvn::optpass_dvn;
 use optpass_impossible_branches::optpass_impossible_branches;
 use optpass_redundant_assigns::optpass_redundant_assigns;
@@ -51,6 +58,26 @@ use optpass_cfg_prune::optpass_cfg_prune;
 use register_alloc::allocate_registers;
 use single_use_insts::analyse_single_use_defs;
 
+static DEBUG_DOT: Lazy<AHashSet<String>> = Lazy::new(|| var("MJS_DEBUG_DOT").ok().map(|v| v.split(',').map(|s| s.to_string()).collect()).unwrap_or_default());
+
+fn dbg_cfg(
+  name: &str,
+  bblock_order: &[u32],
+  bblocks: &AHashMap<u32, Vec<Inst>>,
+  cfg_children: &AHashMap<u32, Bitmap>,
+) {
+  if DEBUG_DOT.contains("1") || DEBUG_DOT.contains(name) {
+    let out_dir = var("MJS_DEBUG_DOT_OUTDIR").unwrap_or_else(|_| ".".to_string());
+    render_cfg(
+      &format!("{out_dir}/minify-js_debug_cfg_{name}.png"),
+      name,
+      bblock_order,
+      bblocks,
+      cfg_children,
+    );
+  }
+}
+
 pub(crate) fn minify_js_statements(
   statements: &[Node],
 ) {
@@ -65,17 +92,20 @@ pub(crate) fn minify_js_statements(
   let (idom_by, domtree) = calculate_domtree(&cfg_parents, &postorder, &label_to_postorder, 0);
   let domfront = calculate_domfront(&cfg_parents, &idom_by, &postorder);
   let mut defs = calculate_defs(&bblocks);
+  dbg_cfg("0. Source", &postorder, &bblocks, &cfg_children);
 
   // Construct SSA.
   insert_phis_for_ssi_construction(&mut defs, &mut bblocks, &domfront);
+  dbg_cfg("1. SSI (Insert Phis)", &postorder, &bblocks, &cfg_children);
   rename_targets_for_ssi_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
+  dbg_cfg("1. SSI (Rename Targets)", &postorder, &bblocks, &cfg_children);
 
   // Optimisation passes:
   // - Dominator-based value numbering.
   // - Trivial dead code elimination.
   // Drop defs as it likely will be invalid after even one pass.
   drop(defs);
-  loop {
+  for i in 1.. {
     let mut changed = false;
 
     // TODO Can we avoid recalculating these on every iteration i.e. mutate in-place when changing the CFG?
@@ -102,6 +132,7 @@ pub(crate) fn minify_js_statements(
     if !changed {
       break;
     }
+    dbg_cfg(&format!("2. Optimisation Pass ({i})"), &postorder, &bblocks, &cfg_children);
   }
 
   let (inlines, inlined_tgts) = analyse_single_use_defs(&bblocks);

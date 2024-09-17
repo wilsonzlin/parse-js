@@ -25,9 +25,8 @@ pub fn emit(node: &Node, output: &mut Vec<u8>) -> () {
 ///
 /// # Arguments
 ///
-/// * `session` - Session to use as backing arena memory. Can be reused across calls and cleared at any time allowed by the Rust lifetime checker.
 /// * `top_level_mode` - How to parse the provided code.
-/// * `source` - A vector of bytes representing the source code to minify.
+/// * `source` - A slice of bytes representing the source code to minify.
 /// * `output` - Destination to write minified output JavaScript code.
 ///
 /// # Examples
@@ -50,4 +49,25 @@ pub fn minify(
   let minified = minify_js(&parsed)?;
   emit(&minified, output);
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use symbol_js::TopLevelMode;
+
+    use crate::minify;
+
+  #[test]
+  fn test_minify() {
+    let mut out = Vec::new();
+    minify(
+      TopLevelMode::Global,
+      br##"
+
+      let myvar = 1;
+      
+      "##,
+      &mut out
+    ).unwrap();
+  }
 }
