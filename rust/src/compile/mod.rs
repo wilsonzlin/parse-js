@@ -25,7 +25,6 @@ pub(crate) mod source_to_inst;
 pub(crate) mod ssi_insert_phis;
 pub(crate) mod ssi_rename;
 pub(crate) mod visit;
-pub(crate) mod reconstruct_source;
 pub(crate) mod find_loops;
 
 use std::env::var;
@@ -78,9 +77,9 @@ fn dbg_cfg(
   }
 }
 
-pub(crate) fn minify_js_statements(
+pub(crate) fn compile_js_statements(
   statements: &[Node],
-) {
+) -> AHashMap<u32, Vec<Inst>> {
   // Label 0 is for entry.
   let mut c_label = Counter::new(1);
   let mut c_temp = Counter::new(0);
@@ -155,12 +154,12 @@ pub(crate) fn minify_js_statements(
   );
 
   // To calculate the post dominators, reverse the edges and run any dominator algorithm.
-  let ipostdom_by = {
-    let (rpo, rpo_label) = calculate_postorder(&cfg_parents, u32::MAX);
-    calculate_domtree(&cfg_children, &rpo, &rpo_label, u32::MAX).0
-  };
-  let backedges = find_backedges_and_junctions(&cfg_children);
+  // TODO Reenable.
+  // let ipostdom_by = {
+  //   let (rpo, rpo_label) = calculate_postorder(&cfg_parents, u32::MAX);
+  //   calculate_domtree(&cfg_children, &rpo, &rpo_label, u32::MAX).0
+  // };
+  // let backedges = find_backedges_and_junctions(&cfg_children);
 
-  // TODO Reconstruct source.
-  todo!();
+  bblocks
 }

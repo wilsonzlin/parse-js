@@ -1,25 +1,22 @@
-use emit::emit_js;
+use analyze::VarVisitor;
+use serialize::emit_js;
 use err::MinifyError;
-use minify::minify_js;
-use parse_js::ast::Node;
+use compile::{compile_js_statements};
+use parse_js::ast::{Node, Syntax};
 use parse_js::parse;
 
-mod emit;
-mod minify;
+mod serialize;
 mod err;
+mod analyze;
+mod reconstruct;
+#[cfg(test)]
+mod tests;
+mod compile;
 
+use parse_js::visit::Visitor;
+use reconstruct::{reconstruct_ast_from_bblocks};
 pub use symbol_js::TopLevelMode;
 use symbol_js::compute_symbols;
-
-/// Emits UTF-8 JavaScript code from a parsed AST in a minified way. This allows custom introspections and transforms on the tree before emitting it to code.
-///
-/// # Arguments
-///
-/// * `node` - The root node from the parsed AST.
-/// * `output` - Destination to write output JavaScript code.
-pub fn emit(node: &Node, output: &mut Vec<u8>) -> () {
-  emit_js(output, node);
-}
 
 /// Minifies UTF-8 JavaScript code, represented as an array of bytes.
 ///
@@ -44,30 +41,25 @@ pub fn minify(
   source: &[u8],
   output: &mut Vec<u8>,
 ) -> Result<(), MinifyError> {
-  let mut parsed = parse(source).map_err(MinifyError::Syntax)?;
-  compute_symbols(&mut parsed, top_level_mode);
-  let minified = minify_js(&parsed)?;
-  emit(&minified, output);
+  let mut top_level_node = parse(source).map_err(MinifyError::Syntax)?;
+  compute_symbols(&mut top_level_node, top_level_mode);
+
+  let mut var_visitor = VarVisitor::default();
+  var_visitor.visit(&top_level_node);
+  let VarVisitor {
+    declared,
+    foreign,
+    unknown,
+    use_before_decl,
+  } = var_visitor;
+  if let Some((_, loc)) = use_before_decl.iter().next() {
+    return Err(MinifyError::UseBeforeDecl(*loc));
+  };
+  let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
+    panic!();
+  };
+  let optimized = compile_js_statements(&body);
+  let minified = reconstruct_ast_from_bblocks(&optimized);
+  emit_js(output, &minified);
   Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use symbol_js::TopLevelMode;
-
-    use crate::minify;
-
-  #[test]
-  fn test_minify() {
-    let mut out = Vec::new();
-    minify(
-      TopLevelMode::Global,
-      br##"
-
-      let myvar = 1;
-      
-      "##,
-      &mut out
-    ).unwrap();
-  }
 }

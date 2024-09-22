@@ -48,7 +48,7 @@ mod tests {
     use croaring::Bitmap;
     use itertools::Itertools;
 
-    use crate::minify::function::backedge::{find_backedges_and_junctions, BackedgesAndJunctions};
+    use crate::minify::optimize::backedge::{find_backedges_and_junctions, BackedgesAndJunctions};
 
   #[test]
   fn test_find_backedges() {
