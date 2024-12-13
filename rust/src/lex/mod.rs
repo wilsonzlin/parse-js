@@ -17,7 +17,9 @@ use crate::token::TokenType;
 use ahash::AHashMap;
 use aho_corasick::AhoCorasick;
 use aho_corasick::AhoCorasickBuilder;
+use aho_corasick::AhoCorasickKind;
 use aho_corasick::MatchKind;
+use aho_corasick::StartKind;
 use core::ops::Index;
 use memchr::memchr;
 use memchr::memchr2;
@@ -180,7 +182,7 @@ impl<'a> Lexer<'a> {
   fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
     ac.find(&self.source[self.next..])
       .map(|m| AhoCorasickMatch {
-        id: m.pattern(),
+        id: m.pattern().as_usize(),
         mat: Match { len: m.end() },
       })
       .ok_or_else(|| self.error(SyntaxErrorType::ExpectedNotFound))
@@ -387,13 +389,14 @@ static PATTERNS: Lazy<Vec<(TokenType, &'static [u8])>> = Lazy::new(|| {
 
 static MATCHER: Lazy<AhoCorasick> = Lazy::new(|| {
   AhoCorasickBuilder::new()
-    .anchored(true)
-    .dfa(true)
+    .start_kind(StartKind::Anchored)
+    .kind(Some(AhoCorasickKind::DFA))
     .match_kind(MatchKind::LeftmostLongest)
     .build(PATTERNS.iter().map(|(_, pat)| pat))
+    .unwrap()
 });
 
-static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new([b"*/"]));
+static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new([b"*/"]).unwrap());
 
 fn lex_multiple_comment(lexer: &mut Lexer<'_>) -> SyntaxResult<()> {
   // Consume `/*`.
