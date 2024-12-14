@@ -731,7 +731,7 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
   }
 }
 
-pub(crate) fn translate_source_to_inst(
+pub fn translate_source_to_inst(
   stmts: &[Node],
   c_label: &mut Counter,
   c_temp: &mut Counter,

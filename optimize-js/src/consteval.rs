@@ -23,17 +23,17 @@ use std::str::FromStr;
  */
 
 // TODO Verify num_bigint::BigInt::from_str matches ECMAScript spec.
-pub(crate) fn parse_bigint(raw: &str) -> Option<num_bigint::BigInt> {
+pub fn parse_bigint(raw: &str) -> Option<num_bigint::BigInt> {
   num_bigint::BigInt::from_str(raw).ok()
 }
 
 // TODO Verify f64::parse matches ECMAScript spec.
-pub(crate) fn coerce_bigint_to_num(v: &num_bigint::BigInt) -> f64 {
+pub fn coerce_bigint_to_num(v: &num_bigint::BigInt) -> f64 {
   v.to_string().parse().unwrap()
 }
 
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number#number_coercion
-pub(crate) fn coerce_str_to_num(raw: &str) -> f64 {
+pub fn coerce_str_to_num(raw: &str) -> f64 {
   let raw = raw.trim();
   if raw.is_empty() {
     return 0.0;
@@ -53,7 +53,7 @@ pub(crate) fn coerce_str_to_num(raw: &str) -> f64 {
 }
 
 // https://tc39.es/ecma262/multipage/abstract-operations.html#sec-tonumber
-pub(crate) fn coerce_to_num(v: &Const) -> f64 {
+pub fn coerce_to_num(v: &Const) -> f64 {
   match v {
     BigInt(_) => panic!("cannot coerce bigint to num according to spec"),
     Bool(false) => 0.0,
@@ -66,7 +66,7 @@ pub(crate) fn coerce_to_num(v: &Const) -> f64 {
 }
 
 // https://developer.mozilla.org/en-US/docs/Glossary/Falsy
-pub(crate) fn coerce_to_bool(v: &Const) -> bool {
+pub fn coerce_to_bool(v: &Const) -> bool {
   match v {
     BigInt(v) => v == &num_bigint::BigInt::from(0),
     Bool(b) => *b,
@@ -79,7 +79,7 @@ pub(crate) fn coerce_to_bool(v: &Const) -> bool {
 
 // If return value is None, then all comparison operators between `a` and `b` result in false.
 // https://tc39.es/ecma262/multipage/abstract-operations.html#sec-islessthan
-pub(crate) fn js_cmp(a: &Const, b: &Const) -> Option<Ordering> {
+pub fn js_cmp(a: &Const, b: &Const) -> Option<Ordering> {
   match (a, b) {
     (Str(a), Str(b)) => Some(a.cmp(b)),
     (Str(a), BigInt(b)) => parse_bigint(a).map(|a| a.cmp(b)),
@@ -98,7 +98,7 @@ pub(crate) fn js_cmp(a: &Const, b: &Const) -> Option<Ordering> {
   }
 }
 
-pub(crate) fn js_div(a: f64, b: f64) -> f64 {
+pub fn js_div(a: f64, b: f64) -> f64 {
   #[allow(illegal_floating_point_literal_pattern)]
   match (a, b) {
     (a, 0.0) if a > 0.0 => f64::INFINITY,
@@ -108,7 +108,7 @@ pub(crate) fn js_div(a: f64, b: f64) -> f64 {
   }
 }
 
-pub(crate) fn js_mod(a: f64, b: f64) -> f64 {
+pub fn js_mod(a: f64, b: f64) -> f64 {
   #[allow(illegal_floating_point_literal_pattern)]
   match (a, b) {
     (_, 0.0) => f64::NAN,
@@ -118,7 +118,7 @@ pub(crate) fn js_mod(a: f64, b: f64) -> f64 {
 }
 
 // https://tc39.es/ecma262/multipage/abstract-operations.html#sec-islooselyequal
-pub(crate) fn js_loose_eq(a: &Const, b: &Const) -> bool {
+pub fn js_loose_eq(a: &Const, b: &Const) -> bool {
   if discriminant(a) == discriminant(b) {
     return js_strict_eq(a, b);
   };
@@ -137,14 +137,14 @@ pub(crate) fn js_loose_eq(a: &Const, b: &Const) -> bool {
   }
 }
 
-pub(crate) fn js_strict_eq(a: &Const, b: &Const) -> bool {
+pub fn js_strict_eq(a: &Const, b: &Const) -> bool {
   match (a, b) {
     (Num(v), _) | (_, Num(v)) if v.0.is_nan() => false,
     (a, b) => a == b,
   }
 }
 
-pub(crate) fn maybe_eval_const_bin_expr(op: BinOp, a: &Const, b: &Const) -> Option<Const> {
+pub fn maybe_eval_const_bin_expr(op: BinOp, a: &Const, b: &Const) -> Option<Const> {
   #[rustfmt::skip]
   let res = match (op, a, b) {
     (Add, Num(l), Num(r)) => Num(JN(l.0 + r.0)),
@@ -180,7 +180,7 @@ pub(crate) fn maybe_eval_const_bin_expr(op: BinOp, a: &Const, b: &Const) -> Opti
   Some(res)
 }
 
-pub(crate) fn maybe_eval_const_un_expr(op: UnOp, a: &Const) -> Option<Const> {
+pub fn maybe_eval_const_un_expr(op: UnOp, a: &Const) -> Option<Const> {
   #[rustfmt::skip]
   let res = match (op, a) {
     (Neg, Num(l)) => Num(JN(-l.0)),
@@ -199,7 +199,7 @@ pub(crate) fn maybe_eval_const_un_expr(op: UnOp, a: &Const) -> Option<Const> {
   Some(res)
 }
 
-pub(crate) fn maybe_eval_const_builtin_call(func: &str, args: &[Const]) -> Option<Const> {
+pub fn maybe_eval_const_builtin_call(func: &str, args: &[Const]) -> Option<Const> {
   #[rustfmt::skip]
   let v = match args.len() {
     1 => match (func, &args[0]) {
@@ -216,7 +216,7 @@ pub(crate) fn maybe_eval_const_builtin_call(func: &str, args: &[Const]) -> Optio
   Some(v)
 }
 
-pub(crate) fn maybe_eval_const_builtin_val(path: &str) -> Option<Const> {
+pub fn maybe_eval_const_builtin_val(path: &str) -> Option<Const> {
   #[rustfmt::skip]
   let v = match path {
     "Math.E" => Num(JN(E)),

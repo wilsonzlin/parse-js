@@ -10,7 +10,7 @@ use croaring::Bitmap;
 // - This paper also contains an explanation on how to calculate what a node dominates given `idom_by`, which is much faster than other dominance calculation algorithms.
 // Other implementations:
 // - https://github.com/sampsyo/bril/blob/34133101a68bb50ae0fc8083857a3e3bd6bae260/bril-llvm/dom.py#L47
-pub(crate) fn calculate_domtree(
+pub fn calculate_domtree(
   cfg_parents: &AHashMap<u32, Bitmap>,
   postorder: &[u32],
   label_to_postorder: &AHashMap<u32, usize>,

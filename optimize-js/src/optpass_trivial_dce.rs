@@ -6,7 +6,7 @@ use super::visit::visit_inst_tgts;
 use ahash::AHashMap;
 use croaring::Bitmap;
 
-pub(crate) fn optpass_trivial_dce(changed: &mut bool, bblocks: &mut AHashMap<u32, Vec<Inst>>) {
+pub fn optpass_trivial_dce(changed: &mut bool, bblocks: &mut AHashMap<u32, Vec<Inst>>) {
   let mut used = Bitmap::new();
   for bblock in bblocks.values() {
     for inst in bblock.iter() {

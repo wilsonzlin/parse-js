@@ -7,7 +7,7 @@ mod tests;
 
 // Four tasks (fill out each field as appropriate).
 #[derive(Default)]
-pub(crate) struct VarVisitor {
+pub struct VarVisitor {
   pub declared: AHashSet<Symbol>,
   pub foreign: AHashSet<Symbol>,
   pub unknown: AHashSet<String>,

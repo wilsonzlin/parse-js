@@ -3,7 +3,7 @@ use super::inst::Inst;
 use ahash::AHashMap;
 use croaring::Bitmap;
 
-pub(crate) fn deconstruct_ssa(
+pub fn deconstruct_ssa(
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_parents: &mut AHashMap<u32, Bitmap>,
   cfg_children: &mut AHashMap<u32, Bitmap>,

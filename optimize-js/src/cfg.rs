@@ -12,7 +12,7 @@ use std::collections::VecDeque;
  * - When an empty bblock has no children with Phi insts.
  */
 
-pub(crate) fn mark_unreachable_cfg_bblocks(
+pub fn mark_unreachable_cfg_bblocks(
   to_delete: &mut Bitmap,
   bblocks: &AHashMap<u32, Vec<Inst>>,
   cfg_children: &AHashMap<u32, Bitmap>,
@@ -35,7 +35,7 @@ pub(crate) fn mark_unreachable_cfg_bblocks(
   }
 }
 
-pub(crate) fn delete_bblocks_from_cfg(
+pub fn delete_bblocks_from_cfg(
   to_delete: &Bitmap,
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_parents: &mut AHashMap<u32, Bitmap>,
@@ -67,7 +67,7 @@ pub(crate) fn delete_bblocks_from_cfg(
   }
 }
 
-pub(crate) fn calculate_cfg(
+pub fn calculate_cfg(
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   // We consume this because all subsequent analysis operations should use a well-defined order (e.g. reverse postorder) for safety/correctness, and not this rather arbitrary ordering.
   mut bblock_order: Vec<u32>,

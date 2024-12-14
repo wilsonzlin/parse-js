@@ -2,7 +2,7 @@ use ahash::AHashMap;
 use croaring::Bitmap;
 use itertools::Itertools;
 
-pub(crate) fn calculate_interference_graph(
+pub fn calculate_interference_graph(
   liveness: &AHashMap<(u32, usize), Bitmap>,
 ) -> AHashMap<u32, Bitmap> {
   // Undirected graph, so two pairs of directed edges for each connection.

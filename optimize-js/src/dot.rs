@@ -6,7 +6,7 @@ use std::io::Write as IoWrite;
 use std::process::Command;
 use std::process::Stdio;
 
-pub(crate) fn render_cfg(
+pub fn render_cfg(
   out: &str,
   title: &str,
   bblock_order: &[u32],

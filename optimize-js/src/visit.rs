@@ -42,7 +42,7 @@ macro_rules! visit_inst_tgts {
   };
 }
 
-pub(crate) use visit_inst_tgts;
+pub use visit_inst_tgts;
 
 macro_rules! visit_inst_args {
   ($inst:expr, | $arg:ident | $proc:expr) => {
@@ -115,4 +115,4 @@ macro_rules! visit_inst_args {
   };
 }
 
-pub(crate) use visit_inst_args;
+pub use visit_inst_args;

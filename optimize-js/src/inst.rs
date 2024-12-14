@@ -8,7 +8,7 @@ use std::fmt::{self};
 
 // PartialOrd and Ord are for some arbitrary canonical order, even if semantics of ordering is opaque.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) enum Const {
+pub enum Const {
   BigInt(BigInt),
   Bool(bool),
   Null,
@@ -32,7 +32,7 @@ impl Debug for Const {
 
 // PartialOrd and Ord are for some arbitrary canonical order, even if semantics of ordering are opaque.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) enum Arg {
+pub enum Arg {
   Builtin(String), // The value is a path (e.g. `Array.prototype.forEach`). Using a single string makes it easier to match.
   Const(Const),
   Var(u32),
@@ -71,7 +71,7 @@ impl Debug for Arg {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub(crate) enum BinOp {
+pub enum BinOp {
   Add,
   Div, // Divide.
   Exp, // Exponentiate.
@@ -112,7 +112,7 @@ impl Debug for BinOp {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub(crate) enum UnOp {
+pub enum UnOp {
   Neg,
   Not,
   Plus,
@@ -133,7 +133,7 @@ impl Debug for UnOp {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) enum CallArg {
+pub enum CallArg {
   Arg(Arg),
   Spread(Arg),
 }
@@ -148,7 +148,7 @@ impl CallArg {
 }
 
 #[derive(PartialEq, Eq)]
-pub(crate) enum Inst {
+pub enum Inst {
   Bin {
     tgt: u32,
     left: Arg,

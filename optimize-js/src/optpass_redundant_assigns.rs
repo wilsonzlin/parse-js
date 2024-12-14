@@ -8,7 +8,7 @@ use ahash::AHashMap;
 // My theory for correctness:
 // - Strict SSA requires all defs to dominate all their uses.
 // - Targets are only assigned in one place globally.
-pub(crate) fn optpass_redundant_assigns(changed: &mut bool, bblocks: &mut AHashMap<u32, Vec<Inst>>) {
+pub fn optpass_redundant_assigns(changed: &mut bool, bblocks: &mut AHashMap<u32, Vec<Inst>>) {
   let mut tgt_to_arg = AHashMap::new();
   for bblock in bblocks.values_mut() {
     let mut to_delete = Vec::new();

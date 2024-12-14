@@ -259,7 +259,7 @@ fn inner(
 /// - Copy propagation
 /// - Const propagation
 /// - Const evaluation
-pub(crate) fn optpass_dvn(
+pub fn optpass_dvn(
   changed: &mut bool,
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_children: &AHashMap<u32, Bitmap>,

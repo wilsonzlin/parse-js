@@ -11,7 +11,7 @@ use itertools::Itertools;
 // - When we detach bblocks A and B (because A can never branch to B in reality e.g. const eval is always true/false), we move all bblocks in subgraph G, which contains all bblocks only reachable from B.
 // - We must then detach all bblocks within G i.e. remove all edges to bblocks outside of G. This isn't recursive, as the bblocks only reachable from B doesn't change as we remove these bblocks or their edges.
 // - We must clean up any usages of defs within G outside of G. Outside of G, these uses can only appear in Phi nodes.
-pub(crate) fn optpass_impossible_branches(
+pub fn optpass_impossible_branches(
   changed: &mut bool,
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_parents: &mut AHashMap<u32, Bitmap>,

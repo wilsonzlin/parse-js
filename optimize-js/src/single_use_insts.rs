@@ -6,7 +6,7 @@ use super::visit::visit_inst_tgts;
 use ahash::AHashMap;
 use croaring::Bitmap;
 
-pub(crate) fn analyse_single_use_defs(
+pub fn analyse_single_use_defs(
   bblocks: &AHashMap<u32, Vec<Inst>>,
 ) -> (AHashMap<(u32, usize), (u32, usize)>, Bitmap) {
   let mut use_locs = AHashMap::<u32, Vec<(u32, usize)>>::new();

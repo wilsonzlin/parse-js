@@ -7,7 +7,7 @@ use ahash::AHashMap;
 use croaring::Bitmap;
 use std::collections::VecDeque;
 
-pub(crate) fn calculate_live_ins(
+pub fn calculate_live_ins(
   bblocks: &AHashMap<u32, Vec<Inst>>,
   cfg_parents: &AHashMap<u32, Bitmap>,
   cfg_children: &AHashMap<u32, Bitmap>,

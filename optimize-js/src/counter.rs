@@ -1,4 +1,4 @@
-pub(crate) struct Counter(u32);
+pub struct Counter(u32);
 
 impl Counter {
   pub fn new(init: u32) -> Self {

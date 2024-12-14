@@ -3,7 +3,7 @@ use super::inst::Inst;
 use ahash::AHashMap;
 
 // We may need to create some new blocks (which require labels), which is why we need `c_label`.
-pub(crate) fn convert_insts_to_bblocks(
+pub fn convert_insts_to_bblocks(
   insts: Vec<Inst>,
   c_label: &mut Counter,
 ) -> (AHashMap<u32, Vec<Inst>>, Vec<u32>) {

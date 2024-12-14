@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 use croaring::Bitmap;
 
-pub(crate) fn allocate_registers(intgraph: &AHashMap<u32, Bitmap>) -> AHashMap<u32, u32> {
+pub fn allocate_registers(intgraph: &AHashMap<u32, Bitmap>) -> AHashMap<u32, u32> {
   let all_colours = Bitmap::from_range(0..u32::try_from(intgraph.len()).unwrap());
   let mut rem = intgraph.clone();
   let mut stack = Vec::new();

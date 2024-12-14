@@ -7,7 +7,7 @@ use itertools::Itertools;
  * WARNING: Read comment in cfg.rs.
  */
 
-pub(crate) fn optpass_cfg_prune(
+pub fn optpass_cfg_prune(
   changed: &mut bool,
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_parents: &mut AHashMap<u32, Bitmap>,

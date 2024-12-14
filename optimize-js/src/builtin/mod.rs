@@ -9,7 +9,7 @@ const DEFS: &str = include_str!("./builtin.js");
 const DEFS_TYPEDARRAY: &str = include_str!("./builtin.TypedArray.js");
 
 #[derive(Default)]
-pub(crate) struct BuiltinEntries(AHashMap<&'static str, BuiltinEntries>);
+pub struct BuiltinEntries(AHashMap<&'static str, BuiltinEntries>);
 
 impl Deref for BuiltinEntries {
   type Target = AHashMap<&'static str, BuiltinEntries>;
@@ -19,7 +19,7 @@ impl Deref for BuiltinEntries {
   }
 }
 
-pub(crate) static BUILTINS: Lazy<BuiltinEntries> = Lazy::new(|| {
+pub static BUILTINS: Lazy<BuiltinEntries> = Lazy::new(|| {
   let typedarray_defs = DEFS_TYPEDARRAY
     .split("\n")
     .filter(|l| !l.is_empty() || l.starts_with("//"))
@@ -56,7 +56,7 @@ pub(crate) static BUILTINS: Lazy<BuiltinEntries> = Lazy::new(|| {
   map
 });
 
-pub(crate) fn check_if_builtin_exists(base: &[String], prop: &String) -> bool {
+pub fn check_if_builtin_exists(base: &[String], prop: &String) -> bool {
   let mut cur = &*BUILTINS;
   for p in base.iter().chain(once(prop)) {
     let Some(c) = cur.get(p.as_str()) else {

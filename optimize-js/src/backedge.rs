@@ -26,13 +26,13 @@ fn inner(
   }
 }
 
-pub(crate) struct BackedgesAndJunctions {
+pub struct BackedgesAndJunctions {
   // A map from A -> B where B -> A is a backedge.
   pub backedges: AHashMap<u32, u32>,
   pub junctions: Bitmap,
 }
 
-pub(crate) fn find_backedges_and_junctions(
+pub fn find_backedges_and_junctions(
   cfg_children: &AHashMap<u32, Bitmap>,
 ) -> BackedgesAndJunctions {
   let mut backedges = AHashMap::<u32, u32>::new();

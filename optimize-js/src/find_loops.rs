@@ -9,7 +9,7 @@ use croaring::Bitmap;
 // - A backedge may point to a loop header outside its own loop.
 //   - Consider: labelled `continue` statements.
 // - A loop may be inside another loop; therefore, nodes may be part of multiple loops.
-pub(crate) fn find_loops(
+pub fn find_loops(
   cfg_parents: &AHashMap<u32, Bitmap>,
   backedges: &AHashMap<u32, u32>, // Map from A -> B where B -> A is a backedge.
 ) -> AHashMap<u32, Bitmap> {
