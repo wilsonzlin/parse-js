@@ -1,13 +1,13 @@
 [workspace]
 members = [
+  "bench/minify-js",
+  "minify-js-cli",
+  "minify-js-nodejs",
+  "minify-js",
   "parse-js-cli",
   "parse-js",
   "symbol-js",
   "test262",
-  "bench/minify-js",
-  "cli",
-  "nodejs",
-  "rust",
 ]
 
 [profile.release]
