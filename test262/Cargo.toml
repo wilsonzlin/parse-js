@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.0.32", features = ["derive"] }
-parse-js = { path = "../rust" }
+parse-js = { path = "../parse-js" }
 rayon = "1.6"

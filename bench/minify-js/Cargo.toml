@@ -5,4 +5,4 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-minify-js = { path = "../../rust" }
+minify-js = { path = "../../minify-js" }
