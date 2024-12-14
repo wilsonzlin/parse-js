@@ -5,7 +5,7 @@ use croaring::Bitmap;
 use itertools::Itertools;
 use std::collections::VecDeque;
 
-pub(crate) fn insert_phis_for_ssi_construction(
+pub(crate) fn insert_phis_for_ssa_construction(
   defs: &mut AHashMap<u32, Bitmap>,
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   domfront: &AHashMap<u32, Bitmap>,

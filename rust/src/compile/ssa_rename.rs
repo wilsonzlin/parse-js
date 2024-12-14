@@ -71,7 +71,7 @@ fn inner(
   }
 }
 
-pub(crate) fn rename_targets_for_ssi_construction(
+pub(crate) fn rename_targets_for_ssa_construction(
   bblocks: &mut AHashMap<u32, Vec<Inst>>,
   cfg_children: &AHashMap<u32, Bitmap>,
   domtree: &AHashMap<u32, Bitmap>,

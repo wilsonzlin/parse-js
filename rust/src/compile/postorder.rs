@@ -20,6 +20,7 @@ impl<'a> PostOrderVisitor<'a> {
   }
 }
 
+// Postorder: visit all children, then self.
 pub(crate) fn calculate_postorder(
   adj_list: &AHashMap<u32, Bitmap>,
   entry: u32,

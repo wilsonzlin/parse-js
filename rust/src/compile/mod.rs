@@ -22,8 +22,8 @@ pub(crate) mod postorder;
 pub(crate) mod register_alloc;
 pub(crate) mod single_use_insts;
 pub(crate) mod source_to_inst;
-pub(crate) mod ssi_insert_phis;
-pub(crate) mod ssi_rename;
+pub(crate) mod ssa_insert_phis;
+pub(crate) mod ssa_rename;
 pub(crate) mod visit;
 pub(crate) mod find_loops;
 
@@ -47,8 +47,8 @@ use optpass_trivial_dce::optpass_trivial_dce;
 use parse_js::ast::Node;
 use postorder::calculate_postorder;
 use source_to_inst::translate_source_to_inst;
-use ssi_insert_phis::insert_phis_for_ssi_construction;
-use ssi_rename::rename_targets_for_ssi_construction;
+use ssa_insert_phis::insert_phis_for_ssa_construction;
+use ssa_rename::rename_targets_for_ssa_construction;
 use backedge::{find_backedges_and_junctions};
 use deconstruct_ssa::deconstruct_ssa;
 use interference::calculate_interference_graph;
@@ -94,10 +94,10 @@ pub(crate) fn compile_js_statements(
   dbg_cfg("0. Source", &postorder, &bblocks, &cfg_children);
 
   // Construct SSA.
-  insert_phis_for_ssi_construction(&mut defs, &mut bblocks, &domfront);
-  dbg_cfg("1. SSI (Insert Phis)", &postorder, &bblocks, &cfg_children);
-  rename_targets_for_ssi_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
-  dbg_cfg("1. SSI (Rename Targets)", &postorder, &bblocks, &cfg_children);
+  insert_phis_for_ssa_construction(&mut defs, &mut bblocks, &domfront);
+  dbg_cfg("1. SSA (Insert Phis)", &postorder, &bblocks, &cfg_children);
+  rename_targets_for_ssa_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
+  dbg_cfg("1. SSA (Rename Targets)", &postorder, &bblocks, &cfg_children);
 
   // Optimisation passes:
   // - Dominator-based value numbering.
