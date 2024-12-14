@@ -1,0 +1,23 @@
+[package]
+authors = ["Wilson Lin <code@wilsonl.in>"]
+categories = ["compression", "command-line-utilities", "development-tools::build-utils", "web-programming"]
+description = "Extremely fast JavaScript minifier"
+edition = "2021"
+homepage = "https://github.com/wilsonzlin/minify-js"
+include = ["/src/**/*", "/Cargo.toml", "/LICENSE", "/README.md"]
+keywords = ["javascript", "compress", "minifier", "js", "ecmascript"]
+license = "Apache-2.0"
+name = "minify-js"
+readme = "README.md"
+repository = "https://github.com/wilsonzlin/minify-js"
+version = "0.6.0"
+
+[dependencies]
+ahash = "0.8.6"
+aho-corasick = "0.7"
+croaring = "1.0.1"
+itertools = "0.12.0"
+num-bigint = "0.4.4"
+once_cell = "1.19.0"
+parse-js = "0.24.0"
+symbol-js = "0.2.0"

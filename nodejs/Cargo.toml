@@ -1,0 +1,18 @@
+[package]
+name = "minify-js-node"
+publish = false
+version = "0.6.0"
+description = "Node.js bindings for minify-js"
+authors = ["Wilson Lin <npm@wilsonl.in>"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+minify-js = { version = "0.6.0", path = "../rust" }
+
+[dependencies.neon]
+version = "0.10"
+default-features = false
+features = ["napi-1"]

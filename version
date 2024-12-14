@@ -87,10 +87,38 @@ if (
   throw new Error("Working directory not clean");
 }
 cmd("git", "pull");
-cmd("cargo", "test");
+cmd("cargo", "test", "--features", "serialize");
 
-for (const f of ["rust/Cargo.toml"]) {
+for (const f of ["rust/Cargo.toml", "cli/Cargo.toml", "nodejs/Cargo.toml"]) {
   replaceInFile(f, /^version = "\d+\.\d+\.\d+"/m, `version = "${NEW_VERSION}"`);
+}
+
+for (const f of ["nodejs/Cargo.toml"]) {
+  replaceInFile(
+    f,
+    /^(minify-js = { version = )"\d+\.\d+\.\d+"/m,
+    `$1"${NEW_VERSION}"`
+  );
+}
+
+for (const f of ["nodejs/package.json"]) {
+  replaceInFile(
+    f,
+    /^(\s*"version": )"\d+\.\d+\.\d+",\s*$/m,
+    `$1"${NEW_VERSION}",`
+  );
+}
+
+for (const f of ["README.md"]) {
+  replaceInFile(f, /^(minify-js = )"\d+\.\d+\.\d+"/m, `$1"${NEW_VERSION}"`);
+}
+
+for (const f of ["README.md"]) {
+  replaceInFile(
+    f,
+    /(static.wilsonl\.in\/minify-js\/(?:bench|cli)\/)\d+\.\d+\.\d+/g,
+    `$1${NEW_VERSION}`
+  );
 }
 
 cmd("cargo", "generate-lockfile");
