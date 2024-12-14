@@ -18,6 +18,8 @@ use ahash::AHashMap;
 use aho_corasick::AhoCorasick;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::AhoCorasickKind;
+use aho_corasick::Anchored;
+use aho_corasick::Input;
 use aho_corasick::MatchKind;
 use aho_corasick::StartKind;
 use core::ops::Index;
@@ -179,8 +181,8 @@ impl<'a> Lexer<'a> {
     Match { len }
   }
 
-  fn aho_corasick(&self, ac: &AhoCorasick) -> SyntaxResult<AhoCorasickMatch> {
-    ac.find(&self.source[self.next..])
+  fn aho_corasick(&self, ac: &AhoCorasick, anchored: Anchored) -> SyntaxResult<AhoCorasickMatch> {
+    ac.find(Input::new(&self.source[self.next..]).anchored(anchored))
       .map(|m| AhoCorasickMatch {
         id: m.pattern().as_usize(),
         mat: Match { len: m.end() },
@@ -401,7 +403,7 @@ static COMMENT_END: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new([b"*/"]).u
 fn lex_multiple_comment(lexer: &mut Lexer<'_>) -> SyntaxResult<()> {
   // Consume `/*`.
   lexer.skip_expect(2);
-  lexer.consume(lexer.aho_corasick(&COMMENT_END)?.mat);
+  lexer.consume(lexer.aho_corasick(&COMMENT_END, Anchored::No)?.mat);
   Ok(())
 }
 
@@ -722,7 +724,7 @@ pub fn lex_next(lexer: &mut Lexer<'_>, mode: LexMode) -> SyntaxResult<Token> {
       return lex_identifier(lexer, mode, preceded_by_line_terminator);
     };
 
-    let AhoCorasickMatch { id, mut mat } = lexer.aho_corasick(&MATCHER)?;
+    let AhoCorasickMatch { id, mut mat } = lexer.aho_corasick(&MATCHER, Anchored::Yes)?;
     match PATTERNS[id].0 {
       TokenType::CommentMultiple => lex_multiple_comment(lexer)?,
       TokenType::CommentSingle => {
