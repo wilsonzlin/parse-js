@@ -5,10 +5,12 @@ members = [
   "minify-js-cli",
   "minify-js-nodejs",
   "minify-js",
+  "optimize-js-cli",
+  "optimize-js",
   "parse-js-cli",
   "parse-js",
   "symbol-js",
-  "test262", "optimize-js",
+  "test262",
 ]
 
 [profile.release]

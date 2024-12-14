@@ -2,9 +2,6 @@ use ahash::{AHashMap, AHashSet};
 use parse_js::{ast::{Node, Syntax}, loc::Loc, visit::{JourneyControls, Visitor}};
 use symbol_js::symbol::{Scope, ScopeType, Symbol};
 
-#[cfg(test)]
-mod tests;
-
 // Four tasks (fill out each field as appropriate).
 #[derive(Default)]
 pub struct VarVisitor {

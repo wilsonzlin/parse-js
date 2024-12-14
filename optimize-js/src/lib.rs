@@ -9,7 +9,6 @@ pub mod defs;
 pub mod domfront;
 pub mod dominators;
 pub mod domtree;
-pub mod dot;
 pub mod inst;
 pub mod interference;
 pub mod liveness;
@@ -26,6 +25,8 @@ pub mod ssa_insert_phis;
 pub mod ssa_rename;
 pub mod visit;
 pub mod find_loops;
+pub mod debug;
+pub mod var_visitor;
 
 use std::env::var;
 
@@ -34,10 +35,10 @@ use bblock::convert_insts_to_bblocks;
 use cfg::calculate_cfg;
 use counter::Counter;
 use croaring::Bitmap;
+use debug::OptimizerDebug;
 use defs::calculate_defs;
 use domfront::calculate_domfront;
 use domtree::calculate_domtree;
-use dot::render_cfg;
 use inst::Inst;
 use once_cell::sync::Lazy;
 use optpass_dvn::optpass_dvn;
@@ -57,28 +58,9 @@ use optpass_cfg_prune::optpass_cfg_prune;
 use register_alloc::allocate_registers;
 use single_use_insts::analyse_single_use_defs;
 
-static DEBUG_DOT: Lazy<AHashSet<String>> = Lazy::new(|| var("MJS_DEBUG_DOT").ok().map(|v| v.split(',').map(|s| s.to_string()).collect()).unwrap_or_default());
-
-fn dbg_cfg(
-  name: &str,
-  bblock_order: &[u32],
-  bblocks: &AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
-) {
-  if DEBUG_DOT.contains("1") || DEBUG_DOT.contains(name) {
-    let out_dir = var("MJS_DEBUG_DOT_OUTDIR").unwrap_or_else(|_| ".".to_string());
-    render_cfg(
-      &format!("{out_dir}/minify-js_debug_cfg_{name}.png"),
-      name,
-      bblock_order,
-      bblocks,
-      cfg_children,
-    );
-  }
-}
-
 pub fn compile_js_statements(
   statements: &[Node],
+  mut dbg: Option<&mut OptimizerDebug>,
 ) -> AHashMap<u32, Vec<Inst>> {
   // Label 0 is for entry.
   let mut c_label = Counter::new(1);
@@ -91,13 +73,13 @@ pub fn compile_js_statements(
   let (idom_by, domtree) = calculate_domtree(&cfg_parents, &postorder, &label_to_postorder, 0);
   let domfront = calculate_domfront(&cfg_parents, &idom_by, &postorder);
   let mut defs = calculate_defs(&bblocks);
-  dbg_cfg("0. Source", &postorder, &bblocks, &cfg_children);
+  dbg.as_mut().map(|dbg| dbg.add_step("source", &postorder, &bblocks, &cfg_children));
 
   // Construct SSA.
   insert_phis_for_ssa_construction(&mut defs, &mut bblocks, &domfront);
-  dbg_cfg("1. SSA (Insert Phis)", &postorder, &bblocks, &cfg_children);
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_insert_phis", &postorder, &bblocks, &cfg_children));
   rename_targets_for_ssa_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
-  dbg_cfg("1. SSA (Rename Targets)", &postorder, &bblocks, &cfg_children);
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_rename_targets", &postorder, &bblocks, &cfg_children));
 
   // Optimisation passes:
   // - Dominator-based value numbering.
@@ -112,26 +94,30 @@ pub fn compile_js_statements(
     let (_, domtree) = calculate_domtree(&cfg_parents, &postorder, &label_to_postorder, 0);
 
     optpass_dvn(&mut changed, &mut bblocks, &cfg_children, &domtree);
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dvn", i), &postorder, &bblocks, &cfg_children));
     optpass_trivial_dce(&mut changed, &mut bblocks);
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dce", i), &postorder, &bblocks, &cfg_children));
     // TODO Isn't this really const/copy propagation to child Phi insts?
     optpass_redundant_assigns(&mut changed, &mut bblocks);
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_redundant_assigns", i), &postorder, &bblocks, &cfg_children));
     optpass_impossible_branches(
       &mut changed,
       &mut bblocks,
       &mut cfg_parents,
       &mut cfg_children,
     );
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_impossible_branches", i), &postorder, &bblocks, &cfg_children));
     optpass_cfg_prune(
       &mut changed,
       &mut bblocks,
       &mut cfg_parents,
       &mut cfg_children,
     );
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_cfg_prune", i), &postorder, &bblocks, &cfg_children));
 
     if !changed {
       break;
     }
-    dbg_cfg(&format!("2. Optimisation Pass ({i})"), &postorder, &bblocks, &cfg_children);
   }
 
   let (inlines, inlined_tgts) = analyse_single_use_defs(&bblocks);
@@ -152,6 +138,7 @@ pub fn compile_js_statements(
     &mut cfg_children,
     &mut c_label,
   );
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_deconstruct", &postorder, &bblocks, &cfg_children));
 
   // To calculate the post dominators, reverse the edges and run any dominator algorithm.
   // TODO Reenable.

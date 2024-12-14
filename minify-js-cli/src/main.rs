@@ -8,6 +8,7 @@ use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 use clap::builder::TypedValueParser;
+use clap::builder::PossibleValuesParser;
 
 #[derive(Parser)]
 #[command(name = "minify-js", about = "Extremely fast JS minifier")]
@@ -25,7 +26,7 @@ struct Cli {
   #[arg(
     short,
     long,
-    value_parser = clap::builder::PossibleValuesParser::new(["global", "module"])
+    value_parser = PossibleValuesParser::new(["global", "module"])
         .map(|s| match s.as_str() {
           "global" => TopLevelMode::Global,
           "module" => TopLevelMode::Module,

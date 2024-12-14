@@ -7,11 +7,9 @@ use parse_js::parse;
 
 mod serialize;
 mod err;
-mod analyze;
 mod reconstruct;
 #[cfg(test)]
 mod tests;
-mod compile;
 
 use parse_js::visit::Visitor;
 use reconstruct::{reconstruct_ast_from_bblocks};

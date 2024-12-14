@@ -1,13 +1,14 @@
 use ahash::AHashMap;
 use num_bigint::BigInt;
 use parse_js::num::JsNumber;
+use serde::Serialize;
 use symbol_js::symbol::Symbol;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::{self};
 
 // PartialOrd and Ord are for some arbitrary canonical order, even if semantics of ordering is opaque.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub enum Const {
   BigInt(BigInt),
   Bool(bool),
@@ -31,7 +32,7 @@ impl Debug for Const {
 }
 
 // PartialOrd and Ord are for some arbitrary canonical order, even if semantics of ordering are opaque.
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub enum Arg {
   Builtin(String), // The value is a path (e.g. `Array.prototype.forEach`). Using a single string makes it easier to match.
   Const(Const),
@@ -70,7 +71,7 @@ impl Debug for Arg {
   }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 pub enum BinOp {
   Add,
   Div, // Divide.
@@ -111,7 +112,7 @@ impl Debug for BinOp {
   }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 pub enum UnOp {
   Neg,
   Not,
@@ -132,7 +133,7 @@ impl Debug for UnOp {
   }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub enum CallArg {
   Arg(Arg),
   Spread(Arg),
@@ -147,7 +148,7 @@ impl CallArg {
   }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Serialize)]
 pub enum Inst {
   Bin {
     tgt: u32,
