@@ -87,7 +87,7 @@ if (
   throw new Error("Working directory not clean");
 }
 cmd("git", "pull");
-cmd("cargo", "test", "--features", "serialize");
+cmd("cargo", "test");
 
 for (const f of ["rust/Cargo.toml"]) {
   replaceInFile(f, /^version = "\d+\.\d+\.\d+"/m, `version = "${NEW_VERSION}"`);
