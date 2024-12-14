@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
   "bench/minify-js",
   "minify-js-cli",
@@ -7,7 +8,7 @@ members = [
   "parse-js-cli",
   "parse-js",
   "symbol-js",
-  "test262",
+  "test262", "optimize-js",
 ]
 
 [profile.release]
