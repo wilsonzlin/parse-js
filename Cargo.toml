@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "cli",
-  "rust",
+  "parse-js-cli",
+  "parse-js",
+  "symbol-js",
   "test262",
 ]
