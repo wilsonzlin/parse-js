@@ -1,14 +1,14 @@
-use ahash::{AHashMap, AHashSet};
+use ahash::{HashMap, HashSet};
 use parse_js::{ast::{Node, Syntax}, loc::Loc, visit::{JourneyControls, Visitor}};
 use symbol_js::symbol::{Scope, ScopeType, Symbol};
 
 // Four tasks (fill out each field as appropriate).
 #[derive(Default)]
 pub struct VarVisitor {
-  pub declared: AHashSet<Symbol>,
-  pub foreign: AHashSet<Symbol>,
-  pub unknown: AHashSet<String>,
-  pub use_before_decl: AHashMap<Symbol, Loc>,
+  pub declared: HashSet<Symbol>,
+  pub foreign: HashSet<Symbol>,
+  pub unknown: HashSet<String>,
+  pub use_before_decl: HashMap<Symbol, Loc>,
 }
 
 // The lifted scope is the nearest self-or-ancestor scope that is not a block, or the self-or-ancestor scope just below the global scope.
@@ -63,7 +63,7 @@ impl Visitor for VarVisitor {
 
 #[cfg(test)]
 mod tests {
-  use ahash::{AHashMap, AHashSet};
+  use ahash::{HashMap, HashSet};
   use parse_js::{parse, visit::Visitor};
   use symbol_js::{
     compute_symbols,
@@ -88,12 +88,12 @@ mod tests {
     children: Vec<T>,
   }
 
-  fn test_scope_tree(out: &mut AHashMap<&'static str, Symbol>, s: &Scope, m: &T) {
+  fn test_scope_tree(out: &mut HashMap<&'static str, Symbol>, s: &Scope, m: &T) {
     let sd = s.data();
     assert_eq!(sd.typ(), m.typ);
     assert_eq!(sd.symbol_count(), m.syms.len());
     for (s, k) in m.syms.iter() {
-      let Some(sym) = sd.get_symbol(s.to_string()) else {
+      let Some(sym) = sd.get_symbol(s) else {
         panic!("did not find the declaration for {s}")
       };
       assert!(out.insert(k, sym).is_none());
@@ -132,7 +132,7 @@ mod tests {
     );
 
     // Verify the entire scope tree from the top.
-    let mut syms = AHashMap::new();
+    let mut syms = HashMap::new();
     #[rustfmt::skip]
     test_scope_tree(&mut syms, &s, &T {
       typ: ScopeType::Global,
@@ -173,7 +173,7 @@ mod tests {
     // Verify the visit.
     assert_eq!(
       v.declared,
-      AHashSet::from([
+      HashSet::from([
         syms["a"],
         syms["b1"],
         syms["b2"],
@@ -185,7 +185,7 @@ mod tests {
 
     assert_eq!(
       v.foreign,
-      AHashSet::from([
+      HashSet::from([
         syms["a"],
         syms["b1"],
         syms["c"],
@@ -193,14 +193,14 @@ mod tests {
     );
 
     assert_eq!(
-      v.use_before_decl.keys().cloned().collect::<AHashSet<_>>(),
-      AHashSet::from([
+      v.use_before_decl.keys().cloned().collect::<HashSet<_>>(),
+      HashSet::from([
       ]),
     );
 
     assert_eq!(
       v.unknown,
-      AHashSet::from([
+      HashSet::from([
         "w".to_string(),
         "y".to_string(),
         "x".to_string(),
@@ -231,7 +231,7 @@ mod tests {
     let (s, v) = parse_and_visit(source);
 
     // Verify the entire scope tree from the top.
-    let mut syms = AHashMap::new();
+    let mut syms = HashMap::new();
     #[rustfmt::skip]
     test_scope_tree(&mut syms, &s, &T {
       typ: ScopeType::Global,
@@ -260,7 +260,7 @@ mod tests {
     // Verify the visit.
     assert_eq!(
       v.declared,
-      AHashSet::from([
+      HashSet::from([
         syms["a"],
         syms["b1"],
         syms["b2"],
@@ -271,13 +271,13 @@ mod tests {
 
     assert_eq!(
       v.foreign,
-      AHashSet::from([
+      HashSet::from([
       ]),
     );
 
     assert_eq!(
-      v.use_before_decl.keys().cloned().collect::<AHashSet<_>>(),
-      AHashSet::from([
+      v.use_before_decl.keys().cloned().collect::<HashSet<_>>(),
+      HashSet::from([
         syms["a"],
         syms["b1"],
         syms["b2"],
@@ -287,7 +287,7 @@ mod tests {
 
     assert_eq!(
       v.unknown,
-      AHashSet::from([
+      HashSet::from([
         "anotherGlobalVar".to_string(),
         "b".to_string(),
         "globalVar".to_string(),

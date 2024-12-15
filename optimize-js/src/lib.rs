@@ -28,13 +28,10 @@ pub mod find_loops;
 pub mod debug;
 pub mod var_visitor;
 
-use std::env::var;
-
-use ahash::{AHashMap, AHashSet};
+use ahash::{AHashMap, AHashSet, HashMap};
 use bblock::convert_insts_to_bblocks;
 use cfg::calculate_cfg;
 use counter::Counter;
-use croaring::Bitmap;
 use debug::OptimizerDebug;
 use defs::calculate_defs;
 use domfront::calculate_domfront;
@@ -61,7 +58,7 @@ use single_use_insts::analyse_single_use_defs;
 pub fn compile_js_statements(
   statements: &[Node],
   mut dbg: Option<&mut OptimizerDebug>,
-) -> AHashMap<u32, Vec<Inst>> {
+) -> HashMap<u32, Vec<Inst>> {
   // Label 0 is for entry.
   let mut c_label = Counter::new(1);
   let mut c_temp = Counter::new(0);

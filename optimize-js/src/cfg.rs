@@ -1,6 +1,6 @@
+use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+
 use super::inst::Inst;
-use ahash::AHashMap;
-use croaring::Bitmap;
 use std::collections::VecDeque;
 
 /**
@@ -13,51 +13,51 @@ use std::collections::VecDeque;
  */
 
 pub fn mark_unreachable_cfg_bblocks(
-  to_delete: &mut Bitmap,
-  bblocks: &AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
+  to_delete: &mut HashSet<u32>,
+  bblocks: &HashMap<u32, Vec<Inst>>,
+  cfg_children: &HashMap<u32, HashSet<u32>>,
 ) {
-  let mut seen = Bitmap::of(&[0]);
-  let mut to_visit = [0].into_iter().collect::<VecDeque<_>>();
+  let mut seen = HashSet::from_iter([0]);
+  let mut to_visit = VecDeque::from([0]);
   while let Some(n) = to_visit.pop_front() {
-    for c in cfg_children[&n].iter() {
-      if !seen.contains(c) {
-        seen.add(c);
+    for &c in cfg_children[&n].iter() {
+      if !seen.contains(&c) {
+        seen.insert(c);
         to_visit.push_back(c);
       };
     }
   }
   // Find unreachable bblocks.
   for &n in bblocks.keys() {
-    if !seen.contains(n) {
-      to_delete.add(n);
+    if !seen.contains(&n) {
+      to_delete.insert(n);
     };
   }
 }
 
 pub fn delete_bblocks_from_cfg(
-  to_delete: &Bitmap,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_parents: &mut AHashMap<u32, Bitmap>,
-  cfg_children: &mut AHashMap<u32, Bitmap>,
+  to_delete: &HashSet<u32>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_parents: &mut HashMap<u32, HashSet<u32>>,
+  cfg_children: &mut HashMap<u32, HashSet<u32>>,
 ) {
   // Connect parents and children.
-  for label in to_delete.iter() {
+  for &label in to_delete {
     let parents = cfg_parents[&label].clone();
     let children = cfg_children[&label].clone();
-    for p in parents.iter() {
-      for c in children.iter() {
-        cfg_children.get_mut(&p).unwrap().add(c);
-        cfg_parents.get_mut(&c).unwrap().add(p);
+    for p in parents {
+      for &c in children.iter() {
+        cfg_children.get_mut(&p).unwrap().insert(c);
+        cfg_parents.get_mut(&c).unwrap().insert(p);
       }
     }
   }
   // Remove nonexistent links.
   for v in cfg_parents.values_mut() {
-    *v -= to_delete.clone();
+    v.retain(|&n| !to_delete.contains(&n));
   }
   for v in cfg_children.values_mut() {
-    *v -= to_delete.clone();
+    v.retain(|&n| !to_delete.contains(&n));
   }
   // Detach.
   for label in to_delete.iter() {
@@ -68,30 +68,34 @@ pub fn delete_bblocks_from_cfg(
 }
 
 pub fn calculate_cfg(
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
   // We consume this because all subsequent analysis operations should use a well-defined order (e.g. reverse postorder) for safety/correctness, and not this rather arbitrary ordering.
   mut bblock_order: Vec<u32>,
-) -> (AHashMap<u32, Bitmap>, AHashMap<u32, Bitmap>) {
+) -> (HashMap<u32, HashSet<u32>>, HashMap<u32, HashSet<u32>>) {
   // Adj. list from label to labels.
-  let mut cfg_children = AHashMap::<u32, Bitmap>::new();
-  let mut cfg_parents = AHashMap::<u32, Bitmap>::new();
+  let mut cfg_children = HashMap::<u32, HashSet<u32>>::new();
+  let mut cfg_parents = HashMap::<u32, HashSet<u32>>::new();
   for i in 0..bblocks.len() {
     let label = bblock_order[i];
-    let mut children = Bitmap::new();
+    let mut children = HashSet::new();
     let last = &bblocks[&label].last();
     match last {
       Some(Inst::Goto { label })
       | Some(Inst::NotCondGoto { label, .. })
-      | Some(Inst::CondGoto { label, .. }) => children.add(*label),
+      | Some(Inst::CondGoto { label, .. }) => {
+        children.insert(*label);
+      }
       _ => {}
     };
     match last {
       Some(Inst::Goto { .. }) => {}
       _ if i == bblocks.len() - 1 => {}
-      _ => children.add(bblock_order[i + 1]),
+      _ => {
+        children.insert(bblock_order[i + 1]);
+      }
     };
-    for c in children.iter() {
-      cfg_parents.entry(c).or_default().add(label);
+    for &c in children.iter() {
+      cfg_parents.entry(c).or_default().insert(label);
     }
     // Ensure that every node exists in `cfg_parents` even if they have none.
     cfg_parents.entry(label).or_default();
@@ -100,14 +104,14 @@ pub fn calculate_cfg(
   // Prune unreachable blocks from 0. This is necessary for dominance calculation to be correct (basic example: every block should be dominated by 0, but if there's an unreachable block it'll make all its descendants not dominated by 0).
   // This can happen due to user code (unreachable code) or by us, because we split after a `goto` which makes the new other-split-half block unreachable (this block is usually empty).
   {
-    let mut to_delete = Bitmap::new();
+    let mut to_delete = HashSet::new();
     mark_unreachable_cfg_bblocks(&mut to_delete, bblocks, &cfg_children);
     delete_bblocks_from_cfg(&to_delete, bblocks, &mut cfg_parents, &mut cfg_children);
     #[allow(unused)] // For correctness in case we do use `bblock_order` in the future.
     {
       bblock_order = bblock_order
         .into_iter()
-        .filter(|&n| !to_delete.contains(n))
+        .filter(|&n| !to_delete.contains(&n))
         .collect();
     }
   };

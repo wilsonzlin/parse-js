@@ -6,7 +6,8 @@ use super::inst::CallArg;
 use super::inst::Const;
 use super::inst::Inst;
 use super::inst::UnOp;
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
 use parse_js::ast::ClassOrObjectMemberKey;
 use parse_js::ast::ForInit;
 use parse_js::ast::Node;
@@ -22,7 +23,7 @@ struct SourceToInst<'c_temp, 'c_label> {
   out: Vec<Inst>,
   c_temp: &'c_temp mut Counter,
   c_label: &'c_label mut Counter,
-  symbol_to_temp: AHashMap<Symbol, u32>,
+  symbol_to_temp: HashMap<Symbol, u32>,
   break_stack: Vec<u32>, // Upon `break`, generate Inst::Goto to the label at the top of this stack.
 }
 
@@ -740,7 +741,7 @@ pub fn translate_source_to_inst(
     c_label,
     c_temp,
     out: Vec::new(),
-    symbol_to_temp: AHashMap::new(),
+    symbol_to_temp: HashMap::new(),
     break_stack: Vec::new(),
   };
   for stmt in stmts {

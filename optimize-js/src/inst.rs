@@ -1,4 +1,4 @@
-use ahash::AHashMap;
+use ahash::HashMap;
 use num_bigint::BigInt;
 use parse_js::num::JsNumber;
 use serde::Serialize;
@@ -149,6 +149,7 @@ impl CallArg {
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize)]
+#[serde(tag = "$type")]
 pub enum Inst {
   Bin {
     tgt: u32,
@@ -209,7 +210,7 @@ pub enum Inst {
   },
   Phi {
     tgt: u32,
-    from_blocks: AHashMap<u32, Arg>, // Pick one assigned value of `tgt` from one of these blocks. Due to const propagation, input targets could be transformed to const values, which is why we have `Arg` and not just `Target`.
+    from_blocks: HashMap<u32, Arg>, // Pick one assigned value of `tgt` from one of these blocks. Due to const propagation, input targets could be transformed to const values, which is why we have `Arg` and not just `Target`.
   },
   // No-op marker for a position in Vec<Inst>. We can't just use indices as we may reorder and splice the instructions during optimisations.
   Label {

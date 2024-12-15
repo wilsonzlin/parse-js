@@ -1,22 +1,24 @@
+use ahash::HashMap;
+use ahash::HashMapExt;
+use ahash::HashSet;
+
 use super::counter::Counter;
 use super::inst::Arg;
 use super::inst::CallArg;
 use super::inst::Inst;
 use super::visit::visit_inst_args;
 use super::visit::visit_inst_tgts;
-use ahash::AHashMap;
-use croaring::Bitmap;
 
 fn inner(
-  rename_stacks: &mut AHashMap<u32, Vec<u32>>,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
-  phi_orig_tgts: &AHashMap<(u32, usize), u32>,
-  domtree: &AHashMap<u32, Bitmap>,
+  rename_stacks: &mut HashMap<u32, Vec<u32>>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_children: &HashMap<u32, HashSet<u32>>,
+  phi_orig_tgts: &HashMap<(u32, usize), u32>,
+  domtree: &HashMap<u32, HashSet<u32>>,
   label: u32,
   c_temp: &mut Counter,
 ) {
-  let mut to_pop = AHashMap::<u32, usize>::new();
+  let mut to_pop = HashMap::<u32, usize>::new();
 
   // Replace arguments and targets in instructions.
   for mut inst in bblocks.get_mut(&label).unwrap().iter_mut() {
@@ -34,7 +36,7 @@ fn inner(
     });
   }
 
-  for s in cfg_children[&label].iter() {
+  for &s in cfg_children[&label].iter() {
     for (inst_no, inst) in bblocks.get_mut(&s).unwrap().iter_mut().enumerate() {
       let Inst::Phi { from_blocks, .. } = inst else {
         // No more phi nodes.
@@ -50,7 +52,7 @@ fn inner(
   }
 
   if let Some(children) = domtree.get(&label) {
-    for c in children.iter() {
+    for &c in children.iter() {
       inner(
         rename_stacks,
         bblocks,
@@ -72,13 +74,13 @@ fn inner(
 }
 
 pub fn rename_targets_for_ssa_construction(
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
-  domtree: &AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_children: &HashMap<u32, HashSet<u32>>,
+  domtree: &HashMap<u32, HashSet<u32>>,
   c_temp: &mut Counter,
 ) {
   // Store the original `tgt` field values from all Inst::Phi.
-  let mut phi_orig_tgts = AHashMap::<(u32, usize), u32>::new();
+  let mut phi_orig_tgts = HashMap::<(u32, usize), u32>::new();
   for (label, insts) in bblocks.iter() {
     for (inst_no, inst) in insts.iter().enumerate() {
       let Inst::Phi { tgt, .. } = inst else {
@@ -89,7 +91,7 @@ pub fn rename_targets_for_ssa_construction(
     }
   }
 
-  let mut rename_stacks = AHashMap::<u32, Vec<u32>>::new();
+  let mut rename_stacks = HashMap::<u32, Vec<u32>>::new();
   inner(
     &mut rename_stacks,
     bblocks,

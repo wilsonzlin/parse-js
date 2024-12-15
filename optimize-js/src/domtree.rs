@@ -1,5 +1,4 @@
-use ahash::AHashMap;
-use croaring::Bitmap;
+use ahash::{HashMap, HashMapExt, HashSet};
 
 // A dominates B if A will **always** execute some time at or before B. (All paths to B go through A.)
 // B is dominated by A if A also dominates **all** of B's parents. (Think about it.)
@@ -11,13 +10,13 @@ use croaring::Bitmap;
 // Other implementations:
 // - https://github.com/sampsyo/bril/blob/34133101a68bb50ae0fc8083857a3e3bd6bae260/bril-llvm/dom.py#L47
 pub fn calculate_domtree(
-  cfg_parents: &AHashMap<u32, Bitmap>,
+  cfg_parents: &HashMap<u32, HashSet<u32>>,
   postorder: &[u32],
-  label_to_postorder: &AHashMap<u32, usize>,
+  label_to_postorder: &HashMap<u32, usize>,
   entry: u32,
-) -> (AHashMap<u32, u32>, AHashMap<u32, Bitmap>) {
-  let mut idom_by = AHashMap::<u32, u32>::new();
-  let mut domtree = AHashMap::<u32, Bitmap>::new();
+) -> (HashMap<u32, u32>, HashMap<u32, HashSet<u32>>) {
+  let mut idom_by = HashMap::<u32, u32>::new();
+  let mut domtree = HashMap::<u32, HashSet<u32>>::new();
   {
     macro_rules! intersect {
       ($b1:expr, $b2:expr) => {{
@@ -40,11 +39,11 @@ pub fn calculate_domtree(
       let mut changed = false;
       for &b in postorder.iter().rev().filter(|b| **b != entry) {
         let parents = &cfg_parents[&b];
-        let Some(mut new_idom) = parents.iter().find(|n| idom_by.contains_key(n)) else {
+        let Some(mut new_idom) = parents.iter().find(|n| idom_by.contains_key(n)).cloned() else {
           continue;
         };
         let to_skip = new_idom;
-        for p in parents.iter().filter(|p| *p != to_skip) {
+        for p in parents.iter().filter(|&&p| p != to_skip) {
           if idom_by.get(&p).is_some() {
             new_idom = intersect!(p, new_idom);
           };
@@ -60,7 +59,7 @@ pub fn calculate_domtree(
     }
     idom_by.remove(&entry);
     for (&c, &p) in idom_by.iter() {
-      domtree.entry(p).or_default().add(c);
+      domtree.entry(p).or_default().insert(c);
     }
   };
   (idom_by, domtree)

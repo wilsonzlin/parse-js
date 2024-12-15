@@ -1,6 +1,5 @@
 use super::inst::Inst;
-use ahash::AHashMap;
-use croaring::Bitmap;
+use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 
 /**
@@ -9,9 +8,9 @@ use itertools::Itertools;
 
 pub fn optpass_cfg_prune(
   changed: &mut bool,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_parents: &mut AHashMap<u32, Bitmap>,
-  cfg_children: &mut AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_parents: &mut HashMap<u32, HashSet<u32>>,
+  cfg_children: &mut HashMap<u32, HashSet<u32>>,
 ) {
   // Iterate until convergence, instead of waiting for another optimisation pass.
   loop {
@@ -22,26 +21,26 @@ pub fn optpass_cfg_prune(
       if label == 0 {
         continue;
       };
-      let Ok(parent) = cfg_parents[&label].iter().exactly_one() else {
+      let Ok(&parent) = cfg_parents[&label].iter().exactly_one() else {
         continue;
       };
-      if cfg_children[&parent].cardinality() != 1 {
+      if cfg_children[&parent].len() != 1 {
         continue;
       };
       // Clone so we can update other entries in `cfg_*`.
       let children = cfg_children[&label].clone();
 
       // Connect parent to children.
-      for c in children.iter() {
-        cfg_parents.get_mut(&c).unwrap().add(parent);
-        cfg_children.get_mut(&parent).unwrap().add(c);
+      for &c in children.iter() {
+        cfg_parents.get_mut(&c).unwrap().insert(parent);
+        cfg_children.get_mut(&parent).unwrap().insert(c);
       }
       // Detach from children.
-      for c in children.iter() {
-        cfg_parents.get_mut(&c).unwrap().remove(label);
+      for &c in children.iter() {
+        cfg_parents.get_mut(&c).unwrap().remove(&label);
       }
       // Detach from parents.
-      cfg_children.get_mut(&parent).unwrap().remove(label);
+      cfg_children.get_mut(&parent).unwrap().remove(&label);
 
       // Remove any goto (cond. or otherwise) instruction in the parent block.
       let p_bblocks = bblocks.get_mut(&parent).unwrap();

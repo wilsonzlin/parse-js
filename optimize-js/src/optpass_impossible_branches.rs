@@ -3,8 +3,9 @@ use super::cfg::mark_unreachable_cfg_bblocks;
 use super::consteval::coerce_to_bool;
 use super::inst::Arg;
 use super::inst::Inst;
-use ahash::AHashMap;
-use croaring::Bitmap;
+use ahash::HashMap;
+use ahash::HashSet;
+use ahash::HashSetExt;
 use itertools::Itertools;
 
 // Correctness:
@@ -13,9 +14,9 @@ use itertools::Itertools;
 // - We must clean up any usages of defs within G outside of G. Outside of G, these uses can only appear in Phi nodes.
 pub fn optpass_impossible_branches(
   changed: &mut bool,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_parents: &mut AHashMap<u32, Bitmap>,
-  cfg_children: &mut AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_parents: &mut HashMap<u32, HashSet<u32>>,
+  cfg_children: &mut HashMap<u32, HashSet<u32>>,
 ) {
   loop {
     for label in bblocks.keys().cloned().collect_vec() {
@@ -23,7 +24,7 @@ pub fn optpass_impossible_branches(
         continue;
       };
       let children = &cfg_children[&label];
-      if children.cardinality() != 2 {
+      if children.len() != 2 {
         continue;
       };
       let (always_bool, eval_bool, explicit_child) = match inst {
@@ -40,9 +41,9 @@ pub fn optpass_impossible_branches(
       let child = if always_bool != eval_bool {
         explicit_child
       } else {
-        let Ok(other_child) = children
+        let Ok(&other_child) = children
           .iter()
-          .filter(|&c| c != explicit_child)
+          .filter(|&&c| c != explicit_child)
           .exactly_one()
         else {
           unreachable!();
@@ -53,12 +54,12 @@ pub fn optpass_impossible_branches(
       // Remove instruction.
       bblocks.get_mut(&label).unwrap().pop().unwrap();
       // Detach from child.
-      cfg_children.get_mut(&label).unwrap().remove(child);
-      cfg_parents.get_mut(&child).unwrap().remove(label);
+      cfg_children.get_mut(&label).unwrap().remove(&child);
+      cfg_parents.get_mut(&child).unwrap().remove(&label);
     }
 
     // Detaching from bblocks means that we may have removed entire subgraphs (i.e. other bblocks). Therefore, we must recalculate again the accessible bblocks.
-    let mut to_delete = Bitmap::new();
+    let mut to_delete = HashSet::new();
     mark_unreachable_cfg_bblocks(&mut to_delete, bblocks, cfg_children);
     // All defs in now-deleted bblocks must be cleared. Since we are in strict SSA, they should only ever appear outside of the deleted bblocks in Phi insts.
     for n in to_delete.iter() {

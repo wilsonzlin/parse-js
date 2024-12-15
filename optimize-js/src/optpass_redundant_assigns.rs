@@ -2,14 +2,15 @@ use super::inst::Arg;
 use super::inst::CallArg;
 use super::inst::Inst;
 use super::visit::visit_inst_args;
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
 
 // VarAssigns are always useless in strict SSA. However, dominator-based value numbering doesn't manage to detect and remove all such insts, with one reason being that DVNT only traverses domtree children.
 // My theory for correctness:
 // - Strict SSA requires all defs to dominate all their uses.
 // - Targets are only assigned in one place globally.
-pub fn optpass_redundant_assigns(changed: &mut bool, bblocks: &mut AHashMap<u32, Vec<Inst>>) {
-  let mut tgt_to_arg = AHashMap::new();
+pub fn optpass_redundant_assigns(changed: &mut bool, bblocks: &mut HashMap<u32, Vec<Inst>>) {
+  let mut tgt_to_arg = HashMap::new();
   for bblock in bblocks.values_mut() {
     let mut to_delete = Vec::new();
     for (i, inst) in bblock.iter().enumerate() {

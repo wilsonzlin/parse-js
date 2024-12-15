@@ -1,12 +1,12 @@
+use ahash::{HashMap, HashMapExt, HashSet};
+
 use super::counter::Counter;
 use super::inst::Inst;
-use ahash::AHashMap;
-use croaring::Bitmap;
 
 pub fn deconstruct_ssa(
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_parents: &mut AHashMap<u32, Bitmap>,
-  cfg_children: &mut AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_parents: &mut HashMap<u32, HashSet<u32>>,
+  cfg_children: &mut HashMap<u32, HashSet<u32>>,
   c_label: &mut Counter,
 ) {
   struct NewBblock {
@@ -17,7 +17,7 @@ pub fn deconstruct_ssa(
   }
   let mut new_bblocks = Vec::<NewBblock>::new();
   for (&label, bblock) in bblocks.iter_mut() {
-    let mut new_bblocks_by_parent = AHashMap::<u32, NewBblock>::new();
+    let mut new_bblocks_by_parent = HashMap::<u32, NewBblock>::new();
     while bblock
       .first()
       .is_some_and(|i| matches!(i, Inst::Phi { .. }))
@@ -48,8 +48,8 @@ pub fn deconstruct_ssa(
   }
   for mut b in new_bblocks {
     // Detach parent from child.
-    cfg_parents.get_mut(&b.child).unwrap().remove(b.parent);
-    cfg_children.get_mut(&b.parent).unwrap().remove(b.child);
+    cfg_parents.get_mut(&b.child).unwrap().remove(&b.parent);
+    cfg_children.get_mut(&b.parent).unwrap().remove(&b.child);
     // Update any goto inst in parent.
     match bblocks.get_mut(&b.parent).unwrap().last_mut() {
       Some(Inst::Goto { label })
@@ -60,12 +60,12 @@ pub fn deconstruct_ssa(
       _ => {}
     };
     // Attach new bblock.
-    cfg_parents.get_mut(&b.child).unwrap().add(b.label);
-    cfg_children.get_mut(&b.parent).unwrap().add(b.label);
+    cfg_parents.get_mut(&b.child).unwrap().insert(b.label);
+    cfg_children.get_mut(&b.parent).unwrap().insert(b.label);
     // Insert new bblock.
     b.insts.push(Inst::Goto { label: b.child });
     bblocks.insert(b.label, b.insts);
-    cfg_parents.insert(b.label, Bitmap::of(&[b.parent]));
-    cfg_children.insert(b.label, Bitmap::of(&[b.child]));
+    cfg_parents.insert(b.label, HashSet::from_iter([b.parent]));
+    cfg_children.insert(b.label, HashSet::from_iter([b.child]));
   }
 }

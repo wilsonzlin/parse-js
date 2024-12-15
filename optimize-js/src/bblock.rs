@@ -1,13 +1,14 @@
+use ahash::{HashMap, HashMapExt};
+
 use super::counter::Counter;
 use super::inst::Inst;
-use ahash::AHashMap;
 
 // We may need to create some new blocks (which require labels), which is why we need `c_label`.
 pub fn convert_insts_to_bblocks(
   insts: Vec<Inst>,
   c_label: &mut Counter,
-) -> (AHashMap<u32, Vec<Inst>>, Vec<u32>) {
-  let mut bblocks = AHashMap::<u32, Vec<Inst>>::new();
+) -> (HashMap<u32, Vec<Inst>>, Vec<u32>) {
+  let mut bblocks = HashMap::<u32, Vec<Inst>>::new();
   // The order is required for implicit "fallthrough" jumps to the lexically "next" block.
   let mut bblock_order = vec![0];
   let mut bblock = bblocks.entry(0).or_default();

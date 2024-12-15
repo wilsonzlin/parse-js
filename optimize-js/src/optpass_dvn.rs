@@ -7,8 +7,8 @@ use super::inst::CallArg;
 use super::inst::Const;
 use super::inst::Inst;
 use super::inst::UnOp;
-use ahash::AHashMap;
-use croaring::Bitmap;
+use ahash::HashMap;
+use ahash::HashSet;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::mem::swap;
@@ -21,16 +21,16 @@ enum Val {
 
 #[derive(Clone, Default)]
 struct State {
-  val_to_coc: AHashMap<Val, Arg>,
-  tgt_to_coc: AHashMap<u32, Arg>,
+  val_to_coc: HashMap<Val, Arg>,
+  tgt_to_coc: HashMap<u32, Arg>,
 }
 
 fn inner(
   changed: &mut bool,
   state: &mut State,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
-  domtree: &AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_children: &HashMap<u32, HashSet<u32>>,
+  domtree: &HashMap<u32, HashSet<u32>>,
   label: u32,
 ) {
   macro_rules! upsert_val {
@@ -241,7 +241,7 @@ fn inner(
   }
 
   if let Some(children) = domtree.get(&label) {
-    for c in children.iter() {
+    for &c in children.iter() {
       inner(changed, state, bblocks, cfg_children, domtree, c);
     }
   }
@@ -261,9 +261,9 @@ fn inner(
 /// - Const evaluation
 pub fn optpass_dvn(
   changed: &mut bool,
-  bblocks: &mut AHashMap<u32, Vec<Inst>>,
-  cfg_children: &AHashMap<u32, Bitmap>,
-  domtree: &AHashMap<u32, Bitmap>,
+  bblocks: &mut HashMap<u32, Vec<Inst>>,
+  cfg_children: &HashMap<u32, HashSet<u32>>,
+  domtree: &HashMap<u32, HashSet<u32>>,
 ) {
   let mut state = State::default();
   inner(changed, &mut state, bblocks, cfg_children, domtree, 0);

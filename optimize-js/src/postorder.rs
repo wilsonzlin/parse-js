@@ -1,19 +1,18 @@
-use ahash::AHashMap;
-use croaring::Bitmap;
+use ahash::{HashMap, HashSet, HashSetExt};
 
 struct PostOrderVisitor<'a> {
-  graph: &'a AHashMap<u32, Bitmap>,
-  seen: Bitmap,
+  graph: &'a HashMap<u32, HashSet<u32>>,
+  seen: HashSet<u32>,
   order: Vec<u32>,
 }
 
 impl<'a> PostOrderVisitor<'a> {
   fn visit(&mut self, n: u32) {
-    if self.seen.contains(n) {
+    if self.seen.contains(&n) {
       return;
     };
-    self.seen.add(n);
-    for c in self.graph[&n].iter() {
+    self.seen.insert(n);
+    for &c in self.graph[&n].iter() {
       self.visit(c);
     }
     self.order.push(n);
@@ -22,13 +21,13 @@ impl<'a> PostOrderVisitor<'a> {
 
 // Postorder: visit all children, then self.
 pub fn calculate_postorder(
-  adj_list: &AHashMap<u32, Bitmap>,
+  adj_list: &HashMap<u32, HashSet<u32>>,
   entry: u32,
-) -> (Vec<u32>, AHashMap<u32, usize>) {
+) -> (Vec<u32>, HashMap<u32, usize>) {
   let mut order_po_v = PostOrderVisitor {
     graph: adj_list,
     order: Vec::new(),
-    seen: Bitmap::new(),
+    seen: HashSet::new(),
   };
   order_po_v.visit(entry);
   // Order of blocks to visit in order to visit by postorder. Elements are labels. This can also be used to map from postorder number (i.e. number each node would be assigned if sequentially visited and assigned in postorder) to label.
@@ -38,6 +37,6 @@ pub fn calculate_postorder(
     .iter()
     .enumerate()
     .map(|(i, l)| (*l, i))
-    .collect::<AHashMap<_, _>>();
+    .collect::<HashMap<_, _>>();
   (order_po, label_to_po)
 }

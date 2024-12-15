@@ -1,16 +1,19 @@
+use ahash::HashMap;
+use ahash::HashMapExt;
+use ahash::HashSet;
+use ahash::HashSetExt;
+
 use super::inst::Arg;
 use super::inst::CallArg;
 use super::inst::Inst;
 use super::visit::visit_inst_args;
 use super::visit::visit_inst_tgts;
-use ahash::AHashMap;
-use croaring::Bitmap;
 
 pub fn analyse_single_use_defs(
-  bblocks: &AHashMap<u32, Vec<Inst>>,
-) -> (AHashMap<(u32, usize), (u32, usize)>, Bitmap) {
-  let mut use_locs = AHashMap::<u32, Vec<(u32, usize)>>::new();
-  let mut def_locs = AHashMap::<u32, (u32, usize)>::new();
+  bblocks: &HashMap<u32, Vec<Inst>>,
+) -> (HashMap<(u32, usize), (u32, usize)>, HashSet<u32>) {
+  let mut use_locs = HashMap::<u32, Vec<(u32, usize)>>::new();
+  let mut def_locs = HashMap::<u32, (u32, usize)>::new();
   for (&label, insts) in bblocks {
     for (inst_no, inst) in insts.iter().enumerate() {
       visit_inst_args!(inst, |arg| match arg {
@@ -24,8 +27,8 @@ pub fn analyse_single_use_defs(
   }
 
   // K => V, where the inst at location K has been inlined into location V. Location V may itself be inlined into somewhere else.
-  let mut inlines = AHashMap::<(u32, usize), (u32, usize)>::new();
-  let mut inlined_vars = Bitmap::new();
+  let mut inlines = HashMap::<(u32, usize), (u32, usize)>::new();
+  let mut inlined_vars = HashSet::new();
   for (var, uses) in use_locs {
     if uses.len() != 1 {
       continue;
@@ -38,7 +41,7 @@ pub fn analyse_single_use_defs(
     };
     assert!(src_loc.1 < dest_loc.1);
     assert!(inlines.insert(src_loc, dest_loc.clone()).is_none());
-    inlined_vars.add(var);
+    inlined_vars.insert(var);
   }
 
   (inlines, inlined_vars)
