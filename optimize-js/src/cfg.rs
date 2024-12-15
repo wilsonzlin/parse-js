@@ -60,7 +60,7 @@ pub fn delete_bblocks_from_cfg(
     v.retain(|&n| !to_delete.contains(&n));
   }
   // Detach.
-  for label in to_delete.iter() {
+  for &label in to_delete {
     bblocks.remove(&label).unwrap();
     cfg_parents.remove(&label).unwrap();
     cfg_children.remove(&label).unwrap();

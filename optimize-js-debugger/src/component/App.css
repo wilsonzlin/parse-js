@@ -3,7 +3,9 @@
   inset: 0;
 
   > main {
+    height: 100%;
     display: flex;
+    align-items: stretch;
 
     > .canvas {
       flex-grow: 1;
@@ -20,26 +22,54 @@
         /* Make translucent to see edges that flow beneath it. */
         background: rgba(255, 255, 255, 0.8);
         padding: 0.5rem;
+        font-family: var(--monospace-font-family);
+
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
 
         > h1 {
           text-align: center;
+          color: blue;
+          font-weight: bolder;
         }
 
         .insts {
           font-size: 0.9rem;
-          font-family: "Courier New", Courier, monospace;
           display: table;
 
           > .inst {
             display: table-row;
+            color: #333;
 
             > div {
               display: table-cell;
 
               &:first-child {
-                padding-right: 0.5rem;
+                padding-right: 1.5rem;
                 text-align: right;
               }
+            }
+
+            .const {
+              color: orange;
+            }
+
+            .eq {
+              color: #999;
+            }
+
+            .foreign,
+            .unknown {
+              color: #333;
+            }
+
+            .label {
+              color: blue;
+            }
+
+            .var {
+              color: purple;
             }
           }
         }
@@ -48,8 +78,28 @@
 
     > .pane {
       flex-shrink: 0;
+      width: 40vw;
+
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+
+      > .info {
+        flex-grow: 1;
+        min-height: 0;
+
+        .error {
+          font-family: var(--monospace-font-family);
+          color: red;
+          background: #fdd;
+          padding: 0.5rem;
+          border: 1px solid #f99;
+          white-space: pre-wrap;
+        }
+      }
 
       > .editor {
+        flex-shrink: 0;
         border: 1px solid #ccc;
       }
     }

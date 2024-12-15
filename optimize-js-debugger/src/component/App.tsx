@@ -182,22 +182,22 @@ type BBlockNode = Node<
 
 const ConstElement = ({ value }: { value: Const }) => {
   if (value === "Null") {
-    return <span className="null">null</span>;
+    return <span className="const null">null</span>;
   }
   if (value === "Undefined") {
-    return <span className="undefined">undefined</span>;
+    return <span className="const undefined">undefined</span>;
   }
   if (value.BigInt !== undefined) {
-    return <span className="bigint">{value.BigInt.toString()}</span>;
+    return <span className="const bigint">{value.BigInt.toString()}</span>;
   }
   if (value.Bool !== undefined) {
-    return <span className="bool">{value.Bool.toString()}</span>;
+    return <span className="const bool">{value.Bool.toString()}</span>;
   }
   if (value.Num !== undefined) {
-    return <span className="num">{value.Num}</span>;
+    return <span className="const num">{value.Num}</span>;
   }
   if (value.Str !== undefined) {
-    return <span className="str">{value.Str}</span>;
+    return <span className="const str">{value.Str}</span>;
   }
   throw new UnreachableError();
 };
@@ -226,7 +226,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.tgt} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.left} />
@@ -240,7 +240,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             {inst.tgt == undefined ? <span /> : <VarElement id={inst.tgt} />}
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.func} />
@@ -274,7 +274,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.to} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <span className="foreign">foreign {inst.from}</span>
@@ -286,7 +286,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <span className="foreign">foreign {inst.to}</span>
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.from} />
@@ -324,7 +324,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.tgt} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <span>ϕ(</span>
@@ -332,6 +332,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
               <Fragment key={i}>
                 <span>{i === 0 ? "" : ", "}</span>
                 <span className="label">:{label}</span>
+                <span> ⇒ </span>
                 <ArgElement arg={arg} />
               </Fragment>
             ))}
@@ -347,7 +348,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
             <span>[</span>
             <ArgElement arg={inst.prop} />
             <span>]</span>
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.value} />
@@ -359,7 +360,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.tgt} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <span>{inst.op}</span>
@@ -372,7 +373,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.to} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <span className="unknown">unknown {inst.from}</span>
@@ -384,7 +385,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <span className="unknown">unknown {inst.to}</span>
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.from} />
@@ -396,7 +397,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
         <>
           <div>
             <VarElement id={inst.tgt} />
-            <span> =</span>
+            <span className="eq"> =</span>
           </div>
           <div>
             <ArgElement arg={inst.value} />
@@ -558,18 +559,48 @@ const Graph = ({
 };
 
 export const App = ({}: {}) => {
-  const [data, setData] = useState<Debug>();
-  const [stepIdx, setStepIdx] = useState(0);
-  const stepNames = useMemo(() => data?.steps.map((s) => s.name) ?? [], [data]);
-
+  const [loadedWasm, setLoadedWasm] = useState(false);
   useEffect(() => {
     (async () => {
       await initWasm({
         module_or_path: "/optimize_js_debugger_bg.wasm",
       });
       set_panic_hook();
+      setLoadedWasm(true);
     })();
   }, []);
+
+  const INIT_SOURCE = `
+let x = 1;
+if (x) {
+  g();
+}
+f(x);
+  `.trim();
+  const [source, setSource] = useState(INIT_SOURCE);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [data, setData] = useState<Debug>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    const src = source.trim();
+    if (!loadedWasm || !src) {
+      return;
+    }
+    let res;
+    try {
+      // TODO Global mode.
+      res = build_js(source, false);
+    } catch (err) {
+      // Don't clear existing graph.
+      setError(err.stack);
+      return;
+    }
+    setError(undefined);
+    console.log("Built JS:", res);
+    // TODO AST
+    setData(vDebug.parseRoot(res.debug));
+  }, [loadedWasm, source]);
+  const stepNames = useMemo(() => data?.steps.map((s) => s.name) ?? [], [data]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -594,20 +625,16 @@ export const App = ({}: {}) => {
           )}
         </div>
         <div className="pane">
+          <div className="info">
+            {error && <p className="error">{error}</p>}
+          </div>
           <div className="editor">
             <Editor
-              height="95vh"
+              height="50vh"
               width="40vw"
               defaultLanguage="javascript"
-              defaultValue="let x = 1; if (x) { g(); } f(x);"
-              onChange={(e) => {
-                const source = e?.trim() ?? "";
-                // TODO Global mode.
-                const res = build_js(source, false);
-                console.log("Built JS:", res);
-                // TODO AST
-                setData(vDebug.parseRoot(res.debug));
-              }}
+              defaultValue={INIT_SOURCE}
+              onChange={(e) => setSource(e?.trim() ?? "")}
             />
           </div>
         </div>

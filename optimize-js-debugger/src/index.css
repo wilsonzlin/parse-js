@@ -3,7 +3,9 @@
 }
 
 :root {
-  font-family: sans-serif;
+  --monospace-font-family: "IBM Plex Mono", monospace;
+
+  font-family: "Inter var", sans-serif;
   font-size: 14px;
   line-height: 1.4;
 }
