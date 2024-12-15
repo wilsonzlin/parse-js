@@ -1,10 +1,11 @@
 import { Valid, Validator, VArray, VBoolean, VFiniteNumber, VInteger, VMap, VMember, VObjectMap, VOptional, VString, VStringEnum, VStruct, VTagged, VUnion } from "@wzlin/valid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Edge, Handle, Node, Panel, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Edge, Handle, Node, Panel, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesInitialized, useNodesState, useReactFlow } from "@xyflow/react";
 import Dagre from "@dagrejs/dagre";
 import initWasm, { build_js, set_panic_hook } from "optimize-js-debugger";
 import { Editor } from "@monaco-editor/react";
 import "./App.css";
+import UnreachableError from "@xtjs/lib/UnreachableError";
 import "@xyflow/react/dist/style.css";
 
 enum BinOp {
@@ -49,11 +50,15 @@ const vConst = new VUnion(
   }),
 );
 
+type Const = Valid<typeof vConst>;
+
 const vArg = new VStruct({
   Builtin: new VOptional(new VString()),
   Const: new VOptional(vConst),
   Var: new VOptional(new VInteger()),
 });
+
+type Arg = Valid<typeof vArg>;
 
 const vCallArg = new VStruct({
   Arg: new VOptional(vArg),
@@ -123,6 +128,8 @@ const vInst = new VTagged("$type", {
   }),
 });
 
+type Inst = Valid<typeof vInst>;
+
 const vDebugStep = new VStruct({
   name: new VString(),
   bblockOrder: new VArray(new VInteger()),
@@ -143,15 +150,259 @@ type BBlockNode = Node<{
   insts: Array<Valid<typeof vInst>>,
 }, "bblock">;
 
+const ConstElement = ({
+  value,
+}: {
+  value: Const,
+}) => {
+  if (value === "Null") {
+    return <span className="null">null</span>;
+  }
+  if (value === "Undefined") {
+    return <span className="undefined">undefined</span>;
+  }
+  if (value.BigInt !== undefined) {
+    return <span className="bigint">{value.BigInt.toString()}</span>;
+  }
+  if (value.Bool !== undefined) {
+    return <span className="bool">{value.Bool.toString()}</span>;
+  }
+  if (value.Num !== undefined) {
+    return <span className="num">{value.Num}</span>;
+  }
+  if (value.Str !== undefined) {
+    return <span className="str">{value.Str}</span>;
+  }
+  throw new UnreachableError();
+};
+
+const VarElement = ({
+  id,
+}: {
+  id: number,
+}) => (
+  <span className="var">%{id}</span>
+);
+
+const ArgElement = ({
+  arg,
+}: {
+  arg: Arg,
+}) => {
+  if (arg.Builtin) {
+    return <span className="builtin">{arg.Builtin}</span>;
+  }
+  if (arg.Const) {
+    return <ConstElement value={arg.Const} />;
+  }
+  if (arg.Var != undefined) {
+    return <VarElement id={arg.Var} />;
+  }
+  throw new UnreachableError();
+}
+
+const InstElement = ({
+  inst
+}: {
+  inst: Inst,
+}) => {
+  switch (inst.$type) {
+    case "Bin":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.tgt} />
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.left} />
+            <span>{inst.op}</span>
+            <ArgElement arg={inst.right} />
+          </div>
+        </>
+      );
+    case "Call":
+      return (
+        <>
+          <div>
+            {inst.tgt == undefined ? <span /> : <VarElement id={inst.tgt} />}
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.func} />
+            <span>(</span>
+            {inst.args.map((arg, i) => (
+              <Fragment key={i}>
+                <span>{i === 0 ? "" : ", "}</span>
+                {arg.Spread && <span>&hellip;</span>}
+                {arg.Arg && <ArgElement arg={arg.Arg} />}
+              </Fragment>
+            ))}
+            <span>)</span>
+          </div>
+        </>
+      );
+    case "CondGoto":
+      return (
+        <>
+          <div>
+            <span>goto</span>
+          </div>
+          <div>
+            <span className="label">:{inst.label}</span>
+            <span> if </span>
+            <ArgElement arg={inst.cond} />
+          </div>
+        </>
+      );
+    case "ForeignLoad":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.to} />
+            <span> =</span>
+          </div>
+          <div>
+            <span className="foreign">foreign {inst.from}</span>
+          </div>
+        </>
+      );
+    case "ForeignStore":
+      return (
+        <>
+          <div>
+            <span className="foreign">foreign {inst.to}</span>
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.from} />
+          </div>
+        </>
+      );
+    case "Goto":
+      return (
+        <>
+          <div>
+            <span>goto</span>
+          </div>
+          <div>
+            <span className="label">:{inst.label}</span>
+          </div>
+        </>
+      );
+    case "Label":
+      throw new UnreachableError();
+    case "NotCondGoto":
+      return (
+        <>
+          <div>
+            <span>goto</span>
+          </div>
+          <div>
+            <span className="label">:{inst.label}</span>
+            <span> if not </span>
+            <ArgElement arg={inst.cond} />
+          </div>
+        </>
+      );
+    case "Phi":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.tgt} />
+            <span> =</span>
+          </div>
+          <div>
+            <span>ϕ(</span>
+            {[...inst.from_blocks].map(([label, arg], i) => (
+              <Fragment key={i}>
+                <span>{i === 0 ? "" : ", "}</span>
+                <span className="label">:{label}</span>
+                <ArgElement arg={arg} />
+              </Fragment>
+            ))}
+            <span>)</span>
+          </div>
+        </>
+      );
+    case "PropAssign":
+      return (
+        <>
+          <div>
+            <ArgElement arg={inst.obj} />
+            <span>[</span>
+            <ArgElement arg={inst.prop} />
+            <span>]</span>
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.value} />
+          </div>
+        </>
+      );
+    case "Un":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.tgt} />
+            <span> =</span>
+          </div>
+          <div>
+            <span>{inst.op}</span>
+            <ArgElement arg={inst.arg} />
+          </div>
+        </>
+      );
+    case "UnknownLoad":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.to} />
+            <span> =</span>
+          </div>
+          <div>
+            <span className="unknown">unknown {inst.from}</span>
+          </div>
+        </>
+      );
+    case "UnknownStore":
+      return (
+        <>
+          <div>
+            <span className="unknown">unknown {inst.to}</span>
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.from} />
+          </div>
+        </>
+      );
+    case "VarAssign":
+      return (
+        <>
+          <div>
+            <VarElement id={inst.tgt} />
+            <span> =</span>
+          </div>
+          <div>
+            <ArgElement arg={inst.value} />
+          </div>
+        </>
+      );
+  }
+};
+
 const BBlockElement = ({ data: { label, insts } }: {data: BBlockNode["data"]}) => {
   return (
     <>
       <Handle type="target" position={Position.Top} />
       <div className="bblock">
         <h1>:{label}</h1>
-        <ol>
+        <ol className="insts">
           {insts.map((s, i) => (
-            <li key={i}>{JSON.stringify(s)}</li>
+            <li key={i} className="inst">
+              <InstElement inst={s} />
+            </li>
           ))}
         </ol>
       </div>
@@ -188,7 +439,6 @@ const getLayoutedElements = (
       // so it matches the React Flow node anchor point (top left).
       const x = position.x - (node.measured?.width ?? 0) / 2;
       const y = position.y - (node.measured?.height ?? 0) / 2;
-
       return { ...node, position: { x, y } };
     }),
     edges,
@@ -200,8 +450,10 @@ const nodeTypes = {
 };
 
 const Graph = ({
+  stepNames,
   step,
 }: {
+  stepNames: Array<string>,
   step: DebugStep
 }) => {
   const initNodes = useMemo(() => step.bblockOrder.map<BBlockNode>(label => ({
@@ -220,36 +472,39 @@ const Graph = ({
     animated: true,
   }))), [step]);
 
-  const [tick, setTick] = useState(0);
-
   const {fitView} = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
+  // https://github.com/xyflow/xyflow/issues/533#issuecomment-1601814350
+  const nodesSized = useNodesInitialized();
+  const [layoutCalculated, setLayoutCalculated] = useState(false);
   // Force update nodes and edges when source code or step changes.
   // (Otherwise, new nodes and edges are left unused.)
   useEffect(() => {
     setNodes(initNodes);
     setEdges(initEdges);
-    // We can't call onLayout now as the nodes don't have correct DOM sizes yet for it to calculate the layout.
-    const timeout = setTimeout(() => {
-      setTick(tick + 1);
-    }, 100);
-    return () => clearTimeout(timeout);
+    setLayoutCalculated(false);
   }, [step]);
 
-  const layoutRaf = useRef<number | null>(null);
-  const onLayout = useCallback((direction: "TB" | "LR") => {
-    const layouted = getLayoutedElements(nodes, edges, { direction });
+  useEffect(() => {
+    if (!nodesSized || layoutCalculated) {
+      return;
+    }
+    const layouted = getLayoutedElements(nodes, edges, { direction: "TB" });
+    setNodes(layouted.nodes);
+    setEdges(layouted.edges);
+    setLayoutCalculated(true);
+  }, [
+    // WARNING: This must *NOT* run when `nodes` or `edges` change, as they will have a size of 0 but nodesSized will be true.
+    // This is correct anyway: we only run after sizing, not before (when inputs change) or after (when layout is calculated).
+    nodesSized,
+  ]);
 
-    setNodes([...layouted.nodes]);
-    setEdges([...layouted.edges]);
-
-    cancelAnimationFrame(layoutRaf.current!);
-    layoutRaf.current = requestAnimationFrame(() => {
+  useEffect(() => {
+    if (nodesSized && layoutCalculated) {
       fitView();
-    });
-  }, [nodes, edges]);
-  useEffect(() => onLayout("TB"), [tick]);
+    }
+  }, [    layoutCalculated  ]);
 
   return (
       <ReactFlow
@@ -262,7 +517,11 @@ const Graph = ({
         onNodesChange={onNodesChange}
       >
         <Panel position="top-left">
-          <h1>{step.name}</h1>
+          <ul className="step-names">
+            {stepNames.map((name, i) => (
+              <li key={i} className={name == step.name ? "current" : ""}>{name}</li>
+            ))}
+          </ul>
         </Panel>
       </ReactFlow>
   )
@@ -271,6 +530,7 @@ const Graph = ({
 export const App = ({}: {}) => {
   const [data, setData] = useState<Debug>();
   const [stepIdx, setStepIdx] = useState(0);
+  const stepNames = useMemo(() => data?.steps.map(s => s.name) ?? [], [data]);
 
   useEffect(() => {
     (async () => {
@@ -283,10 +543,10 @@ export const App = ({}: {}) => {
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         setStepIdx((idx) => Math.max(0, idx - 1));
-      } else if (e.key === "ArrowRight") {
-        setStepIdx((idx) => Math.min(data?.steps.length ?? 0, idx + 1));
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        setStepIdx((idx) => Math.min((data?.steps.length ?? 1) - 1, idx + 1));
       }
     };
     window.addEventListener("keydown", listener);
@@ -299,7 +559,9 @@ export const App = ({}: {}) => {
         <div className="canvas">
           {data &&
           <ReactFlowProvider>
-          <Graph step={data.steps[stepIdx]} />
+          <Graph step={data.steps[stepIdx]}
+            stepNames={stepNames}
+           />
           </ReactFlowProvider>
 }
         </div>
