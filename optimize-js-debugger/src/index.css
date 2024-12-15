@@ -37,8 +37,12 @@ h6 {
 }
 
 p,
-ol, ul, li,
-dl, dt, dd {
+ol,
+ul,
+li,
+dl,
+dt,
+dd {
   display: block;
   margin: 0;
   padding: 0;

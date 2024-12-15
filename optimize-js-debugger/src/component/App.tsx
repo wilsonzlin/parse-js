@@ -1,12 +1,39 @@
-import { Valid, Validator, VArray, VBoolean, VFiniteNumber, VInteger, VMap, VMember, VObjectMap, VOptional, VString, VStringEnum, VStruct, VTagged, VUnion } from "@wzlin/valid";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Edge, Handle, Node, Panel, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesInitialized, useNodesState, useReactFlow } from "@xyflow/react";
 import Dagre from "@dagrejs/dagre";
-import initWasm, { build_js, set_panic_hook } from "optimize-js-debugger";
 import { Editor } from "@monaco-editor/react";
-import "./App.css";
+import {
+  Valid,
+  Validator,
+  VArray,
+  VBoolean,
+  VFiniteNumber,
+  VInteger,
+  VMap,
+  VMember,
+  VOptional,
+  VString,
+  VStringEnum,
+  VStruct,
+  VTagged,
+  VUnion,
+} from "@wzlin/valid";
 import UnreachableError from "@xtjs/lib/UnreachableError";
+import {
+  Edge,
+  Handle,
+  Node,
+  Panel,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesInitialized,
+  useNodesState,
+  useReactFlow,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import initWasm, { build_js, set_panic_hook } from "optimize-js-debugger";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import "./App.css";
 
 enum BinOp {
   Add = "Add",
@@ -14,10 +41,10 @@ enum BinOp {
   Exp = "Exp", // Exponentiate.
   Geq = "Geq", // Greater than or equals to.
   GetProp = "GetProp",
-  Gt = "Gt",  // Greater than.
+  Gt = "Gt", // Greater than.
   Leq = "Leq", // Less than or equals to.
   LooseEq = "LooseEq",
-  Lt = "Lt",  // Less than.
+  Lt = "Lt", // Less than.
   Mod = "Mod", // Modulo.
   Mul = "Mul", // Multiply.
   NotLooseEq = "NotLooseEq",
@@ -145,16 +172,15 @@ const vDebug = new VStruct({
 
 type Debug = Valid<typeof vDebug>;
 
-type BBlockNode = Node<{
-  label: number,
-  insts: Array<Valid<typeof vInst>>,
-}, "bblock">;
+type BBlockNode = Node<
+  {
+    label: number;
+    insts: Array<Valid<typeof vInst>>;
+  },
+  "bblock"
+>;
 
-const ConstElement = ({
-  value,
-}: {
-  value: Const,
-}) => {
+const ConstElement = ({ value }: { value: Const }) => {
   if (value === "Null") {
     return <span className="null">null</span>;
   }
@@ -176,19 +202,11 @@ const ConstElement = ({
   throw new UnreachableError();
 };
 
-const VarElement = ({
-  id,
-}: {
-  id: number,
-}) => (
+const VarElement = ({ id }: { id: number }) => (
   <span className="var">%{id}</span>
 );
 
-const ArgElement = ({
-  arg,
-}: {
-  arg: Arg,
-}) => {
+const ArgElement = ({ arg }: { arg: Arg }) => {
   if (arg.Builtin) {
     return <span className="builtin">{arg.Builtin}</span>;
   }
@@ -199,13 +217,9 @@ const ArgElement = ({
     return <VarElement id={arg.Var} />;
   }
   throw new UnreachableError();
-}
+};
 
-const InstElement = ({
-  inst
-}: {
-  inst: Inst,
-}) => {
+const InstElement = ({ inst }: { inst: Inst }) => {
   switch (inst.$type) {
     case "Bin":
       return (
@@ -392,7 +406,11 @@ const InstElement = ({
   }
 };
 
-const BBlockElement = ({ data: { label, insts } }: {data: BBlockNode["data"]}) => {
+const BBlockElement = ({
+  data: { label, insts },
+}: {
+  data: BBlockNode["data"];
+}) => {
   return (
     <>
       <Handle type="target" position={Position.Top} />
@@ -408,7 +426,7 @@ const BBlockElement = ({ data: { label, insts } }: {data: BBlockNode["data"]}) =
       </div>
       <Handle type="source" position={Position.Bottom} />
     </>
-  )
+  );
 };
 
 const getLayoutedElements = (
@@ -420,14 +438,14 @@ const getLayoutedElements = (
   g.setGraph({ rankdir: options.direction });
 
   for (const edge of edges) {
-    g.setEdge(edge.source, edge.target)
+    g.setEdge(edge.source, edge.target);
   }
   for (const node of nodes) {
     g.setNode(node.id, {
       ...node,
       width: node.measured?.width ?? 0,
       height: node.measured?.height ?? 0,
-    })
+    });
   }
 
   Dagre.layout(g);
@@ -453,26 +471,36 @@ const Graph = ({
   stepNames,
   step,
 }: {
-  stepNames: Array<string>,
-  step: DebugStep
+  stepNames: Array<string>;
+  step: DebugStep;
 }) => {
-  const initNodes = useMemo(() => step.bblockOrder.map<BBlockNode>(label => ({
-    id: `${label}`,
-    type: "bblock",
-    data: {
-      label,
-      insts: step.bblocks.get(label)!,
-    },
-    position: { x: 0, y: 0 },
-  })), [step]);
-  const initEdges = useMemo(() => [...step.cfgChildren].flatMap(([src, dests]) => dests.map<Edge>(dest => ({
-    id: `${src}-${dest}`,
-    source: `${src}`,
-    target: `${dest}`,
-    animated: true,
-  }))), [step]);
+  const initNodes = useMemo(
+    () =>
+      step.bblockOrder.map<BBlockNode>((label) => ({
+        id: `${label}`,
+        type: "bblock",
+        data: {
+          label,
+          insts: step.bblocks.get(label)!,
+        },
+        position: { x: 0, y: 0 },
+      })),
+    [step],
+  );
+  const initEdges = useMemo(
+    () =>
+      [...step.cfgChildren].flatMap(([src, dests]) =>
+        dests.map<Edge>((dest) => ({
+          id: `${src}-${dest}`,
+          source: `${src}`,
+          target: `${dest}`,
+          animated: true,
+        })),
+      ),
+    [step],
+  );
 
-  const {fitView} = useReactFlow();
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState(initNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initEdges);
   // https://github.com/xyflow/xyflow/issues/533#issuecomment-1601814350
@@ -504,33 +532,35 @@ const Graph = ({
     if (nodesSized && layoutCalculated) {
       fitView();
     }
-  }, [    layoutCalculated  ]);
+  }, [layoutCalculated]);
 
   return (
-      <ReactFlow
-        edges={edges}
-        fitView
-        nodes={nodes}
-        nodesDraggable={false}
-        nodeTypes={nodeTypes}
-        onEdgesChange={onEdgesChange}
-        onNodesChange={onNodesChange}
-      >
-        <Panel position="top-left">
-          <ul className="step-names">
-            {stepNames.map((name, i) => (
-              <li key={i} className={name == step.name ? "current" : ""}>{name}</li>
-            ))}
-          </ul>
-        </Panel>
-      </ReactFlow>
-  )
+    <ReactFlow
+      edges={edges}
+      fitView
+      nodes={nodes}
+      nodesDraggable={false}
+      nodeTypes={nodeTypes}
+      onEdgesChange={onEdgesChange}
+      onNodesChange={onNodesChange}
+    >
+      <Panel position="top-left">
+        <ul className="step-names">
+          {stepNames.map((name, i) => (
+            <li key={i} className={name == step.name ? "current" : ""}>
+              {name}
+            </li>
+          ))}
+        </ul>
+      </Panel>
+    </ReactFlow>
+  );
 };
 
 export const App = ({}: {}) => {
   const [data, setData] = useState<Debug>();
   const [stepIdx, setStepIdx] = useState(0);
-  const stepNames = useMemo(() => data?.steps.map(s => s.name) ?? [], [data]);
+  const stepNames = useMemo(() => data?.steps.map((s) => s.name) ?? [], [data]);
 
   useEffect(() => {
     (async () => {
@@ -557,13 +587,11 @@ export const App = ({}: {}) => {
     <div className="App">
       <main>
         <div className="canvas">
-          {data &&
-          <ReactFlowProvider>
-          <Graph step={data.steps[stepIdx]}
-            stepNames={stepNames}
-           />
-          </ReactFlowProvider>
-}
+          {data && (
+            <ReactFlowProvider>
+              <Graph step={data.steps[stepIdx]} stepNames={stepNames} />
+            </ReactFlowProvider>
+          )}
         </div>
         <div className="pane">
           <div className="editor">
@@ -572,11 +600,11 @@ export const App = ({}: {}) => {
               width="40vw"
               defaultLanguage="javascript"
               defaultValue="let x = 1; if (x) { g(); } f(x);"
-              onChange={e => {
+              onChange={(e) => {
                 const source = e?.trim() ?? "";
                 // TODO Global mode.
                 const res = build_js(source, false);
-                console.log("Built JS:", res)
+                console.log("Built JS:", res);
                 // TODO AST
                 setData(vDebug.parseRoot(res.debug));
               }}

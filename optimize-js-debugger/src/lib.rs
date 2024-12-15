@@ -1,9 +1,15 @@
-use optimize_js::{compile_js_statements, debug::OptimizerDebug, var_visitor::VarVisitor};
-use parse_js::{ast::{Node, Syntax}, parse};
-use serde::Serialize;
-use symbol_js::{compute_symbols, TopLevelMode};
+use optimize_js::compile_js_statements;
+use optimize_js::debug::OptimizerDebug;
+use optimize_js::var_visitor::VarVisitor;
+use parse_js::ast::Node;
+use parse_js::ast::Syntax;
+use parse_js::parse;
 use parse_js::visit::Visitor;
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use serde::Serialize;
+use symbol_js::compute_symbols;
+use symbol_js::TopLevelMode;
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsValue;
 
 #[wasm_bindgen]
 pub fn set_panic_hook() {
@@ -24,10 +30,7 @@ pub struct BuiltJs {
 }
 
 #[wasm_bindgen]
-pub fn build_js(
-  source: &str,
-  is_global: bool,
-) -> JsValue {
+pub fn build_js(source: &str, is_global: bool) -> JsValue {
   let top_level_mode = if is_global {
     TopLevelMode::Global
   } else {
@@ -52,6 +55,9 @@ pub fn build_js(
   };
   let mut dbg = OptimizerDebug::new();
   let optimized = compile_js_statements(&body, Some(&mut dbg));
-  let built = BuiltJs { ast: top_level_node, debug: dbg };
+  let built = BuiltJs {
+    ast: top_level_node,
+    debug: dbg,
+  };
   serde_wasm_bindgen::to_value(&built).unwrap()
 }
