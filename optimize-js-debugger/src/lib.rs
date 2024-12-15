@@ -1,0 +1,57 @@
+use optimize_js::{compile_js_statements, debug::OptimizerDebug, var_visitor::VarVisitor};
+use parse_js::{ast::{Node, Syntax}, parse};
+use serde::Serialize;
+use symbol_js::{compute_symbols, TopLevelMode};
+use parse_js::visit::Visitor;
+use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+
+#[wasm_bindgen]
+pub fn set_panic_hook() {
+  // When the `console_error_panic_hook` feature is enabled, we can call the
+  // `set_panic_hook` function at least once during initialization, and then
+  // we will get better error messages if our code ever panics.
+  //
+  // For more details see
+  // https://github.com/rustwasm/console_error_panic_hook#readme
+  #[cfg(feature = "console_error_panic_hook")]
+  console_error_panic_hook::set_once();
+}
+
+#[derive(Serialize)]
+pub struct BuiltJs {
+  pub ast: Node,
+  pub debug: OptimizerDebug,
+}
+
+#[wasm_bindgen]
+pub fn build_js(
+  source: &str,
+  is_global: bool,
+) -> JsValue {
+  let top_level_mode = if is_global {
+    TopLevelMode::Global
+  } else {
+    TopLevelMode::Module
+  };
+  let mut top_level_node = parse(source.as_bytes()).expect("parse input");
+  compute_symbols(&mut top_level_node, top_level_mode);
+
+  let mut var_visitor = VarVisitor::default();
+  var_visitor.visit(&top_level_node);
+  let VarVisitor {
+    declared,
+    foreign,
+    unknown,
+    use_before_decl,
+  } = var_visitor;
+  if let Some((_, loc)) = use_before_decl.iter().next() {
+    panic!("Use before declaration at {:?}", loc);
+  };
+  let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
+    panic!();
+  };
+  let mut dbg = OptimizerDebug::new();
+  let optimized = compile_js_statements(&body, Some(&mut dbg));
+  let built = BuiltJs { ast: top_level_node, debug: dbg };
+  serde_wasm_bindgen::to_value(&built).unwrap()
+}

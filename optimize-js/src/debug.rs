@@ -1,7 +1,7 @@
 use ahash::{HashMap, HashSet};
 use serde::Serialize;
 
-use crate::inst::Inst;
+use crate::{inst::Inst, postorder::calculate_postorder};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,10 +24,11 @@ impl OptimizerDebug {
     }
   }
 
-  pub fn add_step(&mut self, name: impl AsRef<str>, bblock_order: &[u32], bblocks: &HashMap<u32, Vec<Inst>>, cfg_children: &HashMap<u32, HashSet<u32>>) {
+  pub fn add_step(&mut self, name: impl AsRef<str>, bblocks: &HashMap<u32, Vec<Inst>>, cfg_children: &HashMap<u32, HashSet<u32>>) {
     self.steps.push(OptimizerDebugStep {
       name: name.as_ref().to_string(),
-      bblock_order: bblock_order.to_vec(),
+      // We always recalculate as some steps may prune or add bblocks.
+      bblock_order: calculate_postorder(&cfg_children, 0).0,
       bblocks: bblocks.clone(),
       cfg_children: cfg_children.iter().map(|(k, v)| (*k, v.clone())).collect(),
     });

@@ -1,0 +1,30 @@
+.App {
+  position: fixed;
+  inset: 0;
+
+  > main {
+    display: flex;
+
+    > .canvas {
+      flex-grow: 1;
+      min-width: 0;
+
+      .bblock {
+        border: 1px solid #eee;
+        text-align: center;
+
+        ol {
+          font-size: 0.9rem;
+        }
+      }
+    }
+
+    > .pane {
+      flex-shrink: 0;
+
+      > .editor {
+        border: 1px solid #ccc;
+      }
+    }
+  }
+}

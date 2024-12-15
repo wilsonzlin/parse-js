@@ -70,13 +70,13 @@ pub fn compile_js_statements(
   let (idom_by, domtree) = calculate_domtree(&cfg_parents, &postorder, &label_to_postorder, 0);
   let domfront = calculate_domfront(&cfg_parents, &idom_by, &postorder);
   let mut defs = calculate_defs(&bblocks);
-  dbg.as_mut().map(|dbg| dbg.add_step("source", &postorder, &bblocks, &cfg_children));
+  dbg.as_mut().map(|dbg| dbg.add_step("source", &bblocks, &cfg_children));
 
   // Construct SSA.
   insert_phis_for_ssa_construction(&mut defs, &mut bblocks, &domfront);
-  dbg.as_mut().map(|dbg| dbg.add_step("ssa_insert_phis", &postorder, &bblocks, &cfg_children));
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_insert_phis", &bblocks, &cfg_children));
   rename_targets_for_ssa_construction(&mut bblocks, &cfg_children, &domtree, &mut c_temp);
-  dbg.as_mut().map(|dbg| dbg.add_step("ssa_rename_targets", &postorder, &bblocks, &cfg_children));
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_rename_targets", &bblocks, &cfg_children));
 
   // Optimisation passes:
   // - Dominator-based value numbering.
@@ -91,26 +91,26 @@ pub fn compile_js_statements(
     let (_, domtree) = calculate_domtree(&cfg_parents, &postorder, &label_to_postorder, 0);
 
     optpass_dvn(&mut changed, &mut bblocks, &cfg_children, &domtree);
-    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dvn", i), &postorder, &bblocks, &cfg_children));
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dvn", i), &bblocks, &cfg_children));
     optpass_trivial_dce(&mut changed, &mut bblocks);
-    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dce", i), &postorder, &bblocks, &cfg_children));
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_dce", i), &bblocks, &cfg_children));
     // TODO Isn't this really const/copy propagation to child Phi insts?
     optpass_redundant_assigns(&mut changed, &mut bblocks);
-    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_redundant_assigns", i), &postorder, &bblocks, &cfg_children));
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_redundant_assigns", i), &bblocks, &cfg_children));
     optpass_impossible_branches(
       &mut changed,
       &mut bblocks,
       &mut cfg_parents,
       &mut cfg_children,
     );
-    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_impossible_branches", i), &postorder, &bblocks, &cfg_children));
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_impossible_branches", i), &bblocks, &cfg_children));
     optpass_cfg_prune(
       &mut changed,
       &mut bblocks,
       &mut cfg_parents,
       &mut cfg_children,
     );
-    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_cfg_prune", i), &postorder, &bblocks, &cfg_children));
+    dbg.as_mut().map(|dbg| dbg.add_step(&format!("opt{}_cfg_prune", i), &bblocks, &cfg_children));
 
     if !changed {
       break;
@@ -135,7 +135,7 @@ pub fn compile_js_statements(
     &mut cfg_children,
     &mut c_label,
   );
-  dbg.as_mut().map(|dbg| dbg.add_step("ssa_deconstruct", &postorder, &bblocks, &cfg_children));
+  dbg.as_mut().map(|dbg| dbg.add_step("ssa_deconstruct", &bblocks, &cfg_children));
 
   // To calculate the post dominators, reverse the edges and run any dominator algorithm.
   // TODO Reenable.

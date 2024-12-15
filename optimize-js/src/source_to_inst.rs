@@ -480,6 +480,7 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
             OperatorName::Multiplication => BinOp::Mul,
             OperatorName::StrictEquality => BinOp::StrictEq,
             OperatorName::Subtraction => BinOp::Sub,
+            OperatorName::GreaterThan => BinOp::Gt,
             _ => unimplemented!(),
           };
           let left = self.compile_arg(&left);

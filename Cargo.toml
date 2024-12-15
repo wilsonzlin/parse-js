@@ -6,6 +6,7 @@ members = [
   "minify-js-nodejs",
   "minify-js",
   "optimize-js-cli",
+  "optimize-js-debugger",
   "optimize-js",
   "parse-js-cli",
   "parse-js",
