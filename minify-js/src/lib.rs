@@ -42,14 +42,12 @@ pub fn minify(
   let mut top_level_node = parse(source).map_err(MinifyError::Syntax)?;
   compute_symbols(&mut top_level_node, top_level_mode);
 
-  let mut var_visitor = VarVisitor::default();
-  var_visitor.visit(&top_level_node);
   let VarVisitor {
     declared,
     foreign,
     unknown,
     use_before_decl,
-  } = var_visitor;
+  } = VarVisitor::analyze(&top_level_node);
   if let Some((_, loc)) = use_before_decl.iter().next() {
     return Err(MinifyError::UseBeforeDecl(*loc));
   };

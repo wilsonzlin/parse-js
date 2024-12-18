@@ -35,6 +35,22 @@ import initWasm, { build_js, set_panic_hook } from "optimize-js-debugger";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import "./App.css";
 
+enum InstTyp {
+  Bin = "Bin",
+  Un = "Un",
+  VarAssign = "VarAssign",
+  PropAssign = "PropAssign",
+  Goto = "Goto",
+  CondGoto = "CondGoto",
+  Call = "Call",
+  ForeignLoad = "ForeignLoad",
+  ForeignStore = "ForeignStore",
+  UnknownLoad = "UnknownLoad",
+  UnknownStore = "UnknownStore",
+  Phi = "Phi",
+  Label = "Label",
+}
+
 enum BinOp {
   Add = "Add",
   Div = "Div", // Divide.
@@ -87,72 +103,16 @@ const vArg = new VStruct({
 
 type Arg = Valid<typeof vArg>;
 
-const vCallArg = new VStruct({
-  Arg: new VOptional(vArg),
-  Spread: new VOptional(vArg),
-});
-
-const vInst = new VTagged("$type", {
-  Bin: new VStruct({
-    tgt: new VInteger(),
-    left: vArg,
-    op: new VStringEnum(BinOp),
-    right: vArg,
-  }),
-  Un: new VStruct({
-    tgt: new VInteger(),
-    arg: vArg,
-    op: new VStringEnum(UnOp),
-  }),
-  VarAssign: new VStruct({
-    tgt: new VInteger(),
-    value: vArg,
-  }),
-  PropAssign: new VStruct({
-    obj: vArg,
-    prop: vArg,
-    value: vArg,
-  }),
-  Goto: new VStruct({
-    label: new VInteger(),
-  }),
-  CondGoto: new VStruct({
-    cond: vArg,
-    label: new VInteger(),
-  }),
-  NotCondGoto: new VStruct({
-    cond: vArg,
-    label: new VInteger(),
-  }),
-  Call: new VStruct({
-    tgt: new VOptional(new VInteger()),
-    func: vArg,
-    this: vArg,
-    args: new VArray(vCallArg),
-  }),
-  ForeignLoad: new VStruct({
-    from: new VInteger(),
-    to: new VInteger(),
-  }),
-  ForeignStore: new VStruct({
-    from: vArg,
-    to: new VInteger(),
-  }),
-  UnknownLoad: new VStruct({
-    from: new VString(),
-    to: new VInteger(),
-  }),
-  UnknownStore: new VStruct({
-    from: vArg,
-    to: new VString(),
-  }),
-  Phi: new VStruct({
-    tgt: new VInteger(),
-    from_blocks: new VMap(new VInteger(), vArg),
-  }),
-  Label: new VStruct({
-    label: new VInteger(),
-  }),
+const vInst = new VStruct({
+  t: new VStringEnum(InstTyp),
+  tgts: new VArray(new VInteger()),
+  args: new VArray(vArg),
+  spreads: new VArray(new VInteger()),
+  labels: new VArray(new VInteger()),
+  bin_op: new VOptional(new VStringEnum(BinOp)),
+  un_op: new VOptional(new VStringEnum(UnOp)),
+  foreign: new VOptional(new VInteger()),
+  unknown: new VOptional(new VString()),
 });
 
 type Inst = Valid<typeof vInst>;
@@ -207,10 +167,10 @@ const VarElement = ({ id }: { id: number }) => (
 );
 
 const ArgElement = ({ arg }: { arg: Arg }) => {
-  if (arg.Builtin) {
+  if (arg.Builtin != undefined) {
     return <span className="builtin">{arg.Builtin}</span>;
   }
-  if (arg.Const) {
+  if (arg.Const != undefined) {
     return <ConstElement value={arg.Const} />;
   }
   if (arg.Var != undefined) {
@@ -220,18 +180,18 @@ const ArgElement = ({ arg }: { arg: Arg }) => {
 };
 
 const InstElement = ({ inst }: { inst: Inst }) => {
-  switch (inst.$type) {
+  switch (inst.t) {
     case "Bin":
       return (
         <>
           <div>
-            <VarElement id={inst.tgt} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.left} />
-            <span>{inst.op}</span>
-            <ArgElement arg={inst.right} />
+            <ArgElement arg={inst.args[0]} />
+            <span>{inst.bin_op}</span>
+            <ArgElement arg={inst.args[1]} />
           </div>
         </>
       );
@@ -239,17 +199,19 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            {inst.tgt == undefined ? <span /> : <VarElement id={inst.tgt} />}
+            {inst.tgts[0] == undefined ? <span /> : <VarElement id={inst.tgts[0]} />}
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.func} />
+            <ArgElement arg={inst.args[0]} />
             <span>(</span>
-            {inst.args.map((arg, i) => (
+            <span>this=</span>
+            <ArgElement arg={inst.args[1]} />
+            {inst.args.slice(2).map((arg, i) => (
               <Fragment key={i}>
-                <span>{i === 0 ? "" : ", "}</span>
-                {arg.Spread && <span>&hellip;</span>}
-                {arg.Arg && <ArgElement arg={arg.Arg} />}
+                <span>, </span>
+                {inst.spreads.includes(i) && <span>&hellip;</span>}
+                {arg && <ArgElement arg={arg} />}
               </Fragment>
             ))}
             <span>)</span>
@@ -263,9 +225,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
             <span>goto</span>
           </div>
           <div>
-            <span className="label">:{inst.label}</span>
+            <span className="label">:{inst.labels[0]}</span>
             <span> if </span>
-            <ArgElement arg={inst.cond} />
+            <ArgElement arg={inst.args[0]} />
+            <span> else </span>
+            <span className="label">:{inst.labels[1]}</span>
           </div>
         </>
       );
@@ -273,11 +237,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <VarElement id={inst.to} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
-            <span className="foreign">foreign {inst.from}</span>
+            <span className="foreign">foreign {inst.foreign}</span>
           </div>
         </>
       );
@@ -285,11 +249,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <span className="foreign">foreign {inst.to}</span>
+            <span className="foreign">foreign {inst.foreign}</span>
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.from} />
+            <ArgElement arg={inst.args[0]} />
           </div>
         </>
       );
@@ -300,40 +264,27 @@ const InstElement = ({ inst }: { inst: Inst }) => {
             <span>goto</span>
           </div>
           <div>
-            <span className="label">:{inst.label}</span>
+            <span className="label">:{inst.labels[0]}</span>
           </div>
         </>
       );
     case "Label":
       throw new UnreachableError();
-    case "NotCondGoto":
-      return (
-        <>
-          <div>
-            <span>goto</span>
-          </div>
-          <div>
-            <span className="label">:{inst.label}</span>
-            <span> if not </span>
-            <ArgElement arg={inst.cond} />
-          </div>
-        </>
-      );
     case "Phi":
       return (
         <>
           <div>
-            <VarElement id={inst.tgt} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
             <span>ϕ(</span>
-            {[...inst.from_blocks].map(([label, arg], i) => (
+            {inst.labels.map((label, i) => (
               <Fragment key={i}>
                 <span>{i === 0 ? "" : ", "}</span>
                 <span className="label">:{label}</span>
                 <span> ⇒ </span>
-                <ArgElement arg={arg} />
+                <ArgElement arg={inst.args[i]} />
               </Fragment>
             ))}
             <span>)</span>
@@ -344,14 +295,14 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <ArgElement arg={inst.obj} />
+            <ArgElement arg={inst.args[0]} />
             <span>[</span>
-            <ArgElement arg={inst.prop} />
+            <ArgElement arg={inst.args[1]} />
             <span>]</span>
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.value} />
+            <ArgElement arg={inst.args[2]} />
           </div>
         </>
       );
@@ -359,12 +310,12 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <VarElement id={inst.tgt} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
-            <span>{inst.op}</span>
-            <ArgElement arg={inst.arg} />
+            <span>{inst.un_op}</span>
+            <ArgElement arg={inst.args[0]} />
           </div>
         </>
       );
@@ -372,11 +323,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <VarElement id={inst.to} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
-            <span className="unknown">unknown {inst.from}</span>
+            <span className="unknown">unknown {inst.unknown}</span>
           </div>
         </>
       );
@@ -384,11 +335,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <span className="unknown">unknown {inst.to}</span>
+            <span className="unknown">unknown {inst.unknown}</span>
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.from} />
+            <ArgElement arg={inst.args[0]} />
           </div>
         </>
       );
@@ -396,11 +347,11 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <VarElement id={inst.tgt} />
+            <VarElement id={inst.tgts[0]} />
             <span className="eq"> =</span>
           </div>
           <div>
-            <ArgElement arg={inst.value} />
+            <ArgElement arg={inst.args[0]} />
           </div>
         </>
       );

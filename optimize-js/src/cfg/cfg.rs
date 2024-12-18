@@ -103,18 +103,18 @@ pub struct Cfg {
 
 impl Cfg {
   pub fn from_bblocks(
-    bblocks: HashMap<u32, Vec<Inst>>,
+    mut bblocks: HashMap<u32, Vec<Inst>>,
     // We consume this because all subsequent analysis operations should use a well-defined order (e.g. reverse postorder) for safety/correctness, and not this rather arbitrary ordering.
     bblock_order: Vec<u32>,
   ) -> Self {
     let mut graph = Graph::new();
     for i in 0..bblocks.len() {
       let parent = bblock_order[i];
-      if let Some(Inst { t: InstTyp::Goto | InstTyp::CondGoto, labels, .. }) = &bblocks[&parent].last() {
-        for mut label in labels.iter().cloned() {
+      if let Some(Inst { t: InstTyp::Goto | InstTyp::CondGoto, labels, .. }) = bblocks.get_mut(&parent).unwrap().last_mut() {
+        for label in labels.iter_mut() {
           // We use DUMMY_LABEL during source_to_inst for one branch of a CondGoto to indicate fallthrough.
-          if label == DUMMY_LABEL {
-            label = bblock_order[i + 1];
+          if *label == DUMMY_LABEL {
+            *label = bblock_order[i + 1];
           };
           graph.connect(&parent, &label);
         }

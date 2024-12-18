@@ -160,6 +160,18 @@ pub enum InstTyp {
   _Unreachable,
 }
 
+fn is_dummy_binop(op: &BinOp) -> bool {
+  matches!(op, BinOp::_Unreachable)
+}
+
+fn is_dummy_unop(op: &UnOp) -> bool {
+  matches!(op, UnOp::_Unreachable)
+}
+
+fn is_dummy_symbol(sym: &Symbol) -> bool {
+  sym.raw_id() == u64::MAX
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Serialize)]
 pub struct Inst {
   pub t: InstTyp,
@@ -168,9 +180,13 @@ pub struct Inst {
   pub spreads: Vec<usize>, // Indices into `args` that are spread, for Call. Cannot have values less than 2 as the first two args are `callee` and `this`.
   pub labels: Vec<u32>,
   // Garbage values if not applicable.
+  #[serde(default = "BinOp::_Unreachable", skip_serializing_if = "is_dummy_binop")]
   pub bin_op: BinOp,
+  #[serde(default = "UnOp::_Unreachable", skip_serializing_if = "is_dummy_unop")]
   pub un_op: UnOp,
+  #[serde(default = "Symbol::from_raw_id_max", skip_serializing_if = "is_dummy_symbol")]
   pub foreign: Symbol,
+  #[serde(default, skip_serializing_if = "String::is_empty")]
   pub unknown: String,
 }
 

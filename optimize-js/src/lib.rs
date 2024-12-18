@@ -112,3 +112,28 @@ pub fn compile_js_statements(
 
   cfg.bblocks
 }
+
+#[cfg(test)]
+mod tests {
+    use parse_js::{ast::Syntax, parse};
+    use symbol_js::{compute_symbols, TopLevelMode};
+
+    use crate::compile_js_statements;
+
+  #[test]
+  fn test_compile_js_statements() {
+    let source = r#"
+      let x = 1;
+      if (x) {
+        g();
+      }
+      f(x);
+    "#;
+    let mut top_level_node = parse(source.as_bytes()).expect("parse input");
+    compute_symbols(&mut top_level_node, TopLevelMode::Module);
+    let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
+      panic!();
+    };
+    let bblocks = compile_js_statements(body, None);
+  }
+}

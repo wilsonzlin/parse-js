@@ -32,15 +32,15 @@ pub fn optpass_impossible_branches(
       let (Arg::Const(cond), true_label, false_label) = inst.as_cond_goto() else {
         continue;
       };
-      let child = if coerce_to_bool(cond) {
-        true_label
-      } else {
+      let dead_child = if coerce_to_bool(cond) {
         false_label
+      } else {
+        true_label
       };
       // Remove instruction.
       cfg.bblocks.get_mut(label).pop().unwrap();
       // Detach from child.
-      cfg.graph.disconnect(label, child);
+      cfg.graph.disconnect(label, dead_child);
     }
 
     // Detaching from bblocks means that we may have removed entire subgraphs (i.e. other bblocks). Therefore, we must recalculate again the accessible bblocks.

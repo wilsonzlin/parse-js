@@ -1,10 +1,9 @@
 use optimize_js::compile_js_statements;
-use optimize_js::debug::OptimizerDebug;
-use optimize_js::var_visitor::VarVisitor;
+use optimize_js::symbol::var_visitor::VarVisitor;
+use optimize_js::util::debug::OptimizerDebug;
 use parse_js::ast::Node;
 use parse_js::ast::Syntax;
 use parse_js::parse;
-use parse_js::visit::Visitor;
 use serde::Serialize;
 use symbol_js::compute_symbols;
 use symbol_js::TopLevelMode;
@@ -39,14 +38,12 @@ pub fn build_js(source: &str, is_global: bool) -> JsValue {
   let mut top_level_node = parse(source.as_bytes()).expect("parse input");
   compute_symbols(&mut top_level_node, top_level_mode);
 
-  let mut var_visitor = VarVisitor::default();
-  var_visitor.visit(&top_level_node);
   let VarVisitor {
     declared,
     foreign,
     unknown,
     use_before_decl,
-  } = var_visitor;
+  } = VarVisitor::analyze(&top_level_node);
   if let Some((_, loc)) = use_before_decl.iter().next() {
     panic!("Use before declaration at {:?}", loc);
   };

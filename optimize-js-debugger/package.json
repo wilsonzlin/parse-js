@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "build-worker": "wasm-pack build --target web && mkdir -p dist && cp pkg/*.wasm dist/.",
+    "build-worker": "wasm-pack build --release --target web && mkdir -p dist && cp pkg/*.wasm dist/.",
     "build": "npm run build-worker && npm run esbuild -- --minify && cp -iv src/index.html dist/.",
     "esbuild": "esbuild --bundle --legal-comments=none --outdir=dist --sourcemap src/index.tsx",
     "format": "cargo +nightly fmt && prettier --write 'src/**/*.{css,html,ts,tsx}'",

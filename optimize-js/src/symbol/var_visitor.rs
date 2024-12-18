@@ -11,6 +11,14 @@ pub struct VarVisitor {
   pub use_before_decl: HashMap<Symbol, Loc>,
 }
 
+impl VarVisitor {
+  pub fn analyze(top_level_node: &Node) -> Self {
+    let mut var_visitor = VarVisitor::default();
+    var_visitor.visit(top_level_node);
+    var_visitor
+  }
+}
+
 // The lifted scope is the nearest self-or-ancestor scope that is not a block, or the self-or-ancestor scope just below the global scope.
 // This is useful as we don't want a usage in an inner block to count as "foreign".
 fn lifted_scope(scope: &Scope) -> Scope {
