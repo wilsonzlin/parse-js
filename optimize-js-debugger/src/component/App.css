@@ -87,6 +87,7 @@
       > .info {
         flex-grow: 1;
         min-height: 0;
+        overflow: auto;
 
         .error {
           font-family: var(--monospace-font-family);

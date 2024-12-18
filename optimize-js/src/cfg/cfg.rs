@@ -86,6 +86,10 @@ impl CfgBBlocks {
     self.0.remove(&label).unwrap()
   }
 
+  pub fn remove_many(&mut self, labels: impl IntoIterator<Item=u32>) -> Vec<Vec<Inst>> {
+    labels.into_iter().map(|label| self.remove(label)).collect()
+  }
+
   pub fn all(&self) -> impl Iterator<Item=(u32, &Vec<Inst>)> {
     self.0.iter().map(|(k, v)| (*k, v))
   }

@@ -77,7 +77,8 @@ pub fn optpass_impossible_branches(
 
     // Delete bblocks now so that only valid bblocks remain, which is the set of bblocks to iterate for pruning Phi insts.
     let did_delete = !to_delete.is_empty();
-    cfg.graph.delete_many(to_delete);
+    cfg.graph.delete_many(to_delete.clone());
+    cfg.bblocks.remove_many(to_delete);
 
     // Prune Phi insts in remaining bblocks.
     for (_, bblock) in cfg.bblocks.all_mut() {

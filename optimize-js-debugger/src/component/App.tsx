@@ -413,12 +413,13 @@ const Graph = ({
 }) => {
   const initNodes = useMemo(
     () =>
-      step.bblockOrder.map<BBlockNode>((label) => ({
+      // WARNING: Use step.bblocks not step.bblock_order as the latter may hide disconnected components.
+      [...step.bblocks].map<BBlockNode>(([label, insts]) => ({
         id: `${label}`,
         type: "bblock",
         data: {
           label,
-          insts: step.bblocks.get(label)!,
+          insts,
         },
         position: { x: 0, y: 0 },
       })),
@@ -514,6 +515,8 @@ export const App = ({}: {}) => {
         module_or_path: "/optimize_js_debugger_bg.wasm",
       });
       set_panic_hook();
+      // https://github.com/rustwasm/console_error_panic_hook?tab=readme-ov-file#errorstacktracelimit
+      Error.stackTraceLimit = 100;
       setLoadedWasm(true);
     })();
   }, []);

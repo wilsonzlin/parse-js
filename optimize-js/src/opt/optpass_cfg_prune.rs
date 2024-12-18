@@ -52,6 +52,11 @@ pub fn optpass_cfg_prune(
       let is_empty = cfg.bblocks.get(cur).is_empty();
       let is_leaf = children.is_empty();
 
+      // TODO Figure out if bblocks immediately part of a loop are safe to prune.
+      if children.iter().any(|c| parents.contains(c)) {
+        continue;
+      }
+
       if is_empty && is_leaf {
         empty_leaves.push(cur);
       }
