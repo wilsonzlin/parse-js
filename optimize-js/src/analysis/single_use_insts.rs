@@ -5,6 +5,7 @@ use ahash::HashSetExt;
 
 use crate::cfg::cfg::Cfg;
 use crate::il::inst::Arg;
+use crate::il::inst::InstTyp;
 
 pub fn analyse_single_use_defs(
   cfg: &Cfg,
@@ -37,6 +38,11 @@ pub fn analyse_single_use_defs(
     if src_loc.0 != dest_loc.0 {
       continue;
     };
+    if src_loc.1 > dest_loc.1 && cfg.bblocks.get(dest_loc.0)[dest_loc.1].t == InstTyp::Phi {
+      // This can happen for loops, where a var is self-assigned to (e.g. x = x + 1), and some path eventually loops back to the bblock, so there's a Phi with it at the top (i.e. before the inst) representing the value after the self-assignment from the previous iteration. Therefore, it cannot be inlined, and is not really single-use (it's used each time the loop iterates).
+      continue;
+    }
+    // Defensively assert that the def comes before the use. (Even the same inst is incorrect.)
     assert!(src_loc.1 < dest_loc.1);
     assert!(inlines.insert(src_loc, dest_loc.clone()).is_none());
     inlined_vars.insert(var);

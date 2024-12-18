@@ -1,6 +1,3 @@
-// TODO Remove
-#![allow(unused)]
-
 pub mod cfg;
 pub mod graph;
 pub mod dom;
@@ -123,9 +120,14 @@ mod tests {
   #[test]
   fn test_compile_js_statements() {
     let source = r#"
+      a?.b?.c;
       let x = 1;
       if (x) {
         g();
+        x += 1;
+        for (;;) {
+          x += 1;
+        }
       }
       f(x);
     "#;

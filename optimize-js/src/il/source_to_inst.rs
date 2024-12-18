@@ -509,7 +509,7 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
 
   fn compile_stmt(&mut self, n: &Node) {
     match n.stx.as_ref() {
-      Syntax::BlockStmt { body } => {
+      Syntax::BlockStmt { body } | Syntax::ForBody { body } => {
         for stmt in body {
           self.compile_stmt(stmt);
         }

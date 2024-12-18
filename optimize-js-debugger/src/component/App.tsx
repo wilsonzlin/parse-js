@@ -3,6 +3,7 @@ import { Editor } from "@monaco-editor/react";
 import {
   Valid,
   Validator,
+  ValuePath,
   VArray,
   VBoolean,
   VFiniteNumber,
@@ -82,6 +83,11 @@ enum UnOp {
 class VBigInt extends Validator<bigint> {
   constructor() {
     super(0n);
+  }
+
+  parse(theValue: ValuePath, raw: unknown): bigint {
+    // TODO Parse num_bigint serde format.
+    return BigInt(raw as any);
   }
 }
 
@@ -385,9 +391,10 @@ const BBlockElement = ({
 }: {
   data: BBlockNode["data"];
 }) => {
+  // Due to the way our layout is calculated, loops will sometimes have edges in a straight line that overlap with each other and obscures the flow, so we use the left as the target instead of the top.
   return (
     <>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
       <div className="bblock">
         <h1>:{label}</h1>
         <ol className="insts">
@@ -539,7 +546,9 @@ let x = 1;
 if (x) {
   g();
   x += 1;
-  while (true) {}
+  for (;;) {
+    x += 1;
+  }
 }
 f(x);
 `.trim();
@@ -553,6 +562,7 @@ export const App = ({}: {}) => {
       });
       set_panic_hook();
       // https://github.com/rustwasm/console_error_panic_hook?tab=readme-ov-file#errorstacktracelimit
+      // @ts-expect-error
       Error.stackTraceLimit = 100;
       setLoadedWasm(true);
     })();
