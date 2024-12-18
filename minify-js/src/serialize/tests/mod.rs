@@ -1,5 +1,4 @@
 use crate::serialize::emit_js;
-use crate::minify::minify_js;
 use crate::TopLevelMode;
 use parse_js::lex::Lexer;
 use parse_js::parse::Parser;

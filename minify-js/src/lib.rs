@@ -1,3 +1,5 @@
+use optimize_js::compile_js_statements;
+use optimize_js::symbol::var_visitor::VarAnalysis;
 use serialize::emit_js;
 use err::MinifyError;
 use parse_js::ast::{Node, Syntax};
@@ -52,7 +54,7 @@ pub fn minify(
   let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
     panic!();
   };
-  let optimized = compile_js_statements(&body);
+  let optimized = compile_js_statements(&body, None);
   let minified = reconstruct_ast_from_bblocks(&optimized);
   emit_js(output, &minified);
   Ok(())
