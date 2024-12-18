@@ -1,4 +1,5 @@
 use ahash::HashMap;
+use itertools::Itertools;
 use num_bigint::BigInt;
 use parse_js::num::JsNumber;
 use serde::Serialize;
@@ -193,6 +194,7 @@ pub struct Inst {
 impl Inst {
   pub fn remove_phi(&mut self, label: u32) -> Option<Arg> {
     assert!(self.t == InstTyp::Phi);
+    assert_eq!(self.labels.len(), self.args.len());
     let i = self.labels.iter().position(|&l| l == label)?;
     self.labels.remove(i);
     Some(self.args.remove(i))
@@ -200,7 +202,9 @@ impl Inst {
 
   pub fn insert_phi(&mut self, label: u32, arg: Arg) {
     assert!(self.t == InstTyp::Phi);
-    assert!(!self.labels.iter().any(|&l| l == label));
+    assert_eq!(self.labels.len(), self.args.len());
+    // This catches a lot of bugs.
+    assert!(!self.labels.contains(&label), "can't insert {label}=>{arg:?} to {self:?}");
     self.labels.push(label);
     self.args.push(arg);
   }

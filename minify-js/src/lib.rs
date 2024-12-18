@@ -1,7 +1,5 @@
-use analyze::VarVisitor;
 use serialize::emit_js;
 use err::MinifyError;
-use compile::{compile_js_statements};
 use parse_js::ast::{Node, Syntax};
 use parse_js::parse;
 
@@ -42,12 +40,12 @@ pub fn minify(
   let mut top_level_node = parse(source).map_err(MinifyError::Syntax)?;
   compute_symbols(&mut top_level_node, top_level_mode);
 
-  let VarVisitor {
+  let VarAnalysis {
     declared,
     foreign,
     unknown,
     use_before_decl,
-  } = VarVisitor::analyze(&top_level_node);
+  } = VarAnalysis::analyze(&top_level_node);
   if let Some((_, loc)) = use_before_decl.iter().next() {
     return Err(MinifyError::UseBeforeDecl(*loc));
   };

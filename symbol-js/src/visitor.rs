@@ -130,7 +130,10 @@ impl VisitorMut for DeclVisitor {
         };
       }
       Syntax::IdentifierPattern { name } => {
-        self.add_to_scope(name.clone(), self.pattern_action.unwrap());
+        // An identifier pattern doesn't always mean declaration e.g. simple assignment.
+        if let Some(pattern_action) = self.pattern_action {
+          self.add_to_scope(name.clone(), pattern_action);
+        }
       }
       Syntax::ImportStmt { .. } => {
         self.new_pattern_action(AddToScope::IfNotGlobal);

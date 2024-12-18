@@ -190,7 +190,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
           </div>
           <div>
             <ArgElement arg={inst.args[0]} />
-            <span>{inst.bin_op}</span>
+            <span> {inst.bin_op} </span>
             <ArgElement arg={inst.args[1]} />
           </div>
         </>
@@ -314,7 +314,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
             <span className="eq"> =</span>
           </div>
           <div>
-            <span>{inst.un_op}</span>
+            <span>{inst.un_op} </span>
             <ArgElement arg={inst.args[0]} />
           </div>
         </>
@@ -509,6 +509,16 @@ const Graph = ({
   );
 };
 
+
+const INIT_SOURCE = `
+let x = 1;
+if (x) {
+  g();
+  x += 1;
+}
+f(x);
+`.trim();
+
 export const App = ({}: {}) => {
   const [loadedWasm, setLoadedWasm] = useState(false);
   useEffect(() => {
@@ -521,13 +531,6 @@ export const App = ({}: {}) => {
     })();
   }, []);
 
-  const INIT_SOURCE = `
-let x = 1;
-if (x) {
-  g();
-}
-f(x);
-  `.trim();
   const [source, setSource] = useState(INIT_SOURCE);
   const [stepIdx, setStepIdx] = useState(0);
   const [data, setData] = useState<Debug>();

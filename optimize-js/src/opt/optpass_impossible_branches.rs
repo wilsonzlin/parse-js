@@ -19,7 +19,7 @@ pub fn optpass_impossible_branches(
 ) {
   loop {
     for label in cfg.graph.labels().collect_vec() {
-      let Some(inst) = cfg.bblocks.get(label).last() else {
+      let Some(inst) = cfg.bblocks.get_mut(label).last_mut() else {
         continue;
       };
       let children = cfg.graph.children(label).collect_vec();
@@ -32,18 +32,28 @@ pub fn optpass_impossible_branches(
       let (Arg::Const(cond), true_label, false_label) = inst.as_cond_goto() else {
         continue;
       };
-      let dead_child = if coerce_to_bool(cond) {
-        false_label
+      let (always_child, never_child) = if coerce_to_bool(cond) {
+        (true_label, false_label)
       } else {
-        true_label
+        (false_label, true_label)
       };
-      // Remove instruction.
-      cfg.bblocks.get_mut(label).pop().unwrap();
+      // Make CondGoto an unconditional Goto.
+      inst.t = InstTyp::Goto;
+      inst.labels = vec![always_child];
       // Detach from child.
-      cfg.graph.disconnect(label, dead_child);
+      cfg.graph.disconnect(label, never_child);
+      // Update Phi insts in child.
+      // NOTE: This is not the same as the subsequent Phi pruning for each `to_delete`, as `never_child` may still reachable (e.g. CondGoto was for if-with-no-else stmt, and never_child was for after if stmt).
+      for inst in cfg.bblocks.get_mut(never_child).iter_mut() {
+        if inst.t != InstTyp::Phi {
+          // No more Phi insts.
+          break;
+        };
+        inst.remove_phi(label);
+      }
     }
 
-    // Detaching from bblocks means that we may have removed entire subgraphs (i.e. other bblocks). Therefore, we must recalculate again the accessible bblocks.
+    // Detaching bblocks means that we may have removed entire subgraphs (i.e. its descendants). Therefore, we must recalculate again the accessible bblocks.
     let to_delete = cfg.graph.find_unreachable().collect_vec();
     // All defs in now-deleted bblocks must be cleared. Since we are in strict SSA, they should only ever appear outside of the deleted bblocks in Phi insts.
     for &n in to_delete.iter() {

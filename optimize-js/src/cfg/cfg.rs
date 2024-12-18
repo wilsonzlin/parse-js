@@ -113,10 +113,11 @@ impl Cfg {
       if let Some(Inst { t: InstTyp::Goto | InstTyp::CondGoto, labels, .. }) = bblocks.get_mut(&parent).unwrap().last_mut() {
         for label in labels.iter_mut() {
           // We use DUMMY_LABEL during source_to_inst for one branch of a CondGoto to indicate fallthrough.
+          // We must update the Inst label too.
           if *label == DUMMY_LABEL {
             *label = bblock_order[i + 1];
           };
-          graph.connect(&parent, &label);
+          graph.connect(&parent, label);
         }
       } else if i == bblocks.len() - 1 {
         // Last bblock, don't connect to anything.

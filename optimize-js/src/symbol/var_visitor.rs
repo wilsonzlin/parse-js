@@ -4,19 +4,14 @@ use symbol_js::symbol::{Scope, ScopeType, Symbol};
 
 // Four tasks (fill out each field as appropriate).
 #[derive(Default)]
-pub struct VarVisitor {
-  pub declared: HashSet<Symbol>,
-  pub foreign: HashSet<Symbol>,
-  pub unknown: HashSet<String>,
-  pub use_before_decl: HashMap<Symbol, Loc>,
-}
+struct VarVisitor {
+  declared: HashSet<Symbol>,
+  foreign: HashSet<Symbol>,
+  unknown: HashSet<String>,
+  use_before_decl: HashMap<Symbol, Loc>,
 
-impl VarVisitor {
-  pub fn analyze(top_level_node: &Node) -> Self {
-    let mut var_visitor = VarVisitor::default();
-    var_visitor.visit(top_level_node);
-    var_visitor
-  }
+  in_var_decl: bool,
+  in_var_decl_stack: Vec<bool>,
 }
 
 // The lifted scope is the nearest self-or-ancestor scope that is not a block, or the self-or-ancestor scope just below the global scope.
@@ -36,6 +31,10 @@ fn lifted_scope(scope: &Scope) -> Scope {
 impl Visitor for VarVisitor {
   fn on_syntax_down(&mut self, node: &Node, ctl: &mut JourneyControls) {
     match node.stx.as_ref() {
+      Syntax::VarDecl { .. } => {
+        self.in_var_decl_stack.push(self.in_var_decl);
+        self.in_var_decl = true;
+      }
       Syntax::IdentifierExpr { name } => {
         let usage_scope = node.assoc.get::<Scope>().unwrap();
         let usage_ls = lifted_scope(usage_scope);
@@ -56,7 +55,16 @@ impl Visitor for VarVisitor {
           }
         };
       }
-      Syntax::IdentifierPattern { name } | Syntax::ClassOrFunctionName { name } => {
+      Syntax::ClassOrFunctionName { name } => {
+        let scope = node.assoc.get::<Scope>().unwrap();
+        // It won't exist if it's a global declaration.
+        // TODO Is this the only time it won't exist (i.e. is it always safe to ignore None)?
+        if let Some(symbol) = scope.find_symbol(name.clone()) {
+          assert!(self.declared.insert(symbol));
+        };
+      }
+      // An identifier pattern doesn't always mean declaration e.g. simple assignment.
+      Syntax::IdentifierPattern { name } if self.in_var_decl => {
         let scope = node.assoc.get::<Scope>().unwrap();
         // It won't exist if it's a global declaration.
         // TODO Is this the only time it won't exist (i.e. is it always safe to ignore None)?
@@ -65,6 +73,36 @@ impl Visitor for VarVisitor {
         };
       }
       _ => {}
+    }
+  }
+
+  fn on_syntax_up(&mut self, node: &Node) {
+      match node.stx.as_ref() {
+        Syntax::VarDecl { .. } => {
+          self.in_var_decl = self.in_var_decl_stack.pop().unwrap();
+        }
+        _ => {}
+      }
+  }
+}
+
+#[derive(Default)]
+pub struct VarAnalysis {
+  pub declared: HashSet<Symbol>,
+  pub foreign: HashSet<Symbol>,
+  pub unknown: HashSet<String>,
+  pub use_before_decl: HashMap<Symbol, Loc>,
+}
+
+impl VarAnalysis {
+  pub fn analyze(top_level_node: &Node) -> Self {
+    let mut var_visitor = VarVisitor::default();
+    var_visitor.visit(top_level_node);
+    Self {
+      declared: var_visitor.declared,
+      foreign: var_visitor.foreign,
+      unknown: var_visitor.unknown,
+      use_before_decl: var_visitor.use_before_decl,
     }
   }
 }
