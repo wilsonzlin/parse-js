@@ -47,6 +47,10 @@ enum InstTyp {
   UnknownLoad = "UnknownLoad",
   UnknownStore = "UnknownStore",
   Phi = "Phi",
+  // We should never see this, but since we're a debugger, handle these.
+  _Goto = "_Goto",
+  _Label = "_Label",
+  _Dummy = "_Dummy",
 }
 
 enum BinOp {
@@ -340,6 +344,39 @@ const InstElement = ({ inst }: { inst: Inst }) => {
           </div>
         </>
       );
+    case "_Goto":
+      return (
+        <>
+          <div>
+            <span className="invalid-inst">goto</span>
+          </div>
+          <div>
+            <span className="label">:{inst.labels[0]}</span>
+          </div>
+        </>
+      );
+    case "_Label":
+      return (
+        <>
+          <div>
+            <span className="invalid-inst">label</span>
+          </div>
+          <div>
+            <span className="label">:{inst.labels[0]}</span>
+          </div>
+        </>
+      );
+    case "_Dummy":
+      return (
+        <>
+          <div>
+            <span className="invalid-inst">dummy</span>
+          </div>
+          <div/>
+        </>
+      );
+    default:
+      throw new UnreachableError(inst.t);
   }
 };
 

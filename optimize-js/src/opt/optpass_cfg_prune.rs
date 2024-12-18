@@ -52,8 +52,8 @@ pub fn optpass_cfg_prune(
       let is_empty = cfg.bblocks.get(cur).is_empty();
       let is_leaf = children.is_empty();
 
-      // TODO Figure out if bblocks immediately part of a loop are safe to prune.
-      if children.iter().any(|c| parents.contains(c)) {
+      // Self-loops are not safe to prune; they have an effect (e.g. busy loop).
+      if children.contains(&cur) {
         continue;
       }
 
@@ -79,8 +79,7 @@ pub fn optpass_cfg_prune(
       };
 
       // Detach.
-      let insts = cfg.bblocks.remove(cur);
-      cfg.graph.pop(cur);
+      let insts = cfg.pop(cur);
       // Move insts to parents, before any CondGoto, and update that CondGoto.
       for &parent in parents.iter() {
         let p_bblock = cfg.bblocks.get_mut(parent);
@@ -150,8 +149,7 @@ pub fn optpass_cfg_prune(
       };
       // For all other empty leaves, remove them. They should be unreachable.
       for label in empty_leaves.into_iter().skip(1) {
-        cfg.graph.pop(label);
-        cfg.bblocks.remove(label);
+        cfg.pop(label);
       }
       *changed = true;
     }

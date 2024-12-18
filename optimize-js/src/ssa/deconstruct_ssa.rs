@@ -38,7 +38,7 @@ pub fn deconstruct_ssa(
   for mut b in new_bblocks {
     // Detach parent from child.
     cfg.graph.disconnect(b.parent, b.child);
-    // Update any goto inst in parent.
+    // Update any CondGoto inst in parent.
     if let Some(parent_goto) = cfg.bblocks.get_mut(b.parent).last_mut() {
       if parent_goto.t == InstTyp::CondGoto {
         for l in parent_goto.labels.iter_mut() {
@@ -52,7 +52,6 @@ pub fn deconstruct_ssa(
     cfg.graph.connect(b.parent, b.label);
     cfg.graph.connect(b.label, b.child);
     // Insert new bblock.
-    b.insts.push(Inst::goto(b.child));
     cfg.bblocks.add(b.label, b.insts);
   }
 }

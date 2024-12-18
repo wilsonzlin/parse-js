@@ -1,4 +1,5 @@
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use itertools::Itertools;
 
 use std::{collections::VecDeque, ops::{Deref, DerefMut}};
 
@@ -36,7 +37,7 @@ impl CfgGraph {
   }
 
   /// Remove a disconnected bblock from the graph.
-  /// Panics if still connected.
+  /// Panics if still connected or doesn't exist.
   pub fn pop(&mut self, bblock: u32) {
     self.0.pop(&bblock);
   }
@@ -104,6 +105,25 @@ pub struct Cfg {
   // We store these as different fields because we often want to mutate one while holding a reference to the other. If we only provide &mut self methods, we'd have to borrow both mutably at the same time.
   pub graph: CfgGraph,
   pub bblocks: CfgBBlocks,
+}
+
+/// Helper methods for operating on both Cfg graph and bblocks at once and therefore keep them in sync.
+impl Cfg {
+  /// Removes a disconnected bblock from the graph and the bblocks.
+  /// Panics if still connected or doesn't exist.
+  pub fn pop(&mut self, label: u32) -> Vec<Inst> {
+    self.graph.pop(label);
+    self.bblocks.remove(label)
+  }
+
+  /// Disconnects unreachable bblocks from the graph and removes them from the bblocks.
+  /// Returns the labels of the removed bblocks.
+  pub fn find_and_pop_unreachable(&mut self) -> Vec<u32> {
+    let to_delete = self.graph.find_unreachable().collect_vec();
+    self.graph.delete_many(to_delete.iter().cloned());
+    self.bblocks.remove_many(to_delete.iter().cloned());
+    to_delete
+  }
 }
 
 impl Cfg {

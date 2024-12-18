@@ -37,7 +37,7 @@ pub fn compile_js_statements(
   let mut cfg = Cfg::from_bblocks(bblocks, bblock_order);
   // Prune unreachable blocks from 0. This is necessary for dominance calculation to be correct (basic example: every block should be dominated by 0, but if there's an unreachable block it'll make all its descendants not dominated by 0).
   // This can happen due to user code (unreachable code) or by us, because we split after a `goto` which makes the new other-split-half block unreachable (this block is usually empty).
-  cfg.graph.delete_many(cfg.graph.find_unreachable().collect_vec());
+  cfg.find_and_pop_unreachable();
 
   let (postorder, label_to_postorder) = calculate_postorder(&cfg, 0);
   let (idom_by, domtree) = calculate_domtree(&cfg, &postorder, &label_to_postorder, 0);

@@ -61,6 +61,7 @@ impl<K: Clone + Default + Hash + Eq> Graph<K> {
   }
 
   /// Remove a disconnected node from the graph.
+  /// Panics if still connected or doesn't exist.
   pub fn pop(&mut self, node: &K) {
     let r = self.nodes.remove(node).unwrap();
     assert!(r.parents.is_empty());
