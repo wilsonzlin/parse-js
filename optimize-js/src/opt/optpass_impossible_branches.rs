@@ -59,7 +59,8 @@ pub fn optpass_impossible_branches(
     }
 
     // Detaching bblocks means that we may have removed entire subgraphs (i.e. its descendants). Therefore, we must recalculate again the accessible bblocks.
-    let to_delete = cfg.find_and_pop_unreachable();
+    // NOTE: We cannot delete now, as we need to access the children of these deleted nodes first. (They won't have children after deleting.)
+    let to_delete = cfg.graph.find_unreachable().collect_vec();
     // All defs in now-deleted bblocks must be cleared. Since we are in strict SSA, they should only ever appear outside of the deleted bblocks in Phi insts.
     for &n in to_delete.iter() {
       // Update Phi insts in children.
@@ -75,7 +76,10 @@ pub fn optpass_impossible_branches(
       }
     }
 
+    // Delete bblocks now so that only valid bblocks remain, which is the set of bblocks to iterate for pruning Phi insts.
     let did_delete = !to_delete.is_empty();
+    cfg.graph.delete_many(to_delete.clone());
+    cfg.bblocks.remove_many(to_delete);
 
     // Prune Phi insts in remaining bblocks.
     for (_, bblock) in cfg.bblocks.all_mut() {
