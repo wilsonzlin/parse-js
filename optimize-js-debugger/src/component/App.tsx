@@ -496,10 +496,12 @@ const Graph = ({
 
 
 const INIT_SOURCE = `
+a?.b?.c;
 let x = 1;
 if (x) {
   g();
   x += 1;
+  while (true) {}
 }
 f(x);
 `.trim();

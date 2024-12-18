@@ -36,6 +36,7 @@ impl CfgGraph {
   }
 
   /// Remove a disconnected bblock from the graph.
+  /// Panics if still connected.
   pub fn pop(&mut self, bblock: u32) {
     self.0.pop(&bblock);
   }

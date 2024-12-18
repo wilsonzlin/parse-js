@@ -22,14 +22,19 @@ pub fn optpass_impossible_branches(
       let Some(inst) = cfg.bblocks.get_mut(label).last_mut() else {
         continue;
       };
-      let children = cfg.graph.children(label).collect_vec();
-      if children.len() != 2 {
-        continue;
-      };
       if inst.t != InstTyp::CondGoto {
         continue;
       };
-      let (Arg::Const(cond), true_label, false_label) = inst.as_cond_goto() else {
+      let (cond, true_label, false_label) = inst.as_cond_goto();
+      if true_label == false_label {
+        // Drop the CondGoto.
+        // No need to update the graph, it's connected correctly, it's just a redundant inst.
+        // TODO Should this optimization be part of optapss_impossible_branches?
+        cfg.bblocks.get_mut(label).pop().unwrap();
+        *changed = true;
+        continue;
+      }
+      let Arg::Const(cond) = cond else {
         continue;
       };
       let (always_child, never_child) = if coerce_to_bool(cond) {
@@ -50,6 +55,7 @@ pub fn optpass_impossible_branches(
         };
         inst.remove_phi(label);
       }
+      *changed = true;
     }
 
     // Detaching bblocks means that we may have removed entire subgraphs (i.e. its descendants). Therefore, we must recalculate again the accessible bblocks.

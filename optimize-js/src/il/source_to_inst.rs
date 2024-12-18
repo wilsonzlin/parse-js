@@ -107,6 +107,9 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
         chain.reverse();
 
         let after_chain_label_id = self.c_label.bump();
+        // Optional chains result in undefined, whether null or undefined, so we CANNOT simply use the last non-nullish value in the chain.
+        let set_as_undefined_label_id = self.c_label.bump();
+        // This is the var that will store the result of our chain.
         // We must repeatedly assign to this target instead of creating new temporaries. Otherwise, consider `b?.c?.d?.e`. What's the target that the subsequent code can use for the result of this chain?
         let res_tmp_var = self.c_temp.bump();
         let mut did_optional_chaining = false;
@@ -127,7 +130,7 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
               did_optional_chaining = true;
               let is_undefined_tmp_var = self.c_temp.bump();
               self.out.push(Inst::bin(is_undefined_tmp_var, last_arg.clone().unwrap(), BinOp::LooseEq, Arg::Const(Const::Null)));
-              self.out.push(Inst::cond_goto(Arg::Var(is_undefined_tmp_var), after_chain_label_id, DUMMY_LABEL));
+              self.out.push(Inst::cond_goto(Arg::Var(is_undefined_tmp_var), set_as_undefined_label_id, DUMMY_LABEL));
             }
             _ => {}
           };
@@ -176,6 +179,10 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
           last_arg = Some(next_arg);
         }
         if did_optional_chaining {
+          // This is for when our chain is fully evaluated i.e. there was no short-circuiting due to optional chaining.
+          self.out.push(Inst::goto(after_chain_label_id));
+          self.out.push(Inst::label(set_as_undefined_label_id));
+          self.out.push(Inst::var_assign(res_tmp_var, Arg::Const(Const::Undefined)));
           self.out.push(Inst::label(after_chain_label_id));
           // TODO This seems hacky, but our implementation requires that the last Inst in the `out` stack represents the value/target to use.
           self.out.push(Inst::var_assign(res_tmp_var, Arg::Var(res_tmp_var)));

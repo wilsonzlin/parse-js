@@ -41,16 +41,20 @@ impl<K: Clone + Default + Hash + Eq> Graph<K> {
     self.nodes.get(node).map(|node| node.parents.iter()).into_iter().flatten()
   }
 
+  /// Will never contain duplicates as we use a set internally.
   pub fn children(&self, node: &K) -> impl Iterator<Item=&K> + '_ {
     self.nodes.get(node).map(|node| node.children.iter()).into_iter().flatten()
   }
 
   /// Insert the nodes and connect them with an edge.
+  /// It's safe if the edge already exists.
   pub fn connect(&mut self, parent: &K, child: &K) {
     self.nodes.entry(parent.clone()).or_default().children.insert(child.clone());
     self.nodes.entry(child.clone()).or_default().parents.insert(parent.clone());
   }
 
+  /// The nodes must already exist.
+  /// It's safe if the edge doesn't exist.
   pub fn disconnect(&mut self, parent: &K, child: &K) {
     self.nodes.get_mut(parent).unwrap().children.remove(child);
     self.nodes.get_mut(child).unwrap().parents.remove(parent);
