@@ -17,6 +17,18 @@ pub type Identifier = String;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize)]
 pub struct Symbol(u64);
 
+impl Symbol {
+  /// It's not recommended to use this unless you know what you're doing; symbol IDs are opaque, ephemeral, and non-deterministic.
+  pub fn raw_id(&self) -> u64 {
+    self.0
+  }
+
+  /// It's not recommended to use this unless you know what you're doing; symbol IDs are opaque, ephemeral, and non-deterministic.
+  pub fn from_raw_id(id: u64) -> Symbol {
+    Symbol(id)
+  }
+}
+
 // TODO We can probably avoid using a Rc, but this would require refs and lifetimes (possibly not 'a but an additional one) everywhere. Investigate if performance becomes costly.
 #[derive(Clone)]
 pub struct SymbolGenerator(Rc<Cell<u64>>);
