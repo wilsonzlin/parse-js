@@ -37,9 +37,8 @@ pub fn optpass_impossible_branches(
       } else {
         (false_label, true_label)
       };
-      // Make CondGoto an unconditional Goto.
-      inst.t = InstTyp::Goto;
-      inst.labels = vec![always_child];
+      // Drop CondGoto inst.
+      cfg.bblocks.get_mut(label).pop().unwrap();
       // Detach from child.
       cfg.graph.disconnect(label, never_child);
       // Update Phi insts in child.

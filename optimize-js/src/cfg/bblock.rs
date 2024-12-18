@@ -15,12 +15,12 @@ pub fn convert_insts_to_bblocks(
   let mut bblock = bblocks.entry(0).or_default();
   for inst in insts {
     match inst.t {
-      InstTyp::Label => {
+      InstTyp::_Label => {
         let label = inst.labels[0];
         bblock_order.push(label);
         bblock = bblocks.entry(label).or_default();
       }
-      InstTyp::Goto | InstTyp::CondGoto => {
+      InstTyp::_Goto | InstTyp::CondGoto => {
         bblock.push(inst);
         let l = c_label.bump();
         bblock_order.push(l);

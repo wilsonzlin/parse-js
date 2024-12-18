@@ -110,7 +110,12 @@ impl Cfg {
     let mut graph = Graph::new();
     for i in 0..bblocks.len() {
       let parent = bblock_order[i];
-      if let Some(Inst { t: InstTyp::Goto | InstTyp::CondGoto, labels, .. }) = bblocks.get_mut(&parent).unwrap().last_mut() {
+      if let Some(Inst { t: InstTyp::_Goto, labels, .. }) = bblocks[&parent].last() {
+        let label = labels[0];
+        graph.connect(&parent, &label);
+        // We don't want Goto insts after this point.
+        bblocks.get_mut(&parent).unwrap().pop().unwrap();
+      } else if let Some(Inst { t: InstTyp::CondGoto, labels, .. }) = bblocks.get_mut(&parent).unwrap().last_mut() {
         for label in labels.iter_mut() {
           // We use DUMMY_LABEL during source_to_inst for one branch of a CondGoto to indicate fallthrough.
           // We must update the Inst label too.

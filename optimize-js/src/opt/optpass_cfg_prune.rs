@@ -42,12 +42,7 @@ pub fn optpass_cfg_prune(
       cfg.graph.disconnect(parent, cur);
 
       // The parent has exactly one child, so it cannot have a CondGoto.
-      // Therefore, it must have zero or one Goto.
-      let p_bblock = cfg.bblocks.get_mut(parent);
-      if let Some(Inst { t: InstTyp::Goto, labels, .. }) = p_bblock.last() {
-        assert!(labels.contains(&cur));
-        p_bblock.pop().unwrap();
-      }
+      assert!(cfg.bblocks.get_mut(parent).iter().all(|inst| inst.t != InstTyp::CondGoto));
       // Detach.
       let mut insts = cfg.bblocks.remove(cur);
       cfg.graph.pop(cur);

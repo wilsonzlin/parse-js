@@ -40,7 +40,6 @@ enum InstTyp {
   Un = "Un",
   VarAssign = "VarAssign",
   PropAssign = "PropAssign",
-  Goto = "Goto",
   CondGoto = "CondGoto",
   Call = "Call",
   ForeignLoad = "ForeignLoad",
@@ -48,7 +47,6 @@ enum InstTyp {
   UnknownLoad = "UnknownLoad",
   UnknownStore = "UnknownStore",
   Phi = "Phi",
-  Label = "Label",
 }
 
 enum BinOp {
@@ -222,7 +220,7 @@ const InstElement = ({ inst }: { inst: Inst }) => {
       return (
         <>
           <div>
-            <span>goto</span>
+            <span>condgoto</span>
           </div>
           <div>
             <span className="label">:{inst.labels[0]}</span>
@@ -257,19 +255,6 @@ const InstElement = ({ inst }: { inst: Inst }) => {
           </div>
         </>
       );
-    case "Goto":
-      return (
-        <>
-          <div>
-            <span>goto</span>
-          </div>
-          <div>
-            <span className="label">:{inst.labels[0]}</span>
-          </div>
-        </>
-      );
-    case "Label":
-      throw new UnreachableError();
     case "Phi":
       return (
         <>

@@ -89,7 +89,7 @@ pub enum BinOp {
   NotStrictEq,
   StrictEq,
   Sub, // Subtract.
-  _Unreachable,
+  _Dummy,
 }
 
 impl Debug for BinOp {
@@ -110,7 +110,7 @@ impl Debug for BinOp {
       Self::NotStrictEq => write!(f, "!=="),
       Self::StrictEq => write!(f, "==="),
       Self::Sub => write!(f, "-"),
-      Self::_Unreachable => write!(f, "_Unreachable"),
+      Self::_Dummy => write!(f, "_DUMMY"),
     }
   }
 }
@@ -122,7 +122,7 @@ pub enum UnOp {
   Plus,
   Typeof,
   Void,
-  _Unreachable,
+  _Dummy,
 }
 
 impl Debug for UnOp {
@@ -133,7 +133,7 @@ impl Debug for UnOp {
       Self::Plus => write!(f, "+"),
       Self::Typeof => write!(f, "typeof"),
       Self::Void => write!(f, "void"),
-      Self::_Unreachable => write!(f, "_Unreachable"),
+      Self::_Dummy => write!(f, "_DUMMY"),
     }
   }
 }
@@ -144,7 +144,6 @@ pub enum InstTyp {
   Un, // tgts[0] = un_op args[0]
   VarAssign, // tgts[0] = args[0]
   PropAssign, // args[0][args[1]] = args[2]
-  Goto, // goto labels[0]
   CondGoto, // goto labels[0] if args[0] else labels[1]
   Call, // tgts.at(0)? = args[0](this=args[1], ...args[2..])
   // A foreign variable is one in an ancestor scope, all the way up to and including the global scope.
@@ -156,17 +155,19 @@ pub enum InstTyp {
   UnknownStore,  // unknown = args[0]
   // Pick one assigned value of `tgt` from one of these blocks. Due to const propagation, input targets could be transformed to const values, which is why we have `Arg` and not just `Target`.
   Phi, // tgts[0] = ϕ{labels[0]: args[0], labels[1]: args[1], ...}
-  // No-op marker for a position in Vec<Inst>. We can't just use indices as we may reorder and splice the instructions during optimisations.
-  Label, // labels[0]
-  _Unreachable,
+  // No-op marker for a position in Vec<Inst> during source_to_inst. We can't just use indices as we may reorder and splice the instructions during optimisations.
+  _Label, // labels[0]
+  // We only want these during source_to_inst. Afterwards, refer to the graph children; otherwise, it's two separate things we have to keep in sync and check.
+  _Goto, // labels[0]
+  _Dummy,
 }
 
 fn is_dummy_binop(op: &BinOp) -> bool {
-  matches!(op, BinOp::_Unreachable)
+  matches!(op, BinOp::_Dummy)
 }
 
 fn is_dummy_unop(op: &UnOp) -> bool {
-  matches!(op, UnOp::_Unreachable)
+  matches!(op, UnOp::_Dummy)
 }
 
 fn is_dummy_symbol(sym: &Symbol) -> bool {
@@ -213,13 +214,13 @@ impl Inst {
 impl Default for Inst {
   fn default() -> Self {
     Self {
-      t: InstTyp::_Unreachable,
+      t: InstTyp::_Dummy,
       tgts: Default::default(),
       args: Default::default(),
       spreads: Default::default(),
       labels: Default::default(),
-      bin_op: BinOp::_Unreachable,
-      un_op: UnOp::_Unreachable,
+      bin_op: BinOp::_Dummy,
+      un_op: UnOp::_Dummy,
       foreign: Symbol::from_raw_id(u64::MAX),
       unknown: Default::default(),
     }
@@ -267,7 +268,7 @@ impl Inst {
 
   pub fn goto(label: u32) -> Self {
     Self {
-      t: InstTyp::Goto,
+      t: InstTyp::_Goto,
       labels: vec![label],
       ..Default::default()
     }
@@ -340,7 +341,7 @@ impl Inst {
 
   pub fn label(label: u32) -> Self {
     Self {
-      t: InstTyp::Label,
+      t: InstTyp::_Label,
       labels: vec![label],
       ..Default::default()
     }
@@ -367,11 +368,6 @@ impl Inst {
   pub fn as_prop_assign(&self) -> (&Arg, &Arg, &Arg) {
     assert_eq!(self.t, InstTyp::PropAssign);
     (&self.args[0], &self.args[1], &self.args[2])
-  }
-
-  pub fn as_goto(&self) -> u32 {
-    assert_eq!(self.t, InstTyp::Goto);
-    self.labels[0]
   }
 
   pub fn as_cond_goto(&self) -> (&Arg, u32, u32) {

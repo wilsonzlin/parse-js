@@ -40,7 +40,7 @@ pub fn deconstruct_ssa(
     cfg.graph.disconnect(b.parent, b.child);
     // Update any goto inst in parent.
     if let Some(parent_goto) = cfg.bblocks.get_mut(b.parent).last_mut() {
-      if parent_goto.t == InstTyp::Goto || parent_goto.t == InstTyp::CondGoto {
+      if parent_goto.t == InstTyp::CondGoto {
         for l in parent_goto.labels.iter_mut() {
           if *l == b.child {
             *l = b.label;
