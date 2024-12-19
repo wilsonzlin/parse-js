@@ -564,7 +564,7 @@ const INIT_SOURCE = `
   let x = 1;
   if (x) {
     g();
-    x += 1;
+    x += Math.round(1.1);
     for (;;) {
       x += 1;
       setTimeout(() => {
@@ -582,7 +582,9 @@ const BBlocksExplorer = ({
   data: Debug;
 }) => {
   const [stepIdx, setStepIdx] = useState(0);
+  const actualStepIdx = Math.min(stepIdx, data.steps.length - 1);
   const stepNames = useMemo(() => data.steps.map((s) => s.name), [data]);
+  const step = data.steps[actualStepIdx];
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -599,7 +601,7 @@ const BBlocksExplorer = ({
   return (
     <div className="BBlocksExplorer">
       <ReactFlowProvider>
-        <Graph step={data.steps[stepIdx]} stepNames={stepNames} />
+        <Graph step={step} stepNames={stepNames} />
       </ReactFlowProvider>
     </div>
   )

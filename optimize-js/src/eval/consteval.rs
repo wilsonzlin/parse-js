@@ -202,11 +202,22 @@ pub fn maybe_eval_const_builtin_call(func: &str, args: &[Const]) -> Option<Const
   #[rustfmt::skip]
   let v = match args.len() {
     1 => match (func, &args[0]) {
+      ("Math.abs", Num(a)) => Num(JN(a.0.abs())),
+      ("Math.acos", Num(a)) => Num(JN(a.0.acos())),
+      ("Math.asin", Num(a)) => Num(JN(a.0.asin())),
+      ("Math.atan", Num(a)) => Num(JN(a.0.atan())),
+      ("Math.ceil", Num(a)) => Num(JN(a.0.ceil())),
       ("Math.cos", Num(a)) => Num(JN(a.0.cos())),
+      ("Math.floor", Num(a)) => Num(JN(a.0.floor())),
       ("Math.log", Num(a)) => Num(JN(a.0.ln())),
       ("Math.log10", Num(a)) => Num(JN(a.0.log10())),
       ("Math.log1p", Num(a)) => Num(JN(a.0.ln_1p())),
       ("Math.log2", Num(a)) => Num(JN(a.0.log2())),
+      ("Math.round", Num(a)) => Num(JN(a.0.round())),
+      ("Math.sin", Num(a)) => Num(JN(a.0.sin())),
+      ("Math.sqrt", Num(a)) => Num(JN(a.0.sqrt())),
+      ("Math.tan", Num(a)) => Num(JN(a.0.tan())),
+      ("Math.trunc", Num(a)) => Num(JN(a.0.trunc())),
       ("Number", Str(a)) => Num(JN(coerce_str_to_num(&a))),
       _ => return None,
     }

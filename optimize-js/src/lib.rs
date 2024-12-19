@@ -11,6 +11,7 @@ pub mod analysis;
 
 use std::{ops::Deref, sync::{atomic::{AtomicUsize, Ordering}, Arc}};
 
+use ahash::HashSet;
 use analysis::{defs::calculate_defs, interference::calculate_interference_graph, liveness::calculate_live_ins, register_alloc::allocate_registers, single_use_insts::analyse_single_use_defs};
 use cfg::{bblock::convert_insts_to_bblocks, cfg::{Cfg, CfgBBlocks}};
 use crossbeam_utils::sync::WaitGroup;
@@ -22,6 +23,7 @@ use parse_js::ast::{Node, Syntax};
 use serde::Serialize;
 use ssa::{deconstruct_ssa::deconstruct_ssa, ssa_insert_phis::insert_phis_for_ssa_construction, ssa_rename::rename_targets_for_ssa_construction};
 use symbol::var_visitor::VarAnalysis;
+use symbol_js::symbol::Symbol;
 use util::{counter::Counter, debug::OptimizerDebug};
 
 // The top level is considered a function (the optimizer concept, not parser or symbolizer).
@@ -131,6 +133,8 @@ pub type FnId = usize;
 
 #[derive(Debug)]
 pub struct ProgramCompilerInner {
+  // Precomputed via VarVisitor.
+  pub foreign_vars: HashSet<Symbol>,
   pub functions: DashMap<FnId, ProgramFunction>,
   pub next_fn_id: AtomicUsize,
   pub debug: bool,
@@ -173,6 +177,7 @@ impl Program {
       panic!();
     };
     let program = ProgramCompiler(Arc::new(ProgramCompilerInner {
+      foreign_vars: foreign,
       functions: DashMap::new(),
       next_fn_id: AtomicUsize::new(0),
       debug,

@@ -43,22 +43,23 @@ enum VarType {
   Builtin(String),
 }
 
-impl VarType {
-  pub fn from_scope_name(scope: &Scope, name: String) -> VarType {
-    match scope.find_symbol_up_to(name.clone(), |s| s.is_closure()) {
-      Some(local) => VarType::Local(local),
-      None => match scope.find_symbol(name.clone()) {
-        Some(foreign) => VarType::Foreign(foreign),
-        None => match BUILTINS.get(name.as_str()) {
-          Some(_) => VarType::Builtin(name),
-          None => VarType::Unknown(name),
-        },
+impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
+  fn var_type(&self, node: &Node, name: String) -> VarType {
+    let scope = node.assoc.get::<Scope>().unwrap();
+    // WARNING: Don't simply find_symbol_up_to_with_scope to nearest closure, as just because it's locally declared doesn't mean it's not a foreign.
+    match scope.find_symbol(name.clone()) {
+      Some(local_or_foreign) => if self.program.foreign_vars.contains(&local_or_foreign) {
+        VarType::Foreign(local_or_foreign)
+      } else {
+        VarType::Local(local_or_foreign)
+      },
+      None => match BUILTINS.get(name.as_str()) {
+        Some(_) => VarType::Builtin(name),
+        None => VarType::Unknown(name),
       },
     }
   }
-}
 
-impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
   fn symbol_to_temp(&mut self, sym: Symbol) -> u32 {
     *self
       .symbol_to_temp
@@ -220,7 +221,7 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
       }
       // This branch is rare, but can happen (e.g. redundant no-op statement like `a;`).
       Syntax::IdentifierExpr { name } => {
-        let inst = match VarType::from_scope_name(n.assoc.get::<Scope>().unwrap(), name.clone()) {
+        let inst = match self.var_type(n, name.clone()) {
           // TODO This seems hacky, but our implementation requires that the last Inst in the `out` stack represents the value/target to use.
           VarType::Local(local) => Inst::var_assign(self.symbol_to_temp(local), Arg::Var(self.symbol_to_temp(local))),
           // TODO This seems hacky, but our implementation requires that the last Inst in the `out` stack represents the value/target to use.
@@ -319,7 +320,7 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
           let dummy_val = Arg::Const(Const::Num(JsNumber(0xdeadbeefu32 as f64)));
           let mut ass_inst = match left.stx.as_ref() {
             Syntax::IdentifierPattern { name } => {
-              let vartype = VarType::from_scope_name(n.assoc.get::<Scope>().unwrap(), name.clone());
+              let vartype = self.var_type(n, name.clone());
               match vartype {
                 VarType::Local(l) => Inst::var_assign(
                   self.symbol_to_temp(l),
@@ -516,7 +517,7 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
       }
       Syntax::IdentifierPattern { name } => {
         // NOTE: It's possible to destructure-assign to ancestor scope vars (including globals), so just because this is a pattern doesn't mean it's for a local var.
-        let inst = match VarType::from_scope_name(pat.assoc.get::<Scope>().unwrap(), name.clone()) {
+        let inst = match self.var_type(pat, name.clone()) {
           VarType::Local(local) => Inst::var_assign(
             self.symbol_to_temp(local),
             rval.clone(),
