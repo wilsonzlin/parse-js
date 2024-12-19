@@ -11,5 +11,6 @@ repository = "https://github.com/wilsonzlin/symbol-js"
 
 [dependencies]
 ahash = "0.8.7"
+parking_lot = "0.12.3"
 parse-js = { version = "0.24.1", path = "../parse-js" }
 serde = { version = "1.0.216", features = ["derive"] }

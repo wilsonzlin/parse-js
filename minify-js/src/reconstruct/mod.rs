@@ -1,4 +1,4 @@
-use ahash::AHashMap;
+use ahash::HashMap;
 use parse_js::{ast::{Node, Syntax}, loc::Loc, operator::OperatorName};
 
 use crate::compile::inst::UnOp;
@@ -7,7 +7,7 @@ use super::compile::inst::{Arg, BinOp, Const};
 
 use super::compile::inst::Inst;
 
-pub(crate) fn reconstruct_ast_from_bblocks(cfg: &AHashMap<u32, Vec<Inst>>) -> Node {
+pub(crate) fn reconstruct_ast_from_bblocks(cfg: &HashMap<u32, Vec<Inst>>) -> Node {
   fn arg_to_expr(arg: &Arg) -> Node {
     let stx = match arg {
       Arg::Builtin(v) => todo!(),

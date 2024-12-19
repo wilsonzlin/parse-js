@@ -3,7 +3,7 @@ use crate::error::SyntaxErrorType;
 use crate::loc::Loc;
 use crate::num::JsNumber;
 use crate::operator::OperatorName;
-use ahash::AHashMap;
+use ahash::HashMap;
 use core::fmt::Debug;
 use serde::Serialize;
 use serde::Serializer;
@@ -14,7 +14,8 @@ use std::fmt::Formatter;
 
 #[derive(Default)]
 pub struct NodeAssocData {
-  map: AHashMap<TypeId, Box<dyn Any>>,
+  // Make Node movable across threads (e.g. rayon) by bounding value to Send + Sync too.
+  map: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 
 impl NodeAssocData {
@@ -23,7 +24,7 @@ impl NodeAssocData {
     self.map.get(&t).map(|v| v.downcast_ref().unwrap())
   }
 
-  pub fn set<T: Any>(&mut self, v: T) {
+  pub fn set<T: Any + Send + Sync>(&mut self, v: T) {
     let t = TypeId::of::<T>();
     self.map.insert(t, Box::from(v));
   }

@@ -14,7 +14,8 @@ use crate::error::SyntaxResult;
 use crate::loc::Loc;
 use crate::token::Token;
 use crate::token::TokenType;
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
 use aho_corasick::AhoCorasick;
 use aho_corasick::AhoCorasickBuilder;
 use aho_corasick::AhoCorasickKind;
@@ -228,8 +229,8 @@ impl<'a> Index<Match> for Lexer<'a> {
 }
 
 #[rustfmt::skip]
-pub static OPERATORS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
-  let mut map = AHashMap::<TokenType, &'static [u8]>::new();
+pub static OPERATORS_MAPPING: Lazy<HashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
+  let mut map = HashMap::<TokenType, &'static [u8]>::new();
   map.insert(TokenType::Ampersand, b"&");
   map.insert(TokenType::AmpersandAmpersand, b"&&");
   map.insert(TokenType::AmpersandAmpersandEquals, b"&&=");
@@ -293,8 +294,8 @@ pub static OPERATORS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::n
   map
 });
 
-pub static KEYWORDS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
-  let mut map = AHashMap::<TokenType, &'static [u8]>::new();
+pub static KEYWORDS_MAPPING: Lazy<HashMap<TokenType, &'static [u8]>> = Lazy::new(|| {
+  let mut map = HashMap::<TokenType, &'static [u8]>::new();
   map.insert(TokenType::KeywordAs, b"as");
   map.insert(TokenType::KeywordAsync, b"async");
   map.insert(TokenType::KeywordAwait, b"await");
@@ -345,8 +346,8 @@ pub static KEYWORDS_MAPPING: Lazy<AHashMap<TokenType, &'static [u8]>> = Lazy::ne
   map
 });
 
-pub static KEYWORD_STRS: Lazy<AHashMap<&'static [u8], usize>> = Lazy::new(|| {
-  AHashMap::<&'static [u8], usize>::from_iter(
+pub static KEYWORD_STRS: Lazy<HashMap<&'static [u8], usize>> = Lazy::new(|| {
+  HashMap::<&'static [u8], usize>::from_iter(
     KEYWORDS_MAPPING.values().enumerate().map(|(i, v)| (*v, i)),
   )
 });

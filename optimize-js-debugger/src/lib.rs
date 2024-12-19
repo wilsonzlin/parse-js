@@ -1,5 +1,6 @@
 use optimize_js::util::debug::OptimizerDebug;
 use optimize_js::Program;
+use optimize_js::ProgramFunction;
 use parse_js::ast::Node;
 use parse_js::parse;
 use serde::Serialize;
@@ -22,8 +23,8 @@ pub fn set_panic_hook() {
 
 #[derive(Serialize)]
 pub struct BuiltJs {
-  pub ast: Node,
-  pub debug: OptimizerDebug,
+  pub functions: Vec<ProgramFunction>,
+  pub top_level: ProgramFunction,
 }
 
 #[wasm_bindgen]
@@ -35,10 +36,13 @@ pub fn build_js(source: &str, is_global: bool) -> JsValue {
   };
   let mut top_level_node = parse(source.as_bytes()).expect("parse input");
   compute_symbols(&mut top_level_node, top_level_mode);
-  let optimized = Program::compile(&top_level_node, true);
+  let Program {
+    functions,
+    top_level,
+  } = Program::compile(&top_level_node, true);
   let built = BuiltJs {
-    ast: top_level_node,
-    debug: optimized.debug.unwrap(),
+    functions,
+    top_level,
   };
   serde_wasm_bindgen::to_value(&built).unwrap()
 }

@@ -2,12 +2,13 @@ use crate::operator::Operator;
 use crate::operator::OperatorName;
 use crate::operator::OPERATORS;
 use crate::token::TokenType;
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
 use once_cell::sync::Lazy;
 
 #[rustfmt::skip]
-pub static MULTARY_OPERATOR_MAPPING: Lazy<AHashMap<TokenType, &'static Operator>> = Lazy::new(|| {
-  let mut map = AHashMap::<TokenType, &'static Operator>::new();
+pub static MULTARY_OPERATOR_MAPPING: Lazy<HashMap<TokenType, &'static Operator>> = Lazy::new(|| {
+  let mut map = HashMap::<TokenType, &'static Operator>::new();
   map.insert(TokenType::Plus, &OPERATORS[&OperatorName::Addition]);
   map.insert(TokenType::Equals, &OPERATORS[&OperatorName::Assignment]);
   map.insert(TokenType::PlusEquals, &OPERATORS[&OperatorName::AssignmentAddition]);
@@ -62,8 +63,8 @@ pub static MULTARY_OPERATOR_MAPPING: Lazy<AHashMap<TokenType, &'static Operator>
 });
 
 #[rustfmt::skip]
-pub static UNARY_OPERATOR_MAPPING: Lazy<AHashMap<TokenType, &'static Operator>> = Lazy::new(|| {
-  let mut map = AHashMap::<TokenType, &'static Operator>::new();
+pub static UNARY_OPERATOR_MAPPING: Lazy<HashMap<TokenType, &'static Operator>> = Lazy::new(|| {
+  let mut map = HashMap::<TokenType, &'static Operator>::new();
   // Postfix{Increment,Decrement} and YieldDelegated omitted and handled manually.
   map.insert(TokenType::KeywordAwait, &OPERATORS[&OperatorName::Await]);
   map.insert(TokenType::Tilde, &OPERATORS[&OperatorName::BitwiseNot]);

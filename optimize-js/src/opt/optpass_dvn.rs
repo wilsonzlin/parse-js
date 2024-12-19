@@ -46,6 +46,7 @@ impl State {
         None => Arg::Builtin(p.clone()),
       },
       Arg::Const(c) => Arg::Const(c.clone()),
+      Arg::Fn(id) => Arg::Fn(*id),
       Arg::Var(tgt) => match self.tgt_to_coc.entry(*tgt) {
         Entry::Occupied(o) => o.get().clone(),
         // We haven't seen this variable before, so it must be from a back edge. Therefore, we must leave it as is.

@@ -1,3 +1,77 @@
+.BBlocksExplorer {
+  .step-names {
+    .current {
+      font-weight: bold;
+    }
+  }
+
+  .bblock {
+    border: 1px solid #eee;
+    /* Make translucent to see edges that flow beneath it. */
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0.5rem;
+    font-family: var(--monospace-font-family);
+
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    > h1 {
+      text-align: center;
+      color: blue;
+      font-weight: bolder;
+    }
+
+    .insts {
+      font-size: 0.9rem;
+      display: table;
+
+      > .inst {
+        display: table-row;
+        color: #333;
+
+        > div {
+          display: table-cell;
+
+          &:first-child {
+            padding-right: 1.5rem;
+            text-align: right;
+          }
+        }
+
+        .invalid-inst {
+          color: red;
+        }
+
+        .const {
+          color: orange;
+        }
+
+        .eq {
+          color: #999;
+        }
+
+        .fn {
+          color: green;
+        }
+
+        .foreign,
+        .unknown {
+          color: #333;
+        }
+
+        .label {
+          color: blue;
+        }
+
+        .var {
+          color: purple;
+        }
+      }
+    }
+  }
+}
+
 .App {
   position: fixed;
   inset: 0;
@@ -11,72 +85,23 @@
       flex-grow: 1;
       min-width: 0;
 
-      .step-names {
-        .current {
-          font-weight: bold;
-        }
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+
+      > .function-tabs {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #ccc;
       }
 
-      .bblock {
-        border: 1px solid #eee;
-        /* Make translucent to see edges that flow beneath it. */
-        background: rgba(255, 255, 255, 0.8);
-        padding: 0.5rem;
-        font-family: var(--monospace-font-family);
-
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-
-        > h1 {
-          text-align: center;
-          color: blue;
-          font-weight: bolder;
-        }
-
-        .insts {
-          font-size: 0.9rem;
-          display: table;
-
-          > .inst {
-            display: table-row;
-            color: #333;
-
-            > div {
-              display: table-cell;
-
-              &:first-child {
-                padding-right: 1.5rem;
-                text-align: right;
-              }
-            }
-
-            .invalid-inst {
-              color: red;
-            }
-
-            .const {
-              color: orange;
-            }
-
-            .eq {
-              color: #999;
-            }
-
-            .foreign,
-            .unknown {
-              color: #333;
-            }
-
-            .label {
-              color: blue;
-            }
-
-            .var {
-              color: purple;
-            }
-          }
-        }
+      > .BBlocksExplorer {
+        flex-grow: 1;
+        min-height: 0;
       }
     }
 

@@ -1,4 +1,4 @@
-use ahash::AHashMap;
+use ahash::HashMap;
 use aho_corasick::AhoCorasick;
 use once_cell::sync::Lazy;
 use parse_js::ast::ArrayElement;
@@ -18,8 +18,8 @@ use std::io::Write;
 #[cfg(test)]
 mod tests;
 
-pub static BINARY_OPERATOR_SYNTAX: Lazy<AHashMap<OperatorName, &'static str>> = Lazy::new(|| {
-    let mut map = AHashMap::<OperatorName, &'static str>::new();
+pub static BINARY_OPERATOR_SYNTAX: Lazy<HashMap<OperatorName, &'static str>> = Lazy::new(|| {
+    let mut map = HashMap::<OperatorName, &'static str>::new();
     // Excluded: Call, Conditional.
     map.insert(OperatorName::Addition, "+");
     map.insert(OperatorName::Assignment, "=");
@@ -71,8 +71,8 @@ pub static BINARY_OPERATOR_SYNTAX: Lazy<AHashMap<OperatorName, &'static str>> = 
     map
 });
 
-pub static UNARY_OPERATOR_SYNTAX: Lazy<AHashMap<OperatorName, &'static str>> = Lazy::new(|| {
-    let mut map = AHashMap::<OperatorName, &'static str>::new();
+pub static UNARY_OPERATOR_SYNTAX: Lazy<HashMap<OperatorName, &'static str>> = Lazy::new(|| {
+    let mut map = HashMap::<OperatorName, &'static str>::new();
     // Excluded: Postfix{Increment,Decrement}.
     map.insert(OperatorName::Await, "await ");
     map.insert(OperatorName::BitwiseNot, "~");

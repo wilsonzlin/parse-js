@@ -16,6 +16,7 @@ import {
   VStruct,
   VTagged,
   VUnion,
+  VUnknown,
 } from "@wzlin/valid";
 import UnreachableError from "@xtjs/lib/UnreachableError";
 import {
@@ -106,6 +107,7 @@ type Const = Valid<typeof vConst>;
 const vArg = new VStruct({
   Builtin: new VOptional(new VString()),
   Const: new VOptional(vConst),
+  Fn: new VOptional(new VInteger()),
   Var: new VOptional(new VInteger()),
 });
 
@@ -139,6 +141,19 @@ const vDebug = new VStruct({
 });
 
 type Debug = Valid<typeof vDebug>;
+
+const vProgramFunction = new VStruct({
+  debug: vDebug,
+  // We don't care about this field.
+  body: new VUnknown(),
+});
+
+const vBuiltJs = new VStruct({
+  functions: new VArray(vProgramFunction),
+  top_level : vProgramFunction,
+});
+
+type BuiltJs = Valid<typeof vBuiltJs>;
 
 type BBlockNode = Node<
   {
@@ -180,6 +195,9 @@ const ArgElement = ({ arg }: { arg: Arg }) => {
   }
   if (arg.Const != undefined) {
     return <ConstElement value={arg.Const} />;
+  }
+  if (arg.Fn != undefined) {
+    return <span className="fn">Fn{arg.Fn}</span>;
   }
   if (arg.Var != undefined) {
     return <VarElement id={arg.Var} />;
@@ -541,17 +559,51 @@ const Graph = ({
 
 
 const INIT_SOURCE = `
-a?.b?.c;
-let x = 1;
-if (x) {
-  g();
-  x += 1;
-  for (;;) {
+(() => {
+  a?.b?.c;
+  let x = 1;
+  if (x) {
+    g();
     x += 1;
+    for (;;) {
+      x += 1;
+      setTimeout(() => {
+        h(x);
+      }, 1000);
+    }
   }
-}
-f(x);
+  f(x);
+})();
 `.trim();
+
+const BBlocksExplorer = ({
+  data,
+}: {
+  data: Debug;
+}) => {
+  const [stepIdx, setStepIdx] = useState(0);
+  const stepNames = useMemo(() => data.steps.map((s) => s.name), [data]);
+
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        setStepIdx((idx) => Math.max(0, idx - 1));
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        setStepIdx((idx) => Math.min((data?.steps.length ?? 1) - 1, idx + 1));
+      }
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, [data]);
+
+  return (
+    <div className="BBlocksExplorer">
+      <ReactFlowProvider>
+        <Graph step={data.steps[stepIdx]} stepNames={stepNames} />
+      </ReactFlowProvider>
+    </div>
+  )
+};
 
 export const App = ({}: {}) => {
   const [loadedWasm, setLoadedWasm] = useState(false);
@@ -569,8 +621,8 @@ export const App = ({}: {}) => {
   }, []);
 
   const [source, setSource] = useState(INIT_SOURCE);
-  const [stepIdx, setStepIdx] = useState(0);
-  const [data, setData] = useState<Debug>();
+  const [data, setData] = useState<BuiltJs>();
+  const [curFnId, setCurFnId] = useState<number>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     const src = source.trim();
@@ -588,31 +640,23 @@ export const App = ({}: {}) => {
     }
     setError(undefined);
     console.log("Built JS:", res);
-    // TODO AST
-    setData(vDebug.parseRoot(res.debug));
+    setData(vBuiltJs.parseRoot(res));
   }, [loadedWasm, source]);
-  const stepNames = useMemo(() => data?.steps.map((s) => s.name) ?? [], [data]);
-
-  useEffect(() => {
-    const listener = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-        setStepIdx((idx) => Math.max(0, idx - 1));
-      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-        setStepIdx((idx) => Math.min((data?.steps.length ?? 1) - 1, idx + 1));
-      }
-    };
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, [data]);
+  const curFn = data?.functions[curFnId!] ?? data?.top_level;
 
   return (
     <div className="App">
       <main>
         <div className="canvas">
-          {data && (
-            <ReactFlowProvider>
-              <Graph step={data.steps[stepIdx]} stepNames={stepNames} />
-            </ReactFlowProvider>
+          <div className="function-tabs">
+            {[undefined, ...data?.functions.map((_, i) => i) ?? []].map(fnId => (
+              <button key={fnId ?? -1} onClick={() => setCurFnId(fnId)}>
+                {fnId == undefined ? "Top level" : `Fn${fnId}`}
+              </button>
+            ))}
+          </div>
+          {curFn && (
+            <BBlocksExplorer data={curFn.debug} />
           )}
         </div>
         <div className="pane">

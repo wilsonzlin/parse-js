@@ -1,3 +1,4 @@
+use crate::compile_js_statements;
 use crate::eval::builtin::BUILTINS;
 use crate::util::counter::Counter;
 use crate::Program;
@@ -21,12 +22,13 @@ use parse_js::operator::OperatorName;
 use symbol_js::symbol::Scope;
 use symbol_js::symbol::Symbol;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 
 // CondGoto fallthrough placeholder label.
 pub const DUMMY_LABEL: u32 = u32::MAX;
 
 struct SourceToInst<'program, 'c_temp, 'c_label> {
-  program: &'program mut ProgramCompiler,
+  program: &'program ProgramCompiler,
   out: Vec<Inst>,
   c_temp: &'c_temp mut Counter,
   c_label: &'c_label mut Counter,
@@ -70,7 +72,8 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
       Syntax::LiteralNumberExpr { value } => Arg::Const(Const::Num(*value)),
       Syntax::LiteralStringExpr { value } => Arg::Const(Const::Str(value.to_string())),
       // Recurse into expression.
-      Syntax::BinaryExpr { .. }
+      Syntax::ArrowFunctionExpr { .. }
+      | Syntax::BinaryExpr { .. }
       | Syntax::CallExpr { .. }
       | Syntax::ConditionalExpr { .. }
       | Syntax::IdentifierExpr { .. }
@@ -86,6 +89,30 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
 
   fn compile_expr(&mut self, n: &Node) {
     match n.stx.as_ref() {
+      Syntax::ArrowFunctionExpr { parenthesised, function } => {
+        self.compile_expr(function);
+      }
+      Syntax::Function { arrow, async_, generator, parameters, body } => {
+        let pg = self.program.clone();
+        let id = pg.next_fn_id.fetch_add(1, Ordering::Relaxed);
+        // Unfortunately we can't use rayon::spawn because the node is borrowed. Everything else otherwise has 'static, including ProgramCompiler which is wrapped in an Arc.
+        // TODO Maybe we should consume AST?
+        rayon::scope(|s| {
+          s.spawn(|_| {
+            let wg = pg.wg.clone();
+            // TODO params, arrow, async, etc.
+            let Syntax::FunctionBody { body } = body.stx.as_ref() else {
+              panic!();
+            };
+            let func = compile_js_statements(&pg, body);
+            pg.functions.insert(id, func);
+            drop(wg);
+          });
+        });
+        // TODO This seems hacky, but our implementation requires that the last Inst in the `out` stack represents the value/target to use.
+        let res_tmp_var = self.c_temp.bump();
+        self.out.push(Inst::var_assign(res_tmp_var, Arg::Fn(id)));
+      }
       // Due to conditional chaining requiring us to know the location after the entire chain (and not just a single node/subexpression), upon entry into any node that is possibly part of a chain, we run an inner algorithm that flattens the chain nodes and then compiles left to right.
       // TODO `(a?.b).c` is not the same as `a?.b.c`.
       Syntax::CallExpr { .. } | Syntax::MemberExpr { .. } | Syntax::ComputedMemberExpr { .. } => {
@@ -612,7 +639,7 @@ impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
 
 impl ProgramCompiler {
   pub fn translate_source_to_inst(
-    &mut self,
+    &self,
     stmts: &[Node],
     c_label: &mut Counter,
     c_temp: &mut Counter,

@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::{cfg::cfg::Cfg, graph::postorder::calculate_postorder, il::inst::Inst};
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OptimizerDebugStep {
   pub name: String,
@@ -12,7 +12,7 @@ pub struct OptimizerDebugStep {
   pub cfg_children: HashMap<u32, HashSet<u32>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct OptimizerDebug {
   steps: Vec<OptimizerDebugStep>,
 }

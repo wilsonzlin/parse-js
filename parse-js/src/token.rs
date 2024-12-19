@@ -1,7 +1,8 @@
 use crate::error::SyntaxError;
 use crate::error::SyntaxErrorType;
 use crate::loc::Loc;
-use ahash::AHashSet;
+use ahash::HashSet;
+use ahash::HashSetExt;
 use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -137,8 +138,8 @@ pub enum TokenType {
 }
 
 // These can be used as parameter and variable names.
-pub static UNRESERVED_KEYWORDS: Lazy<AHashSet<TokenType>> = Lazy::new(|| {
-  let mut set = AHashSet::<TokenType>::new();
+pub static UNRESERVED_KEYWORDS: Lazy<HashSet<TokenType>> = Lazy::new(|| {
+  let mut set = HashSet::<TokenType>::new();
   set.insert(TokenType::KeywordAs);
   set.insert(TokenType::KeywordAsync);
   set.insert(TokenType::KeywordConstructor);

@@ -1,5 +1,6 @@
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use itertools::Itertools;
+use serde::Serialize;
 
 use std::{collections::VecDeque, ops::{Deref, DerefMut}};
 
@@ -68,7 +69,7 @@ impl CfgGraph {
 
 /// Wrapper over a HashMap that provides owned types and better method names,
 /// as well as domain-specific methods.
-#[derive(Default)]
+#[derive(Default, Debug, Serialize)]
 pub struct CfgBBlocks(HashMap<u32, Vec<Inst>>);
 
 impl CfgBBlocks {

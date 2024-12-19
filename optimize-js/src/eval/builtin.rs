@@ -1,4 +1,4 @@
-use ahash::AHashMap;
+use ahash::HashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::iter::once;
@@ -9,10 +9,10 @@ const DEFS: &str = include_str!("./builtin.js");
 const DEFS_TYPEDARRAY: &str = include_str!("./builtin.TypedArray.js");
 
 #[derive(Default)]
-pub struct BuiltinEntries(AHashMap<&'static str, BuiltinEntries>);
+pub struct BuiltinEntries(HashMap<&'static str, BuiltinEntries>);
 
 impl Deref for BuiltinEntries {
-  type Target = AHashMap<&'static str, BuiltinEntries>;
+  type Target = HashMap<&'static str, BuiltinEntries>;
 
   fn deref(&self) -> &Self::Target {
     &self.0

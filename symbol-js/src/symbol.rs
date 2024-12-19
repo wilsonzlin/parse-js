@@ -1,4 +1,6 @@
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
+use parking_lot::RwLock;
 use serde::Serialize;
 use core::ptr;
 use std::cell::Cell;
@@ -7,7 +9,12 @@ use std::cell::RefCell;
 use std::cell::RefMut;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::rc::Rc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub type Identifier = String;
 
@@ -29,19 +36,17 @@ impl Symbol {
   }
 }
 
-// TODO We can probably avoid using a Rc, but this would require refs and lifetimes (possibly not 'a but an additional one) everywhere. Investigate if performance becomes costly.
+// TODO We can probably avoid using a Arc, but this would require refs and lifetimes (possibly not 'a but an additional one) everywhere. Investigate if performance becomes costly.
 #[derive(Clone)]
-pub struct SymbolGenerator(Rc<Cell<u64>>);
+pub struct SymbolGenerator(Arc<AtomicU64>);
 
 impl SymbolGenerator {
   pub fn new() -> SymbolGenerator {
-    SymbolGenerator(Rc::new(Cell::new(0)))
+    SymbolGenerator(Arc::new(AtomicU64::new(0)))
   }
 
   pub fn next(&self) -> Symbol {
-    let id = self.0.get();
-    self.0.set(id + 1);
-    Symbol(id)
+    Symbol(self.0.fetch_add(1, Ordering::Relaxed))
   }
 }
 
@@ -93,7 +98,7 @@ impl ScopeType {
 
 pub struct ScopeData {
   symbol_generator: SymbolGenerator,
-  symbols: AHashMap<Identifier, Symbol>,
+  symbols: HashMap<Identifier, Symbol>,
   // For deterministic outputs, and to give each Symbol an ID.
   symbol_declaration_order: Vec<Identifier>,
   // Does not exist for top-level.
@@ -148,42 +153,43 @@ impl ScopeData {
   }
 }
 
+// We have downstream uses across threads, so use Arc<RwLock<>> instead of Rc<RefCell<>>.
 #[derive(Clone)]
-pub struct Scope(Rc<RefCell<ScopeData>>);
+pub struct Scope(Arc<RwLock<ScopeData>>);
 
 impl Scope {
   pub fn new(symbol_generator: SymbolGenerator, parent: Option<Scope>, typ: ScopeType) -> Scope {
-    let scope = Scope(Rc::new(RefCell::new(ScopeData {
+    let scope = Scope(Arc::new(RwLock::new(ScopeData {
       symbol_generator,
-      symbols: AHashMap::new(),
+      symbols: HashMap::new(),
       symbol_declaration_order: Vec::new(),
       parent: parent.clone(),
       children: Vec::new(),
       typ,
     })));
     if let Some(parent) = parent {
-      parent.0.borrow_mut().children.push(scope.clone());
+      parent.0.write().children.push(scope.clone());
     };
     scope
   }
 
-  pub fn data(&self) -> Ref<'_, ScopeData> {
-    self.0.borrow()
+  pub fn data(&self) -> impl Deref<Target = ScopeData> + '_ {
+    self.0.read()
   }
 
-  pub fn data_mut(&self) -> RefMut<'_, ScopeData> {
-    self.0.borrow_mut()
+  pub fn data_mut(&self) -> impl DerefMut<Target = ScopeData> + '_ {
+    self.0.write()
   }
 
   pub fn create_child_scope(&self, typ: ScopeType) -> Scope {
     // Scope::new will also acquire ref, so we cannot do this inline.
-    let symbol_generator = self.0.borrow().symbol_generator.clone();
+    let symbol_generator = self.0.read().symbol_generator.clone();
     Scope::new(symbol_generator, Some(self.clone()), typ)
   }
 
   /// Returns the closest self-or-ancestor scope that matches the provided predicate. If no such match is found, None is returned.
   pub fn find_nearest_scope<F: Fn(ScopeType) -> bool>(&self, pred: F) -> Option<Scope> {
-    let cur = self.0.borrow();
+    let cur = self.0.read();
     if pred(cur.typ) {
       Some(self.clone())
     } else if let Some(parent) = &cur.parent {
@@ -198,11 +204,11 @@ impl Scope {
     let mut latest_match = None;
     let mut cur = self.clone();
     loop {
-      if !pred(cur.0.borrow().typ) {
+      if !pred(cur.0.read().typ) {
         break;
       };
       latest_match = Some(cur.clone());
-      let Some(parent) = cur.0.borrow().parent.clone() else {
+      let Some(parent) = cur.0.read().parent.clone() else {
         break;
       };
       cur = parent;
@@ -216,7 +222,7 @@ impl Scope {
     identifier: Identifier,
     scope_pred: impl Fn(ScopeType) -> bool,
   ) -> Option<(Scope, Symbol)> {
-    let cur = self.0.borrow();
+    let cur = self.0.read();
     match cur.symbols.get(&identifier) {
       Some(symbol) => Some((self.clone(), symbol.clone())),
       None => {
@@ -261,7 +267,7 @@ impl Scope {
 // Equality means referring to the same unique scope. Useful for HashMap.
 impl PartialEq for Scope {
   fn eq(&self, other: &Self) -> bool {
-    ptr::eq(self.0.as_ptr(), other.0.as_ptr())
+    ptr::eq(self.0.data_ptr(), other.0.data_ptr())
   }
 }
 
@@ -269,6 +275,6 @@ impl Eq for Scope {}
 
 impl Hash for Scope {
   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-    ptr::hash(self.0.as_ptr(), state);
+    ptr::hash(self.0.data_ptr(), state);
   }
 }

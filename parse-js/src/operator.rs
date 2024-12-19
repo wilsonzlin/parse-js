@@ -1,7 +1,8 @@
 use crate::operator::Arity::*;
 use crate::operator::Associativity::*;
 use crate::operator::OperatorName::*;
-use ahash::AHashMap;
+use ahash::HashMap;
+use ahash::HashMapExt;
 use once_cell::sync::Lazy;
 use serde::Serialize;
 
@@ -202,8 +203,8 @@ const PRECEDENCE_LEVELS: &[&[(OperatorName, Arity, Associativity)]] = &[
   &[(Comma, Binary, Left)],
 ];
 
-pub static OPERATORS: Lazy<AHashMap<OperatorName, Operator>> = Lazy::new(|| {
-  let mut map = AHashMap::<OperatorName, Operator>::new();
+pub static OPERATORS: Lazy<HashMap<OperatorName, Operator>> = Lazy::new(|| {
+  let mut map = HashMap::<OperatorName, Operator>::new();
   for (i, ops) in PRECEDENCE_LEVELS.iter().enumerate() {
     let precedence = (PRECEDENCE_LEVELS.len() - i) as u8;
     for &(name, arity, associativity) in ops.iter() {

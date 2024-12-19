@@ -37,6 +37,7 @@ impl Debug for Const {
 pub enum Arg {
   Builtin(String), // The value is a path (e.g. `Array.prototype.forEach`). Using a single string makes it easier to match.
   Const(Const),
+  Fn(usize), // The value is a function index. Functions are immutable so are similar to Const rather than an inst to load it.
   Var(u32),
 }
 
@@ -67,6 +68,7 @@ impl Debug for Arg {
     match self {
       Self::Builtin(p) => write!(f, "{p}"),
       Self::Const(v) => write!(f, "{v:?}"),
+      Self::Fn(n) => write!(f, "Fn{n}"),
       Self::Var(n) => write!(f, "%{n}"),
     }
   }
