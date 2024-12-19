@@ -1,8 +1,6 @@
-use optimize_js::compile_js_statements;
-use optimize_js::symbol::var_visitor::VarAnalysis;
+use optimize_js::Program;
 use serialize::emit_js;
 use err::MinifyError;
-use parse_js::ast::{Node, Syntax};
 use parse_js::parse;
 
 mod serialize;
@@ -11,8 +9,7 @@ mod reconstruct;
 #[cfg(test)]
 mod tests;
 
-use parse_js::visit::Visitor;
-use reconstruct::{reconstruct_ast_from_bblocks};
+use reconstruct::reconstruct_ast_from_program;
 pub use symbol_js::TopLevelMode;
 use symbol_js::compute_symbols;
 
@@ -41,21 +38,8 @@ pub fn minify(
 ) -> Result<(), MinifyError> {
   let mut top_level_node = parse(source).map_err(MinifyError::Syntax)?;
   compute_symbols(&mut top_level_node, top_level_mode);
-
-  let VarAnalysis {
-    declared,
-    foreign,
-    unknown,
-    use_before_decl,
-  } = VarAnalysis::analyze(&top_level_node);
-  if let Some((_, loc)) = use_before_decl.iter().next() {
-    return Err(MinifyError::UseBeforeDecl(*loc));
-  };
-  let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
-    panic!();
-  };
-  let optimized = compile_js_statements(&body, None);
-  let minified = reconstruct_ast_from_bblocks(&optimized);
+  let program = Program::compile(&top_level_node, false);
+  let minified = reconstruct_ast_from_program(program);
   emit_js(output, &minified);
   Ok(())
 }

@@ -1,8 +1,9 @@
 use std::hash::Hash;
 
 use ahash::{HashMap, HashMapExt, HashSet};
+use serde::Serialize;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug, Serialize)]
 struct GraphNode<K: Clone + Default + Hash + Eq> {
   children: HashSet<K>,
   parents: HashSet<K>,
@@ -15,7 +16,7 @@ struct GraphNode<K: Clone + Default + Hash + Eq> {
 /// - Cycles
 /// - Empty graphs
 /// - Disconnected components
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Graph<K: Clone + Default + Hash + Eq> {
   nodes: HashMap<K, GraphNode<K>>,
 }

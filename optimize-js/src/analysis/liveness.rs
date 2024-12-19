@@ -19,11 +19,10 @@ pub fn calculate_live_ins(
       dest = next;
     }
     for arg in cfg.bblocks.get(src.0)[src.1].args.iter() {
-      match arg {
-        Arg::Var(t) if !inlined_vars.contains(t) => {
+      if let Arg::Var(t) = arg {
+        if !inlined_vars.contains(t) {
           additional_uses_at.entry(dest.clone()).or_default().insert(*t);
         }
-        _ => {}
       }
     }
   }
@@ -52,11 +51,8 @@ pub fn calculate_live_ins(
         cur.remove(&var);
       }
       for arg in inst.args.iter() {
-        match arg {
-          Arg::Var(t) => {
-            cur.insert(*t);
-          }
-          _ => {}
+        if let Arg::Var(t) = arg {
+          cur.insert(*t);
         }
       }
       if let Some(add_uses) = additional_uses_at.get(&loc) {

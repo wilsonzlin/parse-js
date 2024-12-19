@@ -1,4 +1,5 @@
 use ahash::HashMap;
+use ahash::HashMapExt;
 use aho_corasick::AhoCorasick;
 use once_cell::sync::Lazy;
 use parse_js::ast::ArrayElement;

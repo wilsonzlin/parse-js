@@ -30,7 +30,7 @@ use util::{counter::Counter, debug::OptimizerDebug};
 #[derive(Debug, Serialize)]
 pub struct ProgramFunction {
   pub debug: Option<OptimizerDebug>,
-  pub body: CfgBBlocks,
+  pub body: Cfg,
 }
 
 pub fn compile_js_statements(
@@ -99,15 +99,6 @@ pub fn compile_js_statements(
     }
   }
 
-  let (inlines, inlined_tgts) = analyse_single_use_defs(&cfg);
-  let liveness = calculate_live_ins(
-    &cfg,
-    &inlines,
-    &inlined_tgts,
-  );
-  let intgraph = calculate_interference_graph(&liveness);
-  let var_alloc = allocate_registers(&intgraph);
-
   // It's safe to calculate liveliness before removing Phi insts; after deconstructing, they always lie exactly between all parent bblocks and the head of the bblock, so their lifetimes are identical.
   deconstruct_ssa(
     &mut cfg,
@@ -115,17 +106,9 @@ pub fn compile_js_statements(
   );
   dbg_checkpoint("ssa_deconstruct", &cfg);
 
-  // To calculate the post dominators, reverse the edges and run any dominator algorithm.
-  // TODO Reenable.
-  // let ipostdom_by = {
-  //   let (rpo, rpo_label) = calculate_postorder(&cfg_parents, u32::MAX);
-  //   calculate_domtree(&cfg_children, &rpo, &rpo_label, u32::MAX).0
-  // };
-  // let backedges = find_backedges_and_junctions(&cfg_children);
-
   ProgramFunction {
     debug: dbg,
-    body: cfg.bblocks,
+    body: cfg,
   }
 }
 

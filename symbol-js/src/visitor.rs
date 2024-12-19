@@ -14,29 +14,31 @@ enum AddToScope {
 }
 
 pub(crate) struct DeclVisitor {
-  scope: Scope,
   scope_stack: Vec<Scope>,
-  pattern_action: Option<AddToScope>,
-  pattern_action_stack: Vec<Option<AddToScope>>,
+  pattern_action_stack: Vec<AddToScope>,
+  in_var_decl_stack: Vec<bool>,
 }
 
 impl DeclVisitor {
   pub fn new(top_level_scope: Scope) -> DeclVisitor {
     Self {
-      scope: top_level_scope,
-      scope_stack: Vec::new(),
-      pattern_action: None,
+      scope_stack: vec![top_level_scope],
       pattern_action_stack: Vec::new(),
+      in_var_decl_stack: vec![false],
     }
+  }
+
+  fn scope(&self) -> &Scope {
+    self.scope_stack.last().unwrap()
   }
 
   fn add_to_scope(&mut self, name: String, action: AddToScope) {
     match action {
       AddToScope::IfNotGlobal => {
-        self.scope.data_mut().add_symbol_if_not_global(name);
+        self.scope().data_mut().add_symbol_if_not_global(name);
       }
       AddToScope::NearestClosure => {
-        if let Some(closure) = self.scope.find_nearest_scope(|t| t.is_closure()) {
+        if let Some(closure) = self.scope().find_nearest_scope(|t| t.is_closure()) {
           closure.data_mut().add_symbol(name);
         };
       }
@@ -44,24 +46,35 @@ impl DeclVisitor {
   }
 
   fn new_scope(&mut self, new_scope_type: ScopeType) {
-    let new_scope = self.scope.create_child_scope(new_scope_type);
-    let old_scope = replace(&mut self.scope, new_scope);
-    self.scope_stack.push(old_scope);
+    self.scope_stack.push(self.scope().create_child_scope(new_scope_type));
   }
 
   fn restore_scope(&mut self) {
-    let old_scope = self.scope_stack.pop().unwrap();
-    self.scope = old_scope;
+    self.scope_stack.pop().unwrap();
+  }
+
+  fn pattern_action(&self) -> AddToScope {
+    *self.pattern_action_stack.last().unwrap()
   }
 
   fn new_pattern_action(&mut self, new_pattern_action: AddToScope) {
-    let old_action = self.pattern_action.replace(new_pattern_action);
-    self.pattern_action_stack.push(old_action);
+    self.pattern_action_stack.push(new_pattern_action);
   }
 
   fn restore_pattern_action(&mut self) {
-    let old_action = self.pattern_action_stack.pop().unwrap();
-    self.pattern_action = old_action;
+    self.pattern_action_stack.pop().unwrap();
+  }
+
+  fn is_in_var_decl(&self) -> bool {
+    *self.in_var_decl_stack.last().unwrap()
+  }
+
+  fn in_var_decl(&mut self) {
+    self.in_var_decl_stack.push(true);
+  }
+
+  fn out_var_decl(&mut self) {
+    self.in_var_decl_stack.pop().unwrap();
   }
 }
 
@@ -130,15 +143,16 @@ impl VisitorMut for DeclVisitor {
         };
       }
       Syntax::IdentifierPattern { name } => {
-        // An identifier pattern doesn't always mean declaration e.g. simple assignment.
-        if let Some(pattern_action) = self.pattern_action {
-          self.add_to_scope(name.clone(), pattern_action);
+        // An identifier pattern doesn't always mean declaration e.g. simple assignment, assignment to global. This is why we need in_var_decl; an assignment is an expression that could appear almost anywhere (e.g. function parameter default value expression).
+        if self.is_in_var_decl() {
+          self.add_to_scope(name.clone(), self.pattern_action());
         }
       }
       Syntax::ImportStmt { .. } => {
         self.new_pattern_action(AddToScope::IfNotGlobal);
       }
       Syntax::VarDecl { mode, .. } => {
+        self.in_var_decl();
         self.new_pattern_action(match mode {
           VarDeclMode::Const => AddToScope::IfNotGlobal,
           VarDeclMode::Let => AddToScope::IfNotGlobal,
@@ -147,7 +161,7 @@ impl VisitorMut for DeclVisitor {
       }
       _ => {}
     };
-    node.assoc.set(self.scope.clone());
+    node.assoc.set(self.scope().clone());
   }
 
   fn on_syntax_up(&mut self, node: &mut Node) {
@@ -171,6 +185,12 @@ impl VisitorMut for DeclVisitor {
       | Syntax::ImportStmt { .. }
       | Syntax::VarDecl { .. } => {
         self.restore_pattern_action();
+      }
+      _ => {}
+    };
+    match node.stx.as_ref() {
+      Syntax::VarDecl { .. } => {
+        self.out_var_decl();
       }
       _ => {}
     };

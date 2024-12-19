@@ -1,13 +1,27 @@
-use ahash::HashMap;
+use optimize_js::{analysis::{interference::calculate_interference_graph, liveness::calculate_live_ins, register_alloc::allocate_registers, single_use_insts::analyse_single_use_defs}, dom::domtree::calculate_domtree, graph::{backedge::find_backedges_and_junctions, postorder::calculate_postorder}, il::inst::{Arg, BinOp, Const, Inst, UnOp}, Program, ProgramFunction};
 use parse_js::{ast::{Node, Syntax}, loc::Loc, operator::OperatorName};
 
-use crate::compile::inst::UnOp;
+fn reconstruct_fn(f: ProgramFunction) -> Node {
+  let cfg = f.body;
+  let (inlines, inlined_tgts) = analyse_single_use_defs(&cfg);
+  let liveness = calculate_live_ins(
+    &cfg,
+    &inlines,
+    &inlined_tgts,
+  );
+  let intgraph = calculate_interference_graph(&liveness);
+  let var_alloc = allocate_registers(&intgraph);
 
-use super::compile::inst::{Arg, BinOp, Const};
+  // To calculate the post dominators, reverse the edges and run any dominator algorithm.
+  let ipostdom_by = {
+    let (rpo, rpo_label) = calculate_postorder(&cfg, u32::MAX);
+    calculate_domtree(&cfg, &rpo, &rpo_label, u32::MAX).0
+  };
+  let backedges = find_backedges_and_junctions(&cfg);
+  todo!()
+}
 
-use super::compile::inst::Inst;
-
-pub(crate) fn reconstruct_ast_from_bblocks(cfg: &HashMap<u32, Vec<Inst>>) -> Node {
+pub(crate) fn reconstruct_ast_from_program(pg: Program) -> Node {
   fn arg_to_expr(arg: &Arg) -> Node {
     let stx = match arg {
       Arg::Builtin(v) => todo!(),
@@ -19,12 +33,13 @@ pub(crate) fn reconstruct_ast_from_bblocks(cfg: &HashMap<u32, Vec<Inst>>) -> Nod
         Const::Str(v) => todo!(),
         Const::Undefined => todo!(),
       }
+      Arg::Fn(id) => todo!(),
       // TODO
       Arg::Var(v) => Syntax::IdentifierExpr { name: format!("tmp{v}") },
     };
     Node::new(Loc(0, 0), stx)
   }
-  let bblock = &cfg[&0];
+  let bblock = pg.top_level.body.bblocks.get(0);
   let mut stmts = Vec::new();
   for inst in bblock {
     let stx = match inst {

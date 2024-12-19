@@ -8,6 +8,7 @@ use crate::{graph::graph::Graph, il::{inst::{Inst, InstTyp}, source_to_inst::DUM
 
 /// Wrapper over a Graph<u32> that provides owned types and better method names,
 /// as well as domain-specific methods.
+#[derive(Debug, Serialize)]
 pub struct CfgGraph(Graph<u32>);
 
 impl CfgGraph {
@@ -103,6 +104,7 @@ impl CfgBBlocks {
 }
 
 /// Control flow graph. Contains the bblock graph and the bblocks themselves.
+#[derive(Debug, Serialize)]
 pub struct Cfg {
   // We store these as different fields because we often want to mutate one while holding a reference to the other. If we only provide &mut self methods, we'd have to borrow both mutably at the same time.
   pub graph: CfgGraph,
