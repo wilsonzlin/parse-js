@@ -1,5 +1,7 @@
 use crate::eval::builtin::BUILTINS;
 use crate::util::counter::Counter;
+use crate::Program;
+use crate::ProgramCompiler;
 
 use super::inst::Arg;
 use super::inst::BinOp;
@@ -23,7 +25,8 @@ use std::collections::VecDeque;
 // CondGoto fallthrough placeholder label.
 pub const DUMMY_LABEL: u32 = u32::MAX;
 
-struct SourceToInst<'c_temp, 'c_label> {
+struct SourceToInst<'program, 'c_temp, 'c_label> {
+  program: &'program mut ProgramCompiler,
   out: Vec<Inst>,
   c_temp: &'c_temp mut Counter,
   c_label: &'c_label mut Counter,
@@ -53,7 +56,7 @@ impl VarType {
   }
 }
 
-impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
+impl<'program, 'c_temp, 'c_label> SourceToInst<'program, 'c_temp, 'c_label> {
   fn symbol_to_temp(&mut self, sym: Symbol) -> u32 {
     *self
       .symbol_to_temp
@@ -607,20 +610,25 @@ impl<'c_temp, 'c_label> SourceToInst<'c_temp, 'c_label> {
   }
 }
 
-pub fn translate_source_to_inst(
-  stmts: &[Node],
-  c_label: &mut Counter,
-  c_temp: &mut Counter,
-) -> Vec<Inst> {
-  let mut compiler = SourceToInst {
-    c_label,
-    c_temp,
-    out: Vec::new(),
-    symbol_to_temp: HashMap::new(),
-    break_stack: Vec::new(),
-  };
-  for stmt in stmts {
-    compiler.compile_stmt(stmt);
+impl ProgramCompiler {
+  pub fn translate_source_to_inst(
+    &mut self,
+    stmts: &[Node],
+    c_label: &mut Counter,
+    c_temp: &mut Counter,
+  ) -> Vec<Inst> {
+    let mut compiler = SourceToInst {
+      program: self,
+      c_label,
+      c_temp,
+      out: Vec::new(),
+      symbol_to_temp: HashMap::new(),
+      break_stack: Vec::new(),
+    };
+    for stmt in stmts {
+      compiler.compile_stmt(stmt);
+    }
+    compiler.out
   }
-  compiler.out
+
 }

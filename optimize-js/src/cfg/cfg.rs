@@ -68,6 +68,7 @@ impl CfgGraph {
 
 /// Wrapper over a HashMap that provides owned types and better method names,
 /// as well as domain-specific methods.
+#[derive(Default)]
 pub struct CfgBBlocks(HashMap<u32, Vec<Inst>>);
 
 impl CfgBBlocks {

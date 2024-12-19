@@ -1,8 +1,6 @@
-use optimize_js::compile_js_statements;
-use optimize_js::symbol::var_visitor::VarAnalysis;
 use optimize_js::util::debug::OptimizerDebug;
+use optimize_js::Program;
 use parse_js::ast::Node;
-use parse_js::ast::Syntax;
 use parse_js::parse;
 use serde::Serialize;
 use symbol_js::compute_symbols;
@@ -37,24 +35,10 @@ pub fn build_js(source: &str, is_global: bool) -> JsValue {
   };
   let mut top_level_node = parse(source.as_bytes()).expect("parse input");
   compute_symbols(&mut top_level_node, top_level_mode);
-
-  let VarAnalysis {
-    declared,
-    foreign,
-    unknown,
-    use_before_decl,
-  } = VarAnalysis::analyze(&top_level_node);
-  if let Some((_, loc)) = use_before_decl.iter().next() {
-    panic!("Use before declaration at {:?}", loc);
-  };
-  let Syntax::TopLevel { body } = top_level_node.stx.as_ref() else {
-    panic!();
-  };
-  let mut dbg = OptimizerDebug::new();
-  let optimized = compile_js_statements(&body, Some(&mut dbg));
+  let optimized = Program::compile(&top_level_node, true);
   let built = BuiltJs {
     ast: top_level_node,
-    debug: dbg,
+    debug: optimized.debug.unwrap(),
   };
   serde_wasm_bindgen::to_value(&built).unwrap()
 }

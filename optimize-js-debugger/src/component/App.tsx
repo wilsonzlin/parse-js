@@ -579,8 +579,8 @@ export const App = ({}: {}) => {
     }
     let res;
     try {
-      // TODO Global mode.
-      res = build_js(source, false);
+      // TODO Module mode.
+      res = build_js(source, true);
     } catch (err) {
       // Don't clear existing graph.
       setError(err.stack);
