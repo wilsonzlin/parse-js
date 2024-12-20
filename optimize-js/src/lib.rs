@@ -21,8 +21,8 @@ use graph::postorder::calculate_postorder;
 use opt::{optpass_cfg_prune::optpass_cfg_prune, optpass_dvn::optpass_dvn, optpass_impossible_branches::optpass_impossible_branches, optpass_redundant_assigns::optpass_redundant_assigns, optpass_trivial_dce::optpass_trivial_dce};
 use parse_js::ast::{Node, Syntax};
 use serde::Serialize;
-use ssa::{deconstruct_ssa::deconstruct_ssa, ssa_insert_phis::insert_phis_for_ssa_construction, ssa_rename::rename_targets_for_ssa_construction};
-use symbol::var_visitor::VarAnalysis;
+use ssa::{ssa_deconstruct::deconstruct_ssa, ssa_insert_phis::insert_phis_for_ssa_construction, ssa_rename::rename_targets_for_ssa_construction};
+use symbol::var_analysis::VarAnalysis;
 use symbol_js::symbol::Symbol;
 use util::{counter::Counter, debug::OptimizerDebug};
 

@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use std::{collections::VecDeque, ops::{Deref, DerefMut}};
 
-use crate::{graph::graph::Graph, il::{inst::{Inst, InstTyp}, source_to_inst::DUMMY_LABEL}};
+use crate::{graph::Graph, il::{inst::{Inst, InstTyp}, source_to_inst::DUMMY_LABEL}};
 
 /// Wrapper over a Graph<u32> that provides owned types and better method names,
 /// as well as domain-specific methods.
@@ -65,6 +65,14 @@ impl CfgGraph {
     }
     // Find unreachable bblocks.
     self.0.nodes().filter(move |n| !seen.contains(n)).cloned()
+  }
+
+  pub fn calculate_postorder(&self, entry: u32) -> (Vec<u32>, HashMap<u32, usize>) {
+    let (postorder, label_to_postorder) = self.0.calculate_postorder(&entry);
+    (
+      postorder.into_iter().map(|&n| n).collect_vec(),
+      label_to_postorder.into_iter().map(|(&k, v)| (k, v)).collect::<HashMap<_, _>>(),
+    )
   }
 }
 

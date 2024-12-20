@@ -1,7 +1,7 @@
 use ahash::{HashMap, HashMapExt, HashSet};
 use itertools::Itertools;
 
-use crate::{cfg::cfg::Cfg, graph::postorder::calculate_postorder};
+use crate::cfg::cfg::Cfg;
 
 pub struct Dom {
   postorder: Vec<u32>,
@@ -9,7 +9,7 @@ pub struct Dom {
   // Inverse of `domtree`, child => parent.
   idom_by: HashMap<u32, u32>,
   // Parent => children, where parent is the immediate dominator of each child.
-  // Yes, the name is dominator tree, even though it's only immediate dominators and not all nodes it dominates. See https://en.wikipedia.org/wiki/Dominator_(graph_theory).
+  // Yes, the name is dominator tree, even though it's only nodes it immediate dominates and not all nodes it dominates. See https://en.wikipedia.org/wiki/Dominator_(graph_theory).
   domtree: HashMap<u32, HashSet<u32>>,
   entry: u32,
 }
@@ -25,7 +25,7 @@ impl Dom {
   // Other implementations:
   // - https://github.com/sampsyo/bril/blob/34133101a68bb50ae0fc8083857a3e3bd6bae260/bril-llvm/dom.py#L47
   pub fn calculate(cfg: &Cfg, entry: u32) -> Self {
-    let (postorder, label_to_postorder) = calculate_postorder(cfg, entry);
+    let (postorder, label_to_postorder) = cfg.graph.calculate_postorder(entry);
 
     let mut idom_by = HashMap::<u32, u32>::new();
     let mut domtree = HashMap::<u32, HashSet<u32>>::new();
@@ -83,9 +83,9 @@ impl Dom {
     }
   }
 
-  // Node => nodes that dominate it.
+  // Node => nodes that dominate it (are its dominator). Also called the dominator graph.
   // https://www.cs.tufts.edu/comp/150FP/archive/keith-cooper/dom14.pdf
-  pub fn dominated_bys(&self) -> HashMap<u32, HashSet<u32>> {
+  pub fn dominated_by_graph(&self) -> HashMap<u32, HashSet<u32>> {
     let mut dom = HashMap::<u32, HashSet<u32>>::new();
     for label in self.idom_by.keys().cloned() {
       let e = dom.entry(label).or_default();
@@ -99,6 +99,19 @@ impl Dom {
       }
     }
     dom
+  }
+
+  /// Node => nodes that it dominates.
+  /// The inverse of `dominated_bys`.
+  pub fn dominates_graph(&self) -> HashMap<u32, HashSet<u32>> {
+    let dom_bys = self.dominated_by_graph();
+    let mut doms = HashMap::<u32, HashSet<u32>>::new();
+    for (child, dominated_by) in dom_bys {
+      for parent in dominated_by {
+        doms.entry(parent).or_default().insert(child);
+      }
+    }
+    doms
   }
 
   // A's dominance frontier contains B if A doesn't dominate B, but does dominate a parent of B.
