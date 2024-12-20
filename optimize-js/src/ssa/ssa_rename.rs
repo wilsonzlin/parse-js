@@ -4,6 +4,7 @@ use ahash::HashSet;
 use itertools::Itertools;
 
 use crate::cfg::cfg::Cfg;
+use crate::dom::Dom;
 use crate::il::inst::Arg;
 use crate::il::inst::InstTyp;
 use crate::util::counter::Counter;
@@ -12,7 +13,7 @@ fn inner(
   rename_stacks: &mut HashMap<u32, Vec<u32>>,
   cfg: &mut Cfg,
   phi_orig_tgts: &HashMap<(u32, usize), u32>,
-  domtree: &HashMap<u32, HashSet<u32>>,
+  dom: &Dom,
   label: u32,
   c_temp: &mut Counter,
 ) {
@@ -51,17 +52,15 @@ fn inner(
     }
   }
 
-  if let Some(children) = domtree.get(&label) {
-    for &c in children.iter() {
-      inner(
-        rename_stacks,
-        cfg,
-        phi_orig_tgts,
-        domtree,
-        c,
-        c_temp,
-      );
-    }
+  for c in dom.immediately_dominated_by(label) {
+    inner(
+      rename_stacks,
+      cfg,
+      phi_orig_tgts,
+      dom,
+      c,
+      c_temp,
+    );
   }
 
   for (tgt, cnt) in to_pop {
@@ -74,7 +73,7 @@ fn inner(
 
 pub fn rename_targets_for_ssa_construction(
   cfg: &mut Cfg,
-  domtree: &HashMap<u32, HashSet<u32>>,
+  dom: &Dom,
   c_temp: &mut Counter,
 ) {
   // Store the original `tgt` field values from all Inst::Phi.
@@ -95,7 +94,7 @@ pub fn rename_targets_for_ssa_construction(
     &mut rename_stacks,
     cfg,
     &phi_orig_tgts,
-    domtree,
+    dom,
     0,
     c_temp,
   );

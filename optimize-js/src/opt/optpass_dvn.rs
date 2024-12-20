@@ -5,6 +5,7 @@ use std::collections::hash_map::Entry;
 use std::mem::swap;
 
 use crate::cfg::cfg::Cfg;
+use crate::dom::Dom;
 use crate::eval::consteval::maybe_eval_const_bin_expr;
 use crate::eval::consteval::maybe_eval_const_builtin_call;
 use crate::eval::consteval::maybe_eval_const_builtin_val;
@@ -60,7 +61,7 @@ fn inner(
   changed: &mut bool,
   state: &mut State,
   cfg: &mut Cfg,
-  domtree: &HashMap<u32, HashSet<u32>>,
+  dom: &Dom,
   label: u32,
 ) {
   let orig_state = state.clone();
@@ -187,10 +188,8 @@ fn inner(
     }
   }
 
-  if let Some(children) = domtree.get(&label) {
-    for &c in children.iter() {
-      inner(changed, state, cfg, domtree, c);
-    }
+  for c in dom.immediately_dominated_by(label) {
+    inner(changed, state, cfg, dom, c);
   }
 
   *state = orig_state;
@@ -209,8 +208,8 @@ fn inner(
 pub fn optpass_dvn(
   changed: &mut bool,
   cfg: &mut Cfg,
-  domtree: &HashMap<u32, HashSet<u32>>,
+  dom: &Dom,
 ) {
   let mut state = State::default();
-  inner(changed, &mut state, cfg, domtree, 0);
+  inner(changed, &mut state, cfg, dom, 0);
 }

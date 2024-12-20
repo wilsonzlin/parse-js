@@ -74,6 +74,7 @@ impl Debug for Arg {
   }
 }
 
+/// These must all be pure; impure operations (e.g. prop assign) are separate insts.
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 pub enum BinOp {
   Add,
@@ -117,6 +118,7 @@ impl Debug for BinOp {
   }
 }
 
+/// These must all be pure; impure operations (e.g. prop assign) are separate insts.
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Serialize)]
 pub enum UnOp {
   Neg,

@@ -3,13 +3,14 @@ use itertools::Itertools;
 
 use std::collections::VecDeque;
 
-use crate::{cfg::cfg::Cfg, il::inst::Inst};
+use crate::{cfg::cfg::Cfg, dom::Dom, il::inst::Inst};
 
 pub fn insert_phis_for_ssa_construction(
   defs: &mut HashMap<u32, HashSet<u32>>,
   cfg: &mut Cfg,
-  domfront: &HashMap<u32, HashSet<u32>>,
+  dom: &Dom,
 ) {
+  let domfront = dom.dominance_frontiers(cfg);
   for v in defs.keys().cloned().collect_vec() {
     let mut already_inserted = HashSet::new();
     // We'll start with these blocks but add more as we process, so we can't just use `defs[v].iter()`.

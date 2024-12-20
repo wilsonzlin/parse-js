@@ -16,7 +16,7 @@ use analysis::{defs::calculate_defs, interference::calculate_interference_graph,
 use cfg::{bblock::convert_insts_to_bblocks, cfg::{Cfg, CfgBBlocks}};
 use crossbeam_utils::sync::WaitGroup;
 use dashmap::DashMap;
-use dom::{domfront::calculate_domfront, domtree::calculate_domtree};
+use dom::Dom;
 use graph::postorder::calculate_postorder;
 use opt::{optpass_cfg_prune::optpass_cfg_prune, optpass_dvn::optpass_dvn, optpass_impossible_branches::optpass_impossible_branches, optpass_redundant_assigns::optpass_redundant_assigns, optpass_trivial_dce::optpass_trivial_dce};
 use parse_js::ast::{Node, Syntax};
@@ -52,16 +52,14 @@ pub fn compile_js_statements(
   // This can happen due to user code (unreachable code) or by us, because we split after a `goto` which makes the new other-split-half block unreachable (this block is usually empty).
   cfg.find_and_pop_unreachable();
 
-  let (postorder, label_to_postorder) = calculate_postorder(&cfg, 0);
-  let (idom_by, domtree) = calculate_domtree(&cfg, &postorder, &label_to_postorder, 0);
-  let domfront = calculate_domfront(&cfg, &idom_by, &postorder);
   let mut defs = calculate_defs(&cfg);
   dbg_checkpoint("source", &cfg);
 
   // Construct SSA.
-  insert_phis_for_ssa_construction(&mut defs, &mut cfg, &domfront);
+  let dom = Dom::calculate(&cfg, 0);
+  insert_phis_for_ssa_construction(&mut defs, &mut cfg, &dom);
   dbg_checkpoint("ssa_insert_phis", &cfg);
-  rename_targets_for_ssa_construction(&mut cfg, &domtree, &mut c_temp);
+  rename_targets_for_ssa_construction(&mut cfg, &dom, &mut c_temp);
   dbg_checkpoint("ssa_rename_targets", &cfg);
 
   // Optimisation passes:
@@ -73,10 +71,9 @@ pub fn compile_js_statements(
     let mut changed = false;
 
     // TODO Can we avoid recalculating these on every iteration i.e. mutate in-place when changing the CFG?
-    let (postorder, label_to_postorder) = calculate_postorder(&cfg, 0);
-    let (_, domtree) = calculate_domtree(&cfg, &postorder, &label_to_postorder, 0);
+    let dom = Dom::calculate(&cfg, 0);
 
-    optpass_dvn(&mut changed, &mut cfg, &domtree);
+    optpass_dvn(&mut changed, &mut cfg, &dom);
     dbg_checkpoint(&format!("opt{}_dvn", i), &cfg);
     optpass_trivial_dce(&mut changed, &mut cfg);
     dbg_checkpoint(&format!("opt{}_dce", i), &cfg);
