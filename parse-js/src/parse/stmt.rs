@@ -6,6 +6,8 @@ use super::Parser;
 use crate::ast::ExportName;
 use crate::ast::ExportNames;
 use crate::ast::ForInit;
+use crate::ast::ImportName;
+use crate::ast::ImportNames;
 use crate::ast::Node;
 use crate::ast::Syntax;
 use crate::error::SyntaxErrorType;
@@ -460,19 +462,19 @@ impl<'a> Parser<'a> {
           name: self.string(alias),
         }),
       });
-      Some(ExportNames::All(Some(alias_node)))
+      Some(ImportNames::All(alias_node))
     } else {
       self.require(TokenType::BraceOpen)?;
-      let mut names = Vec::<ExportName>::new();
+      let mut names = Vec::<ImportName>::new();
       while !self.consume_if(TokenType::BraceClose)?.is_match() {
-        let name = self.parse_import_or_export_name(ctx)?;
-        names.push(name);
+        let (target, alias) = self.parse_import_or_export_name(ctx)?;
+        names.push(ImportName { target, alias });
         if !self.consume_if(TokenType::Comma)?.is_match() {
           break;
         };
       }
       self.require(TokenType::BraceClose)?;
-      Some(ExportNames::Specific(names))
+      Some(ImportNames::Specific(names))
     };
     self.require(TokenType::KeywordFrom)?;
     let module = self.parse_and_normalise_literal_string(ctx)?;

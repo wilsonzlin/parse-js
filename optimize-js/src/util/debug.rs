@@ -1,7 +1,7 @@
 use ahash::{HashMap, HashSet};
 use serde::Serialize;
 
-use crate::{cfg::cfg::Cfg, graph::postorder::calculate_postorder, il::inst::Inst};
+use crate::{cfg::cfg::Cfg, il::inst::Inst};
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +28,7 @@ impl OptimizerDebug {
     self.steps.push(OptimizerDebugStep {
       name: name.as_ref().to_string(),
       // We always recalculate as some steps may prune or add bblocks.
-      bblock_order: calculate_postorder(cfg, 0).0,
+      bblock_order: cfg.graph.calculate_postorder(0).0,
       bblocks: cfg.bblocks.all().map(|(k, v)| (k, v.clone())).collect(),
       cfg_children: cfg.graph.labels().map(|k| (k, cfg.graph.children(k).collect())).collect(),
     });

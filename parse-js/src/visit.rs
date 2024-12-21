@@ -3,6 +3,7 @@ use crate::ast::ClassOrObjectMemberKey;
 use crate::ast::ClassOrObjectMemberValue;
 use crate::ast::ExportNames;
 use crate::ast::ForInit;
+use crate::ast::ImportNames;
 use crate::ast::LiteralTemplatePart;
 use crate::ast::Node;
 use crate::ast::ObjectMemberType;
@@ -272,12 +273,10 @@ pub trait Visitor {
         };
         for name in names {
           match name {
-            ExportNames::All(alias) => {
-              if let Some(alias) = alias {
-                self.visit(alias);
-              }
+            ImportNames::All(alias) => {
+              self.visit(alias);
             }
-            ExportNames::Specific(names) => {
+            ImportNames::Specific(names) => {
               for name in names {
                 self.visit(&name.alias);
               }
@@ -377,6 +376,9 @@ pub trait Visitor {
         if let Some(value) = default_value {
           self.visit(value);
         }
+      }
+      Syntax::PatternDecl { pattern } => {
+        self.visit(pattern);
       }
       Syntax::ReturnStmt { value } => {
         if let Some(value) = value {
@@ -729,12 +731,10 @@ pub trait VisitorMut {
         };
         for name in names {
           match name {
-            ExportNames::All(alias) => {
-              if let Some(alias) = alias {
-                self.visit(alias);
-              }
+            ImportNames::All(alias) => {
+              self.visit(alias);
             }
-            ExportNames::Specific(names) => {
+            ImportNames::Specific(names) => {
               for name in names {
                 self.visit(&mut name.alias);
               }
@@ -834,6 +834,9 @@ pub trait VisitorMut {
         if let Some(value) = default_value {
           self.visit(value);
         }
+      }
+      Syntax::PatternDecl { pattern } => {
+        self.visit(pattern);
       }
       Syntax::ReturnStmt { value } => {
         if let Some(value) = value {

@@ -17,7 +17,6 @@ use cfg::{bblock::convert_insts_to_bblocks, cfg::{Cfg, CfgBBlocks}};
 use crossbeam_utils::sync::WaitGroup;
 use dashmap::DashMap;
 use dom::Dom;
-use graph::postorder::calculate_postorder;
 use opt::{optpass_cfg_prune::optpass_cfg_prune, optpass_dvn::optpass_dvn, optpass_impossible_branches::optpass_impossible_branches, optpass_redundant_assigns::optpass_redundant_assigns, optpass_trivial_dce::optpass_trivial_dce};
 use parse_js::ast::{Node, Syntax};
 use serde::Serialize;
