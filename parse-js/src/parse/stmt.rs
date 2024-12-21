@@ -19,8 +19,8 @@ struct BreakOrContinue {
 }
 
 impl<'a> Parser<'a> {
-  // Parses `a`, `a as b`, `default as b`. Creates the symbol if importing.
-  fn parse_import_or_export_name(&mut self, ctx: ParseCtx) -> SyntaxResult<ExportName> {
+  // Parses `a`, `a as b`, `default as b`.
+  fn parse_import_or_export_name(&mut self, ctx: ParseCtx) -> SyntaxResult<(String, Node)> {
     let (target, alias) = match self.consume_if(TokenType::KeywordDefault)?.match_loc() {
       Some(target) => {
         self.require(TokenType::KeywordAs)?;
@@ -40,10 +40,10 @@ impl<'a> Parser<'a> {
     let alias_node = Node::new(alias, Syntax::IdentifierPattern {
       name: self.string(alias),
     });
-    Ok(ExportName {
-      target: self.string(target),
-      alias: alias_node,
-    })
+    Ok((
+      self.string(target),
+      alias_node,
+    ))
   }
 
   pub fn parse_stmts(&mut self, ctx: ParseCtx, end: TokenType) -> SyntaxResult<Vec<Node>> {
@@ -167,8 +167,8 @@ impl<'a> Parser<'a> {
           if self.consume_if(TokenType::BraceClose)?.is_match() {
             break;
           };
-          let name = self.parse_import_or_export_name(ctx)?;
-          names.push(name);
+          let (target, alias) = self.parse_import_or_export_name(ctx)?;
+          names.push(ExportName { target, alias });
           if !self.consume_if(TokenType::Comma)?.is_match() {
             self.require(TokenType::BraceClose)?;
             break;
@@ -455,8 +455,10 @@ impl<'a> Parser<'a> {
     } else if self.consume_if(TokenType::Asterisk)?.is_match() {
       self.require(TokenType::KeywordAs)?;
       let alias = self.require(TokenType::Identifier)?.loc;
-      let alias_node = Node::new(alias, Syntax::IdentifierPattern {
-        name: self.string(alias),
+      let alias_node = Node::new(alias, Syntax::PatternDecl {
+        pattern: Node::new(alias, Syntax::IdentifierPattern {
+          name: self.string(alias),
+        }),
       });
       Some(ExportNames::All(Some(alias_node)))
     } else {

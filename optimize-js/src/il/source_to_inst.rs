@@ -1,7 +1,6 @@
 use crate::compile_js_statements;
 use crate::eval::builtin::BUILTINS;
 use crate::util::counter::Counter;
-use crate::Program;
 use crate::ProgramCompiler;
 
 use super::inst::Arg;

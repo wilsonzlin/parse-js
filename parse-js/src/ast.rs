@@ -89,6 +89,7 @@ impl Serialize for Node {
 type Declaration = Node;
 type Expression = Node;
 type Pattern = Node;
+type PatternDecl = Node;
 type Statement = Node;
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize)]
@@ -161,12 +162,10 @@ pub struct ExportName {
 
 #[derive(Debug, Serialize)]
 pub enum ExportNames {
-  // `import * as name`
   // `export * from "module"`
   // `export * as name from "module"`
   // IdentifierPattern.
   All(Option<Pattern>),
-  // `import {a as b, c, default as e}`
   // `export {a as default, b as c, d}`
   // `export {default, a as b, c} from "module"`
   // `default` is still a name, so we don't use an enum.
@@ -174,8 +173,26 @@ pub enum ExportNames {
 }
 
 #[derive(Debug, Serialize)]
+pub struct ImportName {
+  // For simplicity, we always set both fields; for shorthands, both nodes are identical.
+  pub target: String,
+  // IdentifierPattern.
+  pub alias: PatternDecl,
+}
+
+#[derive(Debug, Serialize)]
+pub enum ImportNames {
+  // `import * as name`
+  // IdentifierPattern.
+  All(PatternDecl),
+  // `import {a as b, c, default as e}`
+  // `default` is still a name, so we don't use an enum.
+  Specific(Vec<ImportName>),
+}
+
+#[derive(Debug, Serialize)]
 pub struct VariableDeclarator {
-  pub pattern: Pattern,
+  pub pattern: PatternDecl,
   pub initializer: Option<Expression>,
 }
 
@@ -248,8 +265,12 @@ pub enum Syntax {
   },
   ParamDecl {
     rest: bool,
-    pattern: Pattern,
+    pattern: PatternDecl,
     default_value: Option<Expression>,
+  },
+  // Since a pattern can also be in an expression (e.g. assignment), have a specific unified type for declarations (e.g. imports, function params, var/let/const, catch binding) only, useful for downstream tasks. This contains only the pattern; it shouldn't contain any expressions (e.g. initializer) as that itself could contain patterns (e.g. assignment), defeating the purpose.
+  PatternDecl {
+    pattern: Pattern,
   },
   VarDecl {
     export: bool,
@@ -416,8 +437,8 @@ pub enum Syntax {
   },
   ImportStmt {
     // IdentifierPattern.
-    default: Option<Pattern>,
-    names: Option<ExportNames>,
+    default: Option<PatternDecl>,
+    names: Option<ImportNames>,
     module: String,
   },
   ForStmt {
@@ -427,9 +448,9 @@ pub enum Syntax {
     body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
   ForInStmt {
-    // for-in and for-of statements can have `x`/`[x]`/`{x:a}`/etc. on the lhs or `var x`/`var [x]`/etc. on the lhs. But for the latter, while it's technically a Decl, it's always a VarDecl with exactly one declaration that has no initialiser. If you strip down VarDecl to this, it's basically just a VarDeclMode and a Pattern. Therefore, we can represent both a destructuring expr or a decl on the lhs with an Option<VarDeclMode> and a Pattern.
+    // for-in and for-of statements can have `x`/`[x]`/`{x:a}`/etc. on the lhs or `var x`/`var [x]`/etc. on the lhs. But for the latter, while it's technically a Decl, it's always a VarDecl with exactly one declaration that has no initialiser. If you strip down VarDecl to this, it's basically just a VarDeclMode and a PatternDecl. Therefore, we can represent both a destructuring expr or a decl on the lhs with an Option<VarDeclMode> and a PatternDecl.
     decl_mode: Option<VarDeclMode>,
-    pat: Pattern,
+    pat: PatternDecl,
     rhs: Expression,
     body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
@@ -437,7 +458,7 @@ pub enum Syntax {
     await_: bool,
     // See comment in ForInStmt.
     decl_mode: Option<VarDeclMode>,
-    pat: Pattern,
+    pat: PatternDecl,
     rhs: Expression,
     body: Statement, // Won't be BlockStmt, but ForBody instead. (However, could be another type of statement.)
   },
@@ -475,7 +496,7 @@ pub enum Syntax {
     value: Expression,
   },
   CatchBlock {
-    parameter: Option<Pattern>,
+    parameter: Option<PatternDecl>,
     body: Vec<Statement>, // We don't want to use BlockStmt as the new block scope starts with the parameter, not the braces. This differentiation ensures BlockStmt specifically means a new scope, helpful for downstream usages. See also: FunctionBody.
   },
   ClassMember {

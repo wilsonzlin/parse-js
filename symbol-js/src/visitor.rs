@@ -16,7 +16,7 @@ enum AddToScope {
 pub(crate) struct DeclVisitor {
   scope_stack: Vec<Scope>,
   pattern_action_stack: Vec<AddToScope>,
-  in_var_decl_stack: Vec<bool>,
+  in_pattern_decl: Vec<bool>,
 }
 
 impl DeclVisitor {
@@ -24,7 +24,7 @@ impl DeclVisitor {
     Self {
       scope_stack: vec![top_level_scope],
       pattern_action_stack: Vec::new(),
-      in_var_decl_stack: vec![false],
+      in_pattern_decl: vec![false],
     }
   }
 
@@ -65,16 +65,16 @@ impl DeclVisitor {
     self.pattern_action_stack.pop().unwrap();
   }
 
-  fn is_in_var_decl(&self) -> bool {
-    *self.in_var_decl_stack.last().unwrap()
+  fn is_in_pattern_decl(&self) -> bool {
+    *self.in_pattern_decl.last().unwrap()
   }
 
-  fn in_var_decl(&mut self) {
-    self.in_var_decl_stack.push(true);
+  fn enter_pattern_decl(&mut self) {
+    self.in_pattern_decl.push(true);
   }
 
-  fn out_var_decl(&mut self) {
-    self.in_var_decl_stack.pop().unwrap();
+  fn exit_pattern_decl(&mut self) {
+    self.in_pattern_decl.pop().unwrap();
   }
 }
 
@@ -143,16 +143,18 @@ impl VisitorMut for DeclVisitor {
         };
       }
       Syntax::IdentifierPattern { name } => {
-        // An identifier pattern doesn't always mean declaration e.g. simple assignment, assignment to global. This is why we need in_var_decl; an assignment is an expression that could appear almost anywhere (e.g. function parameter default value expression).
-        if self.is_in_var_decl() {
+        // An identifier pattern doesn't always mean declaration e.g. simple assignment, assignment to global. This is why we need in_param_decl; an assignment is an expression that could appear almost anywhere (e.g. function parameter default value expression).
+        if self.is_in_pattern_decl() {
           self.add_to_scope(name.clone(), self.pattern_action());
         }
       }
       Syntax::ImportStmt { .. } => {
         self.new_pattern_action(AddToScope::IfNotGlobal);
       }
+      Syntax::PatternDecl { .. } => {
+        self.enter_pattern_decl();
+      }
       Syntax::VarDecl { mode, .. } => {
-        self.in_var_decl();
         self.new_pattern_action(match mode {
           VarDeclMode::Const => AddToScope::IfNotGlobal,
           VarDeclMode::Let => AddToScope::IfNotGlobal,
@@ -189,8 +191,8 @@ impl VisitorMut for DeclVisitor {
       _ => {}
     };
     match node.stx.as_ref() {
-      Syntax::VarDecl { .. } => {
-        self.out_var_decl();
+      Syntax::PatternDecl { .. } => {
+        self.exit_pattern_decl();
       }
       _ => {}
     };
